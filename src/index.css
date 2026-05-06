@@ -1,0 +1,69 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Base ──────────────────────────────────────────────────────────────── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-sans bg-surface text-navy-800;
+    min-height: 100dvh;
+  }
+
+  /* Keyboard focus only */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand ring-offset-2;
+  }
+  :focus:not(:focus-visible) {
+    @apply outline-none;
+  }
+}
+
+/* ─── Components ────────────────────────────────────────────────────────── */
+@layer components {
+  /* Page container */
+  .container-app {
+    @apply w-full max-w-container mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium
+           transition-colors duration-150 select-none cursor-pointer
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2
+           disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand text-white px-4 py-2.5 hover:bg-brand-hover;
+  }
+
+  .btn-ghost {
+    @apply btn border border-brand text-brand px-4 py-2.5 hover:bg-brand hover:text-white;
+  }
+
+  .btn-ghost-white {
+    @apply btn border border-white/30 text-white px-4 py-2.5 hover:border-white hover:bg-white/10;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+}
