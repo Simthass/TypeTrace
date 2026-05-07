@@ -1,7 +1,10 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import RootLayout from "./components/layout/RootLayout";
 import HomePage from "./pages/HomePage";
+import HowItWorksPage from "./pages/HowItWorksPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
+import FeaturesPage from "./pages/FeaturesPage";
+import AboutPage from "./pages/AboutPage";
 import { ROUTES } from "./constants/routes";
 
 export default function App() {
@@ -10,18 +13,9 @@ export default function App() {
       <Routes>
         <Route element={<RootLayout />}>
           <Route index element={<HomePage />} />
-          <Route
-            path={ROUTES.HOW_IT_WORKS}
-            element={<PlaceholderPage title="How It Works" />}
-          />
-          <Route
-            path={ROUTES.FEATURES}
-            element={<PlaceholderPage title="Features" />}
-          />
-          <Route
-            path={ROUTES.ABOUT}
-            element={<PlaceholderPage title="About" />}
-          />
+          <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
+          <Route path={ROUTES.FEATURES} element={<FeaturesPage />} />
+          <Route path={ROUTES.ABOUT} element={<AboutPage />} />
           <Route
             path={ROUTES.PRICING}
             element={<PlaceholderPage title="Pricing" />}
