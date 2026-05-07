@@ -1,8 +1,7 @@
 import { Link } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
 
-// github icon as svg - keeping it inline so no extra http requests
-// this is how most students would do it to avoid dependency issues
+/* ─── Social Icons ───────────────────────────────────────────────────────── */
 function GitHubIcon() {
   return (
     <svg
@@ -16,8 +15,6 @@ function GitHubIcon() {
     </svg>
   );
 }
-
-// x/twitter icon - using the newer X style
 function TwitterIcon() {
   return (
     <svg
@@ -31,8 +28,6 @@ function TwitterIcon() {
     </svg>
   );
 }
-
-// linkedin icon
 function LinkedInIcon() {
   return (
     <svg
@@ -47,8 +42,6 @@ function LinkedInIcon() {
   );
 }
 
-// footer column data - all the links organized by category
-// using ROUTES constants so if routes change, these update automatically
 const footerColumns = [
   {
     heading: "Product",
@@ -78,61 +71,49 @@ const footerColumns = [
   },
 ] as const;
 
-// social media links with their icons
 const socialLinks = [
   { label: "GitHub", href: "https://github.com", Icon: GitHubIcon },
   { label: "Twitter", href: "https://twitter.com", Icon: TwitterIcon },
   { label: "LinkedIn", href: "https://linkedin.com", Icon: LinkedInIcon },
 ] as const;
 
-// main footer component - used across all public pages
 export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
     <footer role="contentinfo" className="bg-white border-t border-surface-200">
-      {/* thin brand colored accent line at the very top */}
-      <div className="h-[2px] bg-brand/70" aria-hidden="true" />
-
-      {/* main footer content area with 75px horizontal padding */}
+      {/* Main body */}
       <div
         className="py-14 lg:py-16"
         style={{ paddingLeft: "75px", paddingRight: "75px" }}
       >
         <div className="grid grid-cols-1 gap-12 sm:grid-cols-2 lg:grid-cols-5">
-          {/* brand column - takes 2 columns on large screens, has logo and description */}
+          {/* Brand column */}
           <div className="lg:col-span-2 flex flex-col gap-5">
-            {/* larger logo with hover effect */}
             <Link
               to={ROUTES.HOME}
-              className="w-fit rounded-md transition-opacity duration-150 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              aria-label="TypeTrace — back to home"
+              className="w-fit rounded transition-opacity duration-150 hover:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+              aria-label="TypeTrace — home"
             >
               <img
                 src="/Logo.png"
                 alt="TypeTrace"
-                width={150}
-                height={42}
-                className="h-[42px] w-auto object-contain shrink-0"
+                height={40}
+                className="h-10 w-auto object-contain"
                 onError={(e) => {
-                  // if logo fails to load, hide the broken image
-                  // and show nothing instead of ugly broken image icon
-                  const img = e.currentTarget as HTMLImageElement;
-                  img.style.display = "none";
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
                 }}
               />
             </Link>
 
-            {/* short description about what typetrace does */}
-            <p className="text-[14px] leading-relaxed text-text-secondary max-w-xs">
+            <p className="text-[14px] leading-relaxed text-text-secondary max-w-[260px]">
               Keystroke biometric analysis for verifying academic authorship.
-              Built for universities, educators, and students who care about
-              integrity.
+              Built for universities, educators, and students.
             </p>
 
-            {/* social media icons row */}
+            {/* Social icons */}
             <div
-              className="flex items-center gap-1.5"
+              className="flex items-center gap-1"
               aria-label="Social media links"
             >
               {socialLinks.map(({ label, href, Icon }) => (
@@ -142,33 +123,58 @@ export default function Footer() {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={label}
-                  className="flex items-center justify-center h-9 w-9 rounded-lg text-text-secondary
-                             transition-colors duration-150 hover:text-brand hover:bg-brand/5
-                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand
-                             focus-visible:ring-offset-1 focus-visible:ring-offset-white"
+                  className="flex items-center justify-center h-8 w-8 rounded-lg text-text-secondary transition-colors duration-150 hover:text-brand hover:bg-brand/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
                   <Icon />
                 </a>
               ))}
             </div>
+
+            {/* Trust badge */}
+            <div className="flex items-center gap-2 mt-1">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-verify-text bg-verify-bg border border-verify/20 rounded-full px-2.5 py-1">
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <circle
+                    cx="5"
+                    cy="5"
+                    r="4"
+                    stroke="#10B67E"
+                    strokeWidth="1.2"
+                  />
+                  <path
+                    d="M3 5l1.5 1.5L7 3.5"
+                    stroke="#10B67E"
+                    strokeWidth="1.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                WCAG 2.1 AA
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-text-secondary bg-surface-100 border border-surface-200 rounded-full px-2.5 py-1">
+                GDPR Compliant
+              </span>
+            </div>
           </div>
 
-          {/* link columns - each one is product, support, or legal */}
+          {/* Link columns */}
           {footerColumns.map((col) => (
             <div key={col.heading} className="flex flex-col gap-3.5">
-              {/* column heading in uppercase with tracking */}
-              <h3 className="text-[11px] font-semibold uppercase tracking-widest text-text-secondary/70">
+              <h3 className="text-[11px] font-semibold uppercase tracking-widest text-text-primary">
                 {col.heading}
               </h3>
-              {/* list of links under the heading */}
               <ul className="flex flex-col gap-2.5" role="list">
                 {col.links.map((link) => (
                   <li key={link.label}>
                     <Link
                       to={link.path}
-                      className="text-[14px] text-text-secondary transition-colors duration-150
-                                 hover:text-text-primary focus-visible:outline-none
-                                 focus-visible:ring-1 focus-visible:ring-brand rounded-sm"
+                      className="text-[14px] text-text-secondary transition-colors duration-150 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand rounded-sm"
                     >
                       {link.label}
                     </Link>
@@ -180,61 +186,23 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* bottom bar with copyright and tech stack info */}
+      {/* Bottom bar */}
       <div className="border-t border-surface-200">
         <div
-          className="py-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+          className="py-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
           style={{ paddingLeft: "75px", paddingRight: "75px" }}
         >
-          {/* copyright text */}
           <p className="text-[12px] text-text-secondary/70">
-            &copy; TypeTrace All Rights Reserved {currentYear}. Developed By{" "}
+            &copy; {currentYear} TypeTrace. All rights reserved. Developed by{" "}
             <span className="font-bold">Simthass Mohammed</span>
           </p>
-
-          {/* right side with wcag badge and tech stack */}
-          <div className="flex items-center gap-5">
-            {/* accessibility compliance badge */}
-            <span
-              className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary/70 border
-                         border-surface-200 rounded-full px-3 py-1 select-none"
-              title="WCAG 2.1 Level AA Compliant"
-            >
-              {/* small green checkmark circle */}
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 10 10"
-                fill="none"
-                aria-hidden="true"
-              >
-                <circle
-                  cx="5"
-                  cy="5"
-                  r="4"
-                  stroke="#10B67E"
-                  strokeWidth="1.2"
-                />
-                <path
-                  d="M3 5l1.5 1.5L7 3.5"
-                  stroke="#10B67E"
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              WCAG 2.1 AA
-            </span>
-
-            {/* tech stack display - showing what we built with */}
-            <span className="text-[12px] text-text-secondary/70">
-              <span className="font-medium text-text-secondary">
-                TypeScript
-              </span>{" "}
-              · <span className="font-medium text-text-secondary">React</span> ·{" "}
-              <span className="font-medium text-text-secondary">FastAPI</span>
-            </span>
-          </div>
+          <p className="text-[12px] text-text-secondary/60">
+            Built with <span className="text-brand font-medium">React</span>
+            {" · "}
+            <span className="text-brand font-medium">TypeScript</span>
+            {" · "}
+            <span className="text-brand font-medium">FastAPI</span>
+          </p>
         </div>
       </div>
     </footer>
