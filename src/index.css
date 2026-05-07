@@ -19,7 +19,7 @@
   }
 
   body {
-    @apply font-sans bg-surface text-navy-800;
+    @apply font-sans bg-surface-50 text-text-primary;
     min-height: 100dvh;
   }
 
@@ -56,7 +56,7 @@
   }
 
   .btn-ghost-white {
-    @apply btn border border-white/30 text-white px-4 py-2.5 hover:border-white hover:bg-white/10;
+    @apply btn border border-surface-200 text-text-secondary px-4 py-2.5 hover:border-brand hover:text-brand hover:bg-surface-50;
   }
 
   .btn-sm {
