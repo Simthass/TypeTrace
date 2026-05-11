@@ -18,7 +18,6 @@ export default {
         },
 
         // ─── Official brand palette ─────────────────────────────────────
-        // Electric Blue — buttons, links, active states
         brand: {
           DEFAULT: "#2A7FE0",
           hover: "#1356A3",
@@ -26,43 +25,41 @@ export default {
           muted: "#7BAADB",
         },
 
-        // Steel Blue — secondary text, metadata, labels
         steel: {
           DEFAULT: "#4A6E96",
           light: "#C5D7EE",
         },
 
-        // Verification Green — human badge, certificate
         verify: {
           DEFAULT: "#10B67E",
           bg: "#E6F9F0",
           text: "#0D7A4C",
         },
 
-        // Warm Amber — suspicious badge, warnings
         warn: {
           DEFAULT: "#D48A00",
           bg: "#FEF4E0",
           text: "#8C5B00",
         },
 
-        // Alert Red — AI-detected, paste detection
         danger: {
           DEFAULT: "#E03B30",
           bg: "#FDECEA",
           text: "#9B1C1C",
         },
 
-        // Lime Accent — charts, data viz
         lime: {
           DEFAULT: "#C4E26B",
           dark: "#3C6000",
         },
       },
 
+      // ─── UPDATED: Font Families ─────────────────────────────────────
       fontFamily: {
-        sans: ["DM Sans", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "Fira Code", "monospace"],
+        // Replaced DM Sans with Geist
+        sans: ["Geist", "system-ui", "sans-serif"],
+        // Replaced JetBrains Mono with Geist Mono for consistency
+        mono: ["Geist Mono", "Fira Code", "monospace"],
       },
 
       maxWidth: {
