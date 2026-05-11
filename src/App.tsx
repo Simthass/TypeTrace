@@ -5,12 +5,19 @@ import HowItWorksPage from "./pages/HowItWorksPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import FeaturesPage from "./pages/FeaturesPage";
 import AboutPage from "./pages/AboutPage";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import DashboardLayout from "./components/layout/DashboardLayout";
+import DashboardPage from "./pages/DashboardPage";
+import EditorPage from "./pages/EditorPage";
 import { ROUTES } from "./constants/routes";
+import AuthLayout from "./components/layout/AuthLayout";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* PUBLIC ROUTES (With Header/Footer) */}
         <Route element={<RootLayout />}>
           <Route index element={<HomePage />} />
           <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
@@ -20,48 +27,13 @@ export default function App() {
             path={ROUTES.PRICING}
             element={<PlaceholderPage title="Pricing" />}
           />
-          <Route
-            path={ROUTES.LOGIN}
-            element={
-              <PlaceholderPage
-                title="Log In"
-                description="Login page — coming soon."
-              />
-            }
-          />
-          <Route
-            path={ROUTES.REGISTER}
-            element={
-              <PlaceholderPage
-                title="Create Account"
-                description="Registration — coming soon."
-              />
-            }
-          />
-          <Route
-            path={ROUTES.DASHBOARD}
-            element={
-              <PlaceholderPage
-                title="Dashboard"
-                description="Dashboard — coming soon."
-              />
-            }
-          />
+
           <Route
             path={ROUTES.EDITOR}
             element={
               <PlaceholderPage
                 title="Sessions"
                 description="Session list — coming soon."
-              />
-            }
-          />
-          <Route
-            path={ROUTES.EDITOR_NEW}
-            element={
-              <PlaceholderPage
-                title="New Session"
-                description="Editor — coming soon."
               />
             }
           />
@@ -75,6 +47,19 @@ export default function App() {
             }
           />
         </Route>
+
+        {/* AUTHENTICATED ROUTES (With Sidebar) */}
+        <Route element={<DashboardLayout />}>
+          <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+          {/* ... settings etc ... */}
+        </Route>
+        <Route element={<AuthLayout />}>
+          <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+          <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
+        </Route>
+
+        {/* ZEN MODE EDITOR (Full Screen, No Navigation) */}
+        <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
       </Routes>
     </BrowserRouter>
   );
