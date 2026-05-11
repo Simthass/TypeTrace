@@ -1,12 +1,14 @@
+import React from "react";
 import { Link } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
+import { brand, colors } from "../../styles/colors";
 
-/* ─── Social Icons ───────────────────────────────────────────────────────── */
+// Crisp, perfectly curved SVG icons
 function GitHubIcon() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="20"
+      height="20"
       viewBox="0 0 24 24"
       fill="currentColor"
       aria-hidden="true"
@@ -15,11 +17,12 @@ function GitHubIcon() {
     </svg>
   );
 }
+
 function TwitterIcon() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="20"
+      height="20"
       viewBox="0 0 24 24"
       fill="currentColor"
       aria-hidden="true"
@@ -28,11 +31,12 @@ function TwitterIcon() {
     </svg>
   );
 }
+
 function LinkedInIcon() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="20"
+      height="20"
       viewBox="0 0 24 24"
       fill="currentColor"
       aria-hidden="true"
@@ -44,78 +48,94 @@ function LinkedInIcon() {
 
 const footerColumns = [
   {
-    heading: "Product",
+    heading: "Platform",
     links: [
       { label: "How It Works", path: ROUTES.HOW_IT_WORKS },
-      { label: "Features", path: ROUTES.FEATURES },
+      { label: "Features Stack", path: ROUTES.FEATURES },
       { label: "Dashboard", path: ROUTES.DASHBOARD },
-      { label: "Pricing", path: ROUTES.PRICING },
+      { label: "Enterprise Pricing", path: ROUTES.PRICING },
     ],
   },
   {
-    heading: "Support",
+    heading: "Resources",
     links: [
-      { label: "Documentation", path: "/#docs" },
-      { label: "Contact", path: "/#contact" },
-      { label: "FAQ", path: "/#faq" },
-      { label: "Status", path: "/#status" },
+      { label: "Academic Research", path: "/#docs" },
+      { label: "University Partners", path: "/#partners" },
+      { label: "Help Center", path: "/#faq" },
+      { label: "System Status", path: "/#status" },
     ],
   },
   {
-    heading: "Legal",
+    heading: "Trust",
     links: [
-      { label: "Privacy Policy", path: "/#privacy" },
+      { label: "Privacy Philosophy", path: "/#privacy" },
       { label: "Terms of Service", path: "/#terms" },
-      { label: "Cookie Policy", path: "/#cookies" },
+      { label: "Data Portability", path: "/#gdpr" },
     ],
   },
 ] as const;
 
 const socialLinks = [
-  { label: "GitHub", href: "https://github.com", Icon: GitHubIcon },
-  { label: "Twitter", href: "https://twitter.com", Icon: TwitterIcon },
-  { label: "LinkedIn", href: "https://linkedin.com", Icon: LinkedInIcon },
+  { label: "GitHub Repository", href: "https://github.com", Icon: GitHubIcon },
+  { label: "Follow on X", href: "https://twitter.com", Icon: TwitterIcon },
+  {
+    label: "LinkedIn Network",
+    href: "https://linkedin.com",
+    Icon: LinkedInIcon,
+  },
 ] as const;
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
 
+  // Strict mapping to your colors.ts source of truth
+  const dynamicStyles = {
+    "--bg-footer": colors.text.light,
+    "--border-light": colors.surface[200],
+    "--text-primary": colors.text.primary,
+    "--text-muted": colors.text.secondary,
+    "--action-primary": brand.action,
+    "--action-hover": brand.actionHover,
+    "--verify-green": brand.humanText,
+    "--verify-bg": brand.humanBg,
+    "--verify-border": brand.humanAccent,
+    "--surface-50": colors.surface[50],
+  } as React.CSSProperties;
+
   return (
-    <footer role="contentinfo" className="bg-white border-t border-surface-200">
-      {/* Main body */}
-      <div
-        className="py-14 lg:py-16"
-        style={{ paddingLeft: "75px", paddingRight: "75px" }}
-      >
-        <div className="grid grid-cols-1 gap-12 sm:grid-cols-2 lg:grid-cols-5">
-          {/* Brand column */}
-          <div className="lg:col-span-2 flex flex-col gap-5">
+    <footer
+      role="contentinfo"
+      style={dynamicStyles}
+      className="bg-[var(--bg-footer)] border-t border-[var(--border-light)] overflow-hidden font-sans"
+    >
+      {/* ─── Main Grid Area ─── */}
+      <div className="max-w-[1440px] mx-auto px-6 md:px-12 py-20">
+        <div className="grid grid-cols-1 gap-16 lg:grid-cols-6">
+          {/* Brand & Mission Column */}
+          <div className="lg:col-span-2 flex flex-col gap-6">
             <Link
               to={ROUTES.HOME}
-              className="w-fit rounded transition-opacity duration-150 hover:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
-              aria-label="TypeTrace — home"
+              className="w-fit rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--action-primary)] focus-visible:ring-offset-2"
+              aria-label="TypeTrace Home"
             >
               <img
                 src="/Logo.png"
                 alt="TypeTrace"
-                height={40}
-                className="h-10 w-auto object-contain"
+                className="h-[35px] w-auto object-contain transition-opacity hover:opacity-80"
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).style.display = "none";
                 }}
               />
             </Link>
 
-            <p className="text-[14px] leading-relaxed text-text-secondary max-w-[260px]">
-              Keystroke biometric analysis for verifying academic authorship.
-              Built for universities, educators, and students.
+            <p className="text-[14px] leading-[1.8] text-[var(--text-muted)] max-w-[320px]">
+              Behavioral keystroke biometrics engineered to protect honest
+              students and uphold institutional integrity in the generative AI
+              era.
             </p>
 
-            {/* Social icons */}
-            <div
-              className="flex items-center gap-1"
-              aria-label="Social media links"
-            >
+            {/* Strict Social Links - No round pills, no shadows */}
+            <div className="flex items-center gap-2 mt-2">
               {socialLinks.map(({ label, href, Icon }) => (
                 <a
                   key={label}
@@ -123,86 +143,82 @@ export default function Footer() {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={label}
-                  className="flex items-center justify-center h-8 w-8 rounded-lg text-text-secondary transition-colors duration-150 hover:text-brand hover:bg-brand/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  // STRICT TOKEN: rounded-lg
+                  className="flex items-center justify-center h-10 w-10 rounded-lg border border-transparent bg-[var(--surface-50)] text-[var(--text-muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--action-primary)]"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "var(--action-primary)";
+                    e.currentTarget.style.borderColor = "var(--border-light)";
+                    e.currentTarget.style.backgroundColor = "var(--bg-footer)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "var(--text-muted)";
+                    e.currentTarget.style.borderColor = "transparent";
+                    e.currentTarget.style.backgroundColor = "var(--surface-50)";
+                  }}
                 >
                   <Icon />
                 </a>
               ))}
             </div>
-
-            {/* Trust badge */}
-            <div className="flex items-center gap-2 mt-1">
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-verify-text bg-verify-bg border border-verify/20 rounded-full px-2.5 py-1">
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 10 10"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <circle
-                    cx="5"
-                    cy="5"
-                    r="4"
-                    stroke="#10B67E"
-                    strokeWidth="1.2"
-                  />
-                  <path
-                    d="M3 5l1.5 1.5L7 3.5"
-                    stroke="#10B67E"
-                    strokeWidth="1.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                WCAG 2.1 AA
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-text-secondary bg-surface-100 border border-surface-200 rounded-full px-2.5 py-1">
-                GDPR Compliant
-              </span>
-            </div>
           </div>
 
-          {/* Link columns */}
-          {footerColumns.map((col) => (
-            <div key={col.heading} className="flex flex-col gap-3.5">
-              <h3 className="text-[11px] font-semibold uppercase tracking-widest text-text-primary">
-                {col.heading}
-              </h3>
-              <ul className="flex flex-col gap-2.5" role="list">
-                {col.links.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      to={link.path}
-                      className="text-[14px] text-text-secondary transition-colors duration-150 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand rounded-sm"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          {/* Dynamic Link Columns */}
+          <div className="lg:col-span-4 grid grid-cols-2 md:grid-cols-3 gap-10 lg:pl-12">
+            {footerColumns.map((col) => (
+              <div key={col.heading} className="flex flex-col gap-5">
+                <h3 className="text-[12px] font-bold uppercase tracking-widest text-[var(--text-primary)]">
+                  {col.heading}
+                </h3>
+                <ul className="flex flex-col gap-3.5" role="list">
+                  {col.links.map((link) => (
+                    <li key={link.label}>
+                      <Link
+                        to={link.path}
+                        // Minimalist text color transition. Removed the 2021 animated underline.
+                        className="text-[14px] font-medium text-[var(--text-muted)] transition-colors duration-200 hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--action-primary)] rounded-md"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Bottom bar */}
-      <div className="border-t border-surface-200">
-        <div
-          className="py-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-          style={{ paddingLeft: "75px", paddingRight: "75px" }}
-        >
-          <p className="text-[12px] text-text-secondary/70">
-            &copy; {currentYear} TypeTrace. All rights reserved. Developed by{" "}
-            <span className="font-bold">Simthass Mohammed</span>
-          </p>
-          <p className="text-[12px] text-text-secondary/60">
-            Built with <span className="text-brand font-medium">React</span>
-            {" · "}
-            <span className="text-brand font-medium">TypeScript</span>
-            {" · "}
-            <span className="text-brand font-medium">FastAPI</span>
-          </p>
+      {/* ─── Bottom Legal & Status Bar ─── */}
+      <div className="border-t border-[var(--border-light)] bg-[var(--surface-50)]">
+        <div className="max-w-[1440px] mx-auto px-6 md:px-12 py-6 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
+            <p className="text-[13px] font-medium text-[var(--text-muted)]">
+              &copy; {currentYear} TypeTrace Systems.
+            </p>
+            <p className="text-[13px] text-[var(--text-muted)] flex items-center gap-1.5">
+              Developed by{" "}
+              <span className="font-semibold text-[var(--text-primary)] transition-colors hover:text-[var(--action-primary)] cursor-pointer">
+                Simthass Mohammed
+              </span>
+            </p>
+          </div>
+
+          {/* System Status Indicators */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* STRICT TOKEN: rounded-md */}
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-[var(--bg-footer)] border border-[var(--border-light)]">
+              <span className="text-[11.5px] font-medium text-[var(--text-muted)]">
+                GDPR Compliant
+              </span>
+            </div>
+
+            {/* STRICT TOKEN: rounded-md */}
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-[var(--bg-footer)] border border-[var(--border-light)]">
+              <span className="text-[11.5px] font-medium text-[var(--text-muted)]">
+                WCAG 2.1 AA
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </footer>
