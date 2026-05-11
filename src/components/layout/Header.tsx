@@ -1,232 +1,262 @@
-import { useState, useEffect, useRef } from "react";
-import { NavLink, Link, useLocation } from "react-router-dom";
-import clsx from "clsx";
+import React, { useState, useEffect, useRef } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { ROUTES, PUBLIC_NAV } from "../../constants/routes";
+import { brand, colors } from "../../styles/colors";
 
-/* ─── Hamburger ──────────────────────────────────────────────────────────── */
-function HamburgerIcon({ open }: { open: boolean }) {
+function MenuToggleIcon({ isOpen }: { isOpen: boolean }) {
   return (
-    <span
+    <div
+      className="relative w-[18px] h-[14px] flex flex-col justify-between items-center"
       aria-hidden="true"
-      className="flex h-5 w-5 flex-col justify-center gap-[5px]"
     >
-      <span
-        className={clsx(
-          "block h-[1.5px] w-full bg-text-primary origin-center transition-transform duration-200",
-          open ? "translate-y-[6.5px] rotate-45" : "",
-        )}
+      <motion.span
+        className="w-full h-[1.5px] rounded-full origin-left"
+        style={{ backgroundColor: colors.text.primary }}
+        animate={{ rotate: isOpen ? 45 : 0, y: isOpen ? -1.5 : 0 }}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       />
-      <span
-        className={clsx(
-          "block h-[1.5px] w-full bg-text-primary transition-opacity duration-200",
-          open ? "opacity-0" : "opacity-100",
-        )}
+      <motion.span
+        className="w-full h-[1.5px] rounded-full"
+        style={{ backgroundColor: colors.text.primary }}
+        animate={{ opacity: isOpen ? 0 : 1, x: isOpen ? 8 : 0 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
       />
-      <span
-        className={clsx(
-          "block h-[1.5px] w-full bg-text-primary origin-center transition-transform duration-200",
-          open ? "-translate-y-[6.5px] -rotate-45" : "",
-        )}
+      <motion.span
+        className="w-full h-[1.5px] rounded-full origin-left"
+        style={{ backgroundColor: colors.text.primary }}
+        animate={{ rotate: isOpen ? -45 : 0, y: isOpen ? 1.5 : 0 }}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       />
-    </span>
+    </div>
   );
 }
 
-/* ─── Header ─────────────────────────────────────────────────────────────── */
 export default function Header() {
-  const [scrolled, setScrolled] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const prevPathRef = useRef<string | null>(null);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const prevPathRef = useRef<string | null>(null);
 
-  // Close mobile menu on route change — using ref to avoid setState-in-effect cascade
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.scrollY > 10);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   useEffect(() => {
     if (
       prevPathRef.current !== null &&
       prevPathRef.current !== location.pathname
     ) {
-      setMobileOpen(false);
+      setIsMobileMenuOpen(false);
     }
     prevPathRef.current = location.pathname;
   }, [location.pathname]);
 
-  // Detect scroll for border shadow
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 4);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // Escape closes mobile menu
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [mobileOpen]);
-
-  // Lock body scroll when mobile menu is open
-  useEffect(() => {
-    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    document.body.style.overflow = isMobileMenuOpen ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
-  }, [mobileOpen]);
+  }, [isMobileMenuOpen]);
 
   return (
     <>
       <header
         role="banner"
-        className={clsx(
-          "fixed inset-x-0 top-0 z-50 h-[68px] bg-surface-50",
-          "transition-all duration-200",
-          scrolled
-            ? "shadow-[0_1px_0_#D1D9E0,0_2px_12px_rgba(26,35,50,0.06)]"
-            : "border-b border-surface-200",
-        )}
+        className="fixed top-0 inset-x-0 z-50 transition-colors duration-300"
+        style={{
+          backgroundColor: colors.text.light,
+          borderBottom: isScrolled
+            ? `1px solid ${colors.surface[200]}`
+            : "1px solid transparent",
+          height: "64px",
+        }}
       >
-        <div
-          className="h-full flex items-center justify-between"
-          style={{ paddingLeft: "75px", paddingRight: "75px" }}
-        >
-          {/* Logo — image only, no wordmark (text already in logo) */}
-          <Link
-            to={ROUTES.HOME}
-            className="flex items-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
-            aria-label="TypeTrace — home"
-          >
-            <img
-              src="/Logo.png"
-              alt="TypeTrace"
-              height={38}
-              className="h-[38px] w-auto object-contain"
-              onError={(e) => {
-                // show nothing if logo missing — avoids broken image
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-              }}
-            />
-          </Link>
-
-          {/* Desktop nav — centered */}
-          <nav
-            aria-label="Main navigation"
-            className="hidden lg:flex items-center gap-0.5"
-          >
-            {PUBLIC_NAV.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.path === ROUTES.HOME}
-                className={({ isActive }) =>
-                  clsx(
-                    "relative px-4 py-2 text-[14px] font-medium rounded-lg transition-colors duration-150",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1",
-                    isActive
-                      ? "text-brand bg-brand/5"
-                      : "text-text-secondary hover:text-text-primary hover:bg-surface-100",
-                  )
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-
-          {/* Desktop auth */}
-          <div className="hidden lg:flex items-center gap-2.5">
+        <div className="h-full w-full max-w-[1440px] mx-auto px-6 md:px-12 flex items-center justify-between">
+          <div className="flex-shrink-0 flex items-center">
             <Link
-              to={ROUTES.LOGIN}
-              className="px-4 py-2 text-[14px] font-medium text-text-secondary rounded-lg border border-surface-200 transition-all duration-150 hover:border-brand/40 hover:text-brand hover:bg-brand/3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1"
+              to={ROUTES.HOME}
+              className="flex items-center outline-none focus-visible:ring-2 rounded-lg"
             >
-              Log in
-            </Link>
-            <Link
-              to={ROUTES.REGISTER}
-              className="px-4 py-2 text-[14px] font-medium text-white bg-brand rounded-lg transition-all duration-150 hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
-            >
-              Get started
+              <img
+                src="/Logo.png"
+                alt="TypeTrace"
+                className="h-[37px] w-auto object-contain transition-opacity hover:opacity-80"
+              />
             </Link>
           </div>
 
-          {/* Mobile toggle */}
+          <nav className="hidden md:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
+            {PUBLIC_NAV.map((item) => {
+              const isActive =
+                location.pathname === item.path ||
+                (item.path !== "/" && location.pathname.startsWith(item.path));
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  // STRICT TOKEN: rounded-lg (8px)
+                  className="relative px-4 py-2 rounded-lg text-[13.5px] font-medium transition-colors duration-200 outline-none"
+                  style={{
+                    color: isActive
+                      ? colors.text.primary
+                      : colors.text.secondary,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive)
+                      e.currentTarget.style.color = colors.text.primary;
+                    e.currentTarget.style.backgroundColor = colors.surface[50];
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive)
+                      e.currentTarget.style.color = colors.text.secondary;
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }}
+                >
+                  <span className="relative z-10">{item.label}</span>
+                  {isActive && (
+                    <motion.div
+                      layoutId="nav-indicator"
+                      className="absolute bottom-1 left-4 right-4 h-[2px] rounded-full"
+                      style={{ backgroundColor: colors.text.primary }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 500,
+                        damping: 35,
+                      }}
+                    />
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="hidden md:flex items-center gap-4">
+            <Link
+              to={ROUTES.LOGIN}
+              // STRICT TOKEN: rounded-lg (8px)
+              className="px-4 py-2 rounded-lg text-[13.5px] font-medium transition-colors duration-200 outline-none"
+              style={{ color: colors.text.secondary }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = colors.text.primary;
+                e.currentTarget.style.backgroundColor = colors.surface[50];
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = colors.text.secondary;
+                e.currentTarget.style.backgroundColor = "transparent";
+              }}
+            >
+              Sign In
+            </Link>
+
+            <Link
+              to={ROUTES.REGISTER}
+              // STRICT TOKEN: rounded-lg (8px)
+              className="px-5 py-2 rounded-lg text-[13.5px] font-medium text-white transition-all duration-200 outline-none"
+              style={{ backgroundColor: brand.action }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor = brand.actionHover)
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = brand.action)
+              }
+            >
+              Start Free Session
+            </Link>
+          </div>
+
           <button
             type="button"
-            aria-expanded={mobileOpen}
-            aria-controls="mobile-menu"
-            aria-label={mobileOpen ? "Close menu" : "Open menu"}
-            onClick={() => setMobileOpen((v) => !v)}
-            className="lg:hidden flex h-9 w-9 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-surface-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            // STRICT TOKEN: rounded-lg (8px)
+            className="md:hidden flex items-center justify-center w-10 h-10 rounded-lg transition-colors outline-none"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = colors.surface[50])
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = "transparent")
+            }
           >
-            <HamburgerIcon open={mobileOpen} />
+            <MenuToggleIcon isOpen={isMobileMenuOpen} />
           </button>
         </div>
       </header>
 
-      {/* Mobile backdrop */}
-      <div
-        aria-hidden="true"
-        onClick={() => setMobileOpen(false)}
-        className={clsx(
-          "fixed inset-0 z-40 bg-black/30 lg:hidden transition-opacity duration-200",
-          mobileOpen
-            ? "opacity-100 pointer-events-auto"
-            : "opacity-0 pointer-events-none",
-        )}
-      />
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="fixed inset-0 z-40 pt-[64px] flex flex-col md:hidden"
+            style={{ backgroundColor: colors.text.light }}
+          >
+            <div className="flex-1 overflow-y-auto px-6 py-8 flex flex-col">
+              <nav className="flex flex-col gap-2 mb-auto">
+                {PUBLIC_NAV.map((item, index) => {
+                  const isActive =
+                    location.pathname === item.path ||
+                    (item.path !== "/" &&
+                      location.pathname.startsWith(item.path));
+                  return (
+                    <motion.div
+                      key={item.path}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <Link
+                        to={item.path}
+                        // STRICT TOKEN: rounded-lg (8px)
+                        className="block px-4 py-3 rounded-lg text-xl font-semibold tracking-tight transition-colors"
+                        style={{
+                          color: isActive ? brand.action : colors.text.primary,
+                          backgroundColor: isActive
+                            ? `${brand.action}10`
+                            : "transparent",
+                        }}
+                      >
+                        {item.label}
+                      </Link>
+                    </motion.div>
+                  );
+                })}
+              </nav>
 
-      {/* Mobile drawer */}
-      <div
-        id="mobile-menu"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Navigation menu"
-        className={clsx(
-          "fixed inset-x-0 top-[68px] z-40 lg:hidden",
-          "bg-surface-50 border-b border-surface-200",
-          "transition-all duration-200",
-          mobileOpen
-            ? "opacity-100 translate-y-0 pointer-events-auto"
-            : "opacity-0 -translate-y-2 pointer-events-none",
-        )}
-      >
-        <div className="px-5 py-4">
-          <nav aria-label="Mobile navigation" className="flex flex-col gap-0.5">
-            {PUBLIC_NAV.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.path === ROUTES.HOME}
-                className={({ isActive }) =>
-                  clsx(
-                    "px-3 py-2.5 text-[14px] font-medium rounded-lg transition-colors duration-150",
-                    isActive
-                      ? "bg-brand/8 text-brand"
-                      : "text-text-secondary hover:text-text-primary hover:bg-surface-100",
-                  )
-                }
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+                className="flex flex-col gap-3 pt-8 border-t"
+                style={{ borderColor: colors.surface[200] }}
               >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="mt-4 pt-4 border-t border-surface-200 flex flex-col gap-2.5">
-            <Link
-              to={ROUTES.LOGIN}
-              className="flex justify-center px-4 py-2.5 text-[14px] font-medium text-brand border border-brand/30 rounded-lg transition-colors duration-150 hover:bg-brand/5"
-            >
-              Log in
-            </Link>
-            <Link
-              to={ROUTES.REGISTER}
-              className="flex justify-center px-4 py-2.5 text-[14px] font-medium text-white bg-brand rounded-lg transition-colors duration-150 hover:bg-brand-hover"
-            >
-              Get started
-            </Link>
-          </div>
-        </div>
-      </div>
+                <Link
+                  to={ROUTES.LOGIN}
+                  // STRICT TOKEN: rounded-lg (8px)
+                  className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center border transition-colors"
+                  style={{
+                    color: colors.text.primary,
+                    borderColor: colors.surface[200],
+                  }}
+                >
+                  Sign In
+                </Link>
+                <Link
+                  to={ROUTES.REGISTER}
+                  // STRICT TOKEN: rounded-lg (8px)
+                  className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center text-white transition-colors"
+                  style={{ backgroundColor: brand.action }}
+                >
+                  Start Free Session
+                </Link>
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
