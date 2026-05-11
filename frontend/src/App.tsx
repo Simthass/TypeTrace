@@ -1,3 +1,4 @@
+// src/App.tsx
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import RootLayout from "./components/layout/RootLayout";
 import HomePage from "./pages/HomePage";
@@ -7,11 +8,13 @@ import FeaturesPage from "./pages/FeaturesPage";
 import AboutPage from "./pages/AboutPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import VerifyOtpPage from "./pages/VerifyOtpPage"; // <-- 1. IMPORT THIS
 import DashboardLayout from "./components/layout/DashboardLayout";
 import DashboardPage from "./pages/DashboardPage";
 import EditorPage from "./pages/EditorPage";
 import { ROUTES } from "./constants/routes";
 import AuthLayout from "./components/layout/AuthLayout";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 
 export default function App() {
   return (
@@ -27,7 +30,6 @@ export default function App() {
             path={ROUTES.PRICING}
             element={<PlaceholderPage title="Pricing" />}
           />
-
           <Route
             path={ROUTES.EDITOR}
             element={
@@ -53,9 +55,17 @@ export default function App() {
           <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
           {/* ... settings etc ... */}
         </Route>
+
+        {/* AUTHENTICATION FLOW ROUTES */}
         <Route element={<AuthLayout />}>
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
           <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
+          <Route path={ROUTES.VERIFY_OTP} element={<VerifyOtpPage />} />{" "}
+          {/* <-- 2. ADD THIS ROUTE */}
+          <Route
+            path={ROUTES.FORGOT_PASSWORD}
+            element={<ForgotPasswordPage />}
+          />
         </Route>
 
         {/* ZEN MODE EDITOR (Full Screen, No Navigation) */}

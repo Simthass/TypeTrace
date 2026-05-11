@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ROUTES, PUBLIC_NAV } from "../../constants/routes";
 import { brand, colors } from "../../styles/colors";
+import { useAuthStore } from "../../store/authStore";
 
 function MenuToggleIcon({ isOpen }: { isOpen: boolean }) {
   return (
@@ -35,8 +36,15 @@ function MenuToggleIcon({ isOpen }: { isOpen: boolean }) {
 export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
   const location = useLocation();
+  const navigate = useNavigate();
   const prevPathRef = useRef<string | null>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Pulling global state to check if user is logged in
+  const { user, logout } = useAuthStore();
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
@@ -50,16 +58,36 @@ export default function Header() {
       prevPathRef.current !== location.pathname
     ) {
       setIsMobileMenuOpen(false);
+      setIsProfileMenuOpen(false);
     }
     prevPathRef.current = location.pathname;
   }, [location.pathname]);
 
+  // Close profile dropdown when clicking outside
   useEffect(() => {
-    document.body.style.overflow = isMobileMenuOpen ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [isMobileMenuOpen]);
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsProfileMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    setIsProfileMenuOpen(false);
+    navigate(ROUTES.HOME);
+  };
+
+  // Get user initials for the avatar
+  const getInitials = () => {
+    if (!user || !user.first_name) return "U";
+    return user.first_name.charAt(0).toUpperCase();
+  };
 
   return (
     <>
@@ -97,7 +125,6 @@ export default function Header() {
                 <Link
                   key={item.path}
                   to={item.path}
-                  // STRICT TOKEN: rounded-lg (8px)
                   className="relative px-4 py-2 rounded-lg text-[13.5px] font-medium transition-colors duration-200 outline-none"
                   style={{
                     color: isActive
@@ -134,42 +161,180 @@ export default function Header() {
           </nav>
 
           <div className="hidden md:flex items-center gap-4">
-            <Link
-              to={ROUTES.LOGIN}
-              // STRICT TOKEN: rounded-lg (8px)
-              className="px-4 py-2 rounded-lg text-[13.5px] font-medium transition-colors duration-200 outline-none"
-              style={{ color: colors.text.secondary }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = colors.text.primary;
-                e.currentTarget.style.backgroundColor = colors.surface[50];
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = colors.text.secondary;
-                e.currentTarget.style.backgroundColor = "transparent";
-              }}
-            >
-              Sign In
-            </Link>
+            {user ? (
+              /* --- AUTHENTICATED STATE: Profile Dropdown --- */
+              <div className="relative" ref={profileMenuRef}>
+                <button
+                  onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                  className="flex items-center gap-2 p-1.5 rounded-lg transition-colors outline-none focus-visible:ring-2"
+                  style={{
+                    backgroundColor: isProfileMenuOpen
+                      ? colors.surface[50]
+                      : "transparent",
+                  }}
+                  onMouseEnter={(e) =>
+                    !isProfileMenuOpen &&
+                    (e.currentTarget.style.backgroundColor = colors.surface[50])
+                  }
+                  onMouseLeave={(e) =>
+                    !isProfileMenuOpen &&
+                    (e.currentTarget.style.backgroundColor = "transparent")
+                  }
+                >
+                  <div
+                    className="h-8 w-8 rounded-md flex items-center justify-center font-bold text-[13px]"
+                    style={{
+                      backgroundColor: `${brand.action}15`,
+                      color: brand.action,
+                    }}
+                  >
+                    {getInitials()}
+                  </div>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke={colors.text.secondary}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{
+                      transform: isProfileMenuOpen
+                        ? "rotate(180deg)"
+                        : "rotate(0deg)",
+                      transition: "transform 0.2s",
+                    }}
+                  >
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
 
-            <Link
-              to={ROUTES.REGISTER}
-              // STRICT TOKEN: rounded-lg (8px)
-              className="px-5 py-2 rounded-lg text-[13.5px] font-medium text-white transition-all duration-200 outline-none"
-              style={{ backgroundColor: brand.action }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.backgroundColor = brand.actionHover)
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.backgroundColor = brand.action)
-              }
-            >
-              Start Free Session
-            </Link>
+                <AnimatePresence>
+                  {isProfileMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 mt-2 w-56 rounded-xl border flex flex-col overflow-hidden"
+                      style={{
+                        backgroundColor: colors.text.light,
+                        borderColor: colors.surface[200],
+                      }}
+                    >
+                      <div
+                        className="px-4 py-3 border-b"
+                        style={{
+                          borderColor: colors.surface[200],
+                          backgroundColor: colors.surface[50],
+                        }}
+                      >
+                        <p
+                          className="text-[13px] font-semibold truncate"
+                          style={{ color: colors.text.primary }}
+                        >
+                          {user.first_name}
+                        </p>
+                        <p
+                          className="text-[12px] truncate mt-0.5"
+                          style={{ color: colors.text.secondary }}
+                        >
+                          {user.email}
+                        </p>
+                      </div>
+                      <div className="p-1.5 flex flex-col">
+                        <Link
+                          to={ROUTES.DASHBOARD}
+                          className="px-3 py-2 text-[13px] font-medium rounded-md transition-colors"
+                          style={{ color: colors.text.primary }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              colors.surface[50])
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              "transparent")
+                          }
+                        >
+                          Dashboard
+                        </Link>
+                        <Link
+                          to={ROUTES.EDITOR_NEW}
+                          className="px-3 py-2 text-[13px] font-medium rounded-md transition-colors"
+                          style={{ color: colors.text.primary }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              colors.surface[50])
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              "transparent")
+                          }
+                        >
+                          New Verification Session
+                        </Link>
+                      </div>
+                      <div
+                        className="p-1.5 border-t"
+                        style={{ borderColor: colors.surface[200] }}
+                      >
+                        <button
+                          onClick={handleLogout}
+                          className="w-full text-left px-3 py-2 text-[13px] font-medium rounded-md transition-colors outline-none"
+                          style={{ color: brand.aiAccent }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.backgroundColor = `${brand.aiAccent}10`)
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              "transparent")
+                          }
+                        >
+                          Sign out
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ) : (
+              /* --- UNAUTHENTICATED STATE: Login/Register Buttons --- */
+              <>
+                <Link
+                  to={ROUTES.LOGIN}
+                  className="px-4 py-2 rounded-lg text-[13.5px] font-medium transition-colors duration-200 outline-none"
+                  style={{ color: colors.text.secondary }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = colors.text.primary;
+                    e.currentTarget.style.backgroundColor = colors.surface[50];
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = colors.text.secondary;
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }}
+                >
+                  Sign In
+                </Link>
+                <Link
+                  to={ROUTES.REGISTER}
+                  className="px-5 py-2 rounded-lg text-[13.5px] font-medium text-white transition-all duration-200 outline-none"
+                  style={{ backgroundColor: brand.action }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.backgroundColor = brand.actionHover)
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.backgroundColor = brand.action)
+                  }
+                >
+                  Start Free Session
+                </Link>
+              </>
+            )}
           </div>
 
           <button
             type="button"
-            // STRICT TOKEN: rounded-lg (8px)
             className="md:hidden flex items-center justify-center w-10 h-10 rounded-lg transition-colors outline-none"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             onMouseEnter={(e) =>

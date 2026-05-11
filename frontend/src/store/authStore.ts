@@ -1,26 +1,36 @@
 // src/store/authStore.ts
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
-// defining the types for typescript so examiner knows i understand type safety
 interface AuthState {
-  user: any | null; // will replace 'any' with strict user type later when backend is done
+  user: any | null;
   token: string | null;
-  pendingEmail: string | null; // storing this temporarily for the OTP page
+  pendingEmail: string | null;
   setPendingEmail: (email: string) => void;
   login: (user: any, token: string) => void;
   logout: () => void;
 }
 
-// using zustand cos professor said redux is too heavy for modern 2026 apps
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  token: null,
-  pendingEmail: null,
+// Wrapping the store in the persist middleware for enterprise-grade session retention
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      token: null,
+      pendingEmail: null,
 
-  // call this right after user submit register form successfully
-  setPendingEmail: (email) => set({ pendingEmail: email }),
+      setPendingEmail: (email) => set({ pendingEmail: email }),
 
-  login: (user, token) => set({ user, token }),
+      login: (user, token) => set({ user, token }),
 
-  logout: () => set({ user: null, token: null, pendingEmail: null }),
-}));
+      logout: () => set({ user: null, token: null, pendingEmail: null }),
+    }),
+    {
+      name: "typetrace-auth-storage", // The key used in localStorage
+      storage: createJSONStorage(() => localStorage),
+      // We only want to persist the user and token.
+      // We DONT want to persist pendingEmail across reloads.
+      partialize: (state) => ({ user: state.user, token: state.token }),
+    },
+  ),
+);

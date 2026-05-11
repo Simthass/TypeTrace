@@ -80,3 +80,36 @@ class UserResponse(BaseModel):
     # this tells pydantic to read from SQLAlchemy database models automatically
     class Config:
         from_attributes = True
+        
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetVerify(BaseModel):
+    email: EmailStr
+    otp: str
+
+    @field_validator('otp')
+    @classmethod
+    def validate_otp(cls, v: str) -> str:
+        if not v.isdigit() or len(v) != 6:
+            raise ValueError("OTP must be exactly 6 digits")
+        return v
+
+class PasswordResetConfirm(BaseModel):
+    email: EmailStr
+    reset_token: str
+    new_password: str
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        # reusing the same strong password logic from registration
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if not any(char.isdigit() for char in v):
+            raise ValueError("Password must contain at least one number")
+        if not any(not char.isalnum() for char in v):
+            raise ValueError("Password must contain at least one special character")
+        return v

@@ -6,6 +6,8 @@ import * as z from "zod";
 import { motion } from "framer-motion";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
+import { api } from "../lib/api";
+import { useAuthStore } from "../store/authStore";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Invalid email format"),
@@ -25,19 +27,19 @@ function GoogleIcon() {
     >
       <path
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-        fill={colors.text.primary}
+        fill="currentColor"
       />
       <path
         d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-        fill={colors.text.primary}
+        fill="currentColor"
       />
       <path
         d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-        fill={colors.text.primary}
+        fill="currentColor"
       />
       <path
         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-        fill={colors.text.primary}
+        fill="currentColor"
       />
     </svg>
   );
@@ -55,8 +57,8 @@ function LockIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <rect x="5" y="11" width="14" height="11" rx="2" ry="2"></rect>
-      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+      <rect x="5" y="11" width="14" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   );
 }
@@ -80,157 +82,80 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
-    console.log("Login Payload:", data);
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      // baseURL already includes /api/v1/auth, so we just hit /login
+      const response = await api.post("/login", {
+        email: data.email,
+        password: data.password,
+      });
+
+      const { user, access_token } = response.data;
+      useAuthStore.getState().login(user, access_token);
       navigate(ROUTES.DASHBOARD);
-    }, 1000);
+    } catch (error: any) {
+      alert(error.response?.data?.detail || "Invalid credentials.");
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  const authStyles = {
+    "--bg-main": colors.text.light,
+    "--surface-50": colors.surface[50],
+    "--surface-200": colors.surface[200],
+    "--text-primary": colors.text.primary,
+    "--text-secondary": colors.text.secondary,
+    "--brand-action": brand.action,
+    "--brand-hover": brand.actionHover,
+    "--error-color": brand.aiAccent,
+  } as React.CSSProperties;
 
   return (
     <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "flex-start", // changed from center
-        justifyContent: "center",
-        backgroundColor: colors.text.light, // Pure white/lightest background
-        padding: "10vh 24px 24px", // 10vh pushes it down optimally instead of dead center
-        fontFamily: "inherit",
-      }}
+      style={authStyles}
+      className="min-h-screen flex items-start justify-center bg-[var(--bg-main)] pt-[10vh] px-6 pb-6 font-sans"
     >
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
-        style={{
-          width: "100%",
-          maxWidth: "380px", // Slightly tighter width for borderless design
-          // NO background color, NO border, NO box-shadow. The card is gone.
-        }}
+        className="w-full max-w-[380px]"
       >
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            marginBottom: "40px",
-          }}
-        >
+        <div className="flex flex-col items-center mb-10">
           <Link
             to={ROUTES.HOME}
-            style={{ marginBottom: "32px", outline: "none" }}
+            className="mb-8 outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)] rounded-md"
             aria-label="Back to Home"
           >
-            <img
-              src="/Logo.png"
-              alt="TypeTrace"
-              style={{ height: "45px", width: "auto" }}
-            />
+            <img src="/Logo.png" alt="TypeTrace" className="h-[45px] w-auto" />
           </Link>
-          <h1
-            style={{
-              fontSize: "24px",
-              fontWeight: 600, // Slightly reduced weight for elegance
-              color: colors.text.primary,
-              letterSpacing: "-0.03em", // Tighter tracking
-              marginBottom: "8px",
-              textAlign: "center",
-            }}
-          >
+          <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight mb-2 text-center">
             Sign in to TypeTrace
           </h1>
-          <p
-            style={{
-              fontSize: "15px",
-              color: colors.text.secondary,
-              textAlign: "center",
-            }}
-          >
+          <p className="text-[15px] text-[var(--text-secondary)] text-center">
             Welcome back to your secure session.
           </p>
         </div>
 
-        {/* SSO Button - Vercel style solid border */}
         <button
           type="button"
-          style={{
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "10px",
-            padding: "12px",
-            backgroundColor: colors.text.light,
-            border: `1px solid ${colors.surface[200]}`, // Thinner, crisper border
-            borderRadius: "8px", // Reduced border radius for a sharper, technical look
-            fontSize: "14px",
-            fontWeight: 500,
-            color: colors.text.primary,
-            cursor: "pointer",
-            transition: "all 0.2s ease",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor =
-              colors.surface[50];
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor =
-              colors.text.light;
-          }}
+          className="w-full flex items-center justify-center gap-2.5 p-3 bg-[var(--bg-main)] border border-[var(--surface-200)] rounded-lg text-sm font-medium text-[var(--text-primary)] cursor-pointer transition-colors hover:bg-[var(--surface-50)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)]"
         >
           <GoogleIcon />
           Continue with Google
         </button>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
-            margin: "24px 0",
-          }}
-        >
-          <div
-            style={{
-              flex: 1,
-              height: "1px",
-              backgroundColor: colors.surface[200],
-              opacity: 0.6,
-            }}
-          />
-          <span
-            style={{
-              fontSize: "12px",
-              color: colors.text.secondary,
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
-          >
+        <div className="flex items-center gap-4 my-6">
+          <div className="flex-1 h-[1px] bg-[var(--surface-200)] opacity-60" />
+          <span className="text-xs text-[var(--text-secondary)] uppercase tracking-widest">
             Or
           </span>
-          <div
-            style={{
-              flex: 1,
-              height: "1px",
-              backgroundColor: colors.surface[200],
-              opacity: 0.6,
-            }}
-          />
+          <div className="flex-1 h-[1px] bg-[var(--surface-200)] opacity-60" />
         </div>
 
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          style={{ display: "flex", flexDirection: "column", gap: "16px" }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <label
-              style={{
-                fontSize: "13px",
-                fontWeight: 500,
-                color: colors.text.primary,
-              }}
-            >
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-[13px] font-medium text-[var(--text-primary)]">
               Email Address
             </label>
             <input
@@ -239,65 +164,30 @@ export default function LoginPage() {
               {...register("email")}
               onFocus={() => setFocusedField("email")}
               onBlur={() => setFocusedField(null)}
+              className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
               style={{
-                width: "100%",
-                padding: "12px 14px",
-                backgroundColor: colors.surface[50], // Subtle contrast against white page
-                border: `1px solid ${errors.email ? brand.aiAccent : focusedField === "email" ? brand.action : colors.surface[200]}`,
-                borderRadius: "8px",
-                fontSize: "14px",
-                color: colors.text.primary,
-                outline: "none",
-                transition: "all 0.2s ease",
+                border: `1px solid ${errors.email ? "var(--error-color)" : focusedField === "email" ? "var(--brand-action)" : "var(--surface-200)"}`,
                 boxShadow:
                   focusedField === "email" && !errors.email
-                    ? `0 0 0 1px ${brand.action}`
-                    : "none", // Sharp Vercel-style focus ring
+                    ? "0 0 0 1px var(--brand-action)"
+                    : "none",
               }}
             />
             {errors.email && (
-              <span
-                style={{
-                  fontSize: "12px",
-                  color: brand.aiAccent,
-                  fontWeight: 500,
-                }}
-              >
+              <span className="text-xs font-medium text-[var(--error-color)]">
                 {errors.email.message}
               </span>
             )}
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <label
-                style={{
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  color: colors.text.primary,
-                }}
-              >
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-between items-center">
+              <label className="text-[13px] font-medium text-[var(--text-primary)]">
                 Password
               </label>
               <Link
-                to="#"
-                style={{
-                  fontSize: "13px",
-                  color: colors.text.secondary,
-                  textDecoration: "none",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.color = colors.text.primary)
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.color = colors.text.secondary)
-                }
+                to={ROUTES.FORGOT_PASSWORD}
+                className="text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors outline-none focus-visible:underline"
               >
                 Forgot password?
               </Link>
@@ -308,30 +198,17 @@ export default function LoginPage() {
               {...register("password")}
               onFocus={() => setFocusedField("password")}
               onBlur={() => setFocusedField(null)}
+              className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
               style={{
-                width: "100%",
-                padding: "12px 14px",
-                backgroundColor: colors.surface[50],
-                border: `1px solid ${errors.password ? brand.aiAccent : focusedField === "password" ? brand.action : colors.surface[200]}`,
-                borderRadius: "8px",
-                fontSize: "14px",
-                color: colors.text.primary,
-                outline: "none",
-                transition: "all 0.2s ease",
+                border: `1px solid ${errors.password ? "var(--error-color)" : focusedField === "password" ? "var(--brand-action)" : "var(--surface-200)"}`,
                 boxShadow:
                   focusedField === "password" && !errors.password
-                    ? `0 0 0 1px ${brand.action}`
+                    ? "0 0 0 1px var(--brand-action)"
                     : "none",
               }}
             />
             {errors.password && (
-              <span
-                style={{
-                  fontSize: "12px",
-                  color: brand.aiAccent,
-                  fontWeight: 500,
-                }}
-              >
+              <span className="text-xs font-medium text-[var(--error-color)]">
                 {errors.password.message}
               </span>
             )}
@@ -340,76 +217,40 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
+            className="w-full mt-2 p-3 text-white rounded-lg text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--brand-action)]"
             style={{
-              width: "100%",
-              marginTop: "8px",
-              padding: "12px",
-              backgroundColor: brand.action,
-              color: colors.text.light,
-              border: "none",
-              borderRadius: "8px",
-              fontSize: "14px",
-              fontWeight: 500,
-              cursor: isLoading ? "not-allowed" : "pointer",
-              transition: "all 0.2s ease",
+              backgroundColor: isLoading
+                ? "var(--brand-action)"
+                : "var(--brand-action)",
               opacity: isLoading ? 0.8 : 1,
+              cursor: isLoading ? "not-allowed" : "pointer",
             }}
-            onMouseEnter={(e) => {
-              if (!isLoading)
-                (e.currentTarget as HTMLElement).style.backgroundColor =
-                  brand.actionHover;
-            }}
-            onMouseLeave={(e) => {
-              if (!isLoading)
-                (e.currentTarget as HTMLElement).style.backgroundColor =
-                  brand.action;
-            }}
+            onMouseEnter={(e) =>
+              !isLoading &&
+              (e.currentTarget.style.backgroundColor = "var(--brand-hover)")
+            }
+            onMouseLeave={(e) =>
+              !isLoading &&
+              (e.currentTarget.style.backgroundColor = "var(--brand-action)")
+            }
           >
             {isLoading ? "Authenticating..." : "Sign In"}
           </button>
         </form>
 
-        <p
-          style={{
-            fontSize: "14px",
-            color: colors.text.secondary,
-            textAlign: "center",
-            marginTop: "32px",
-          }}
-        >
+        <p className="text-sm text-[var(--text-secondary)] text-center mt-8">
           Don't have an account?{" "}
           <Link
             to={ROUTES.REGISTER}
-            style={{
-              color: colors.text.primary,
-              textDecoration: "none",
-              fontWeight: 500,
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.textDecoration = "underline")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.textDecoration = "none")
-            }
+            className="text-[var(--text-primary)] font-medium hover:underline transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)] rounded-sm"
           >
             Sign up
           </Link>
         </p>
 
-        {/* Minimalist Trust Indicator */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "6px",
-            marginTop: "40px",
-            color: colors.text.secondary,
-            opacity: 0.7,
-          }}
-        >
+        <div className="flex items-center justify-center gap-1.5 mt-10 text-[var(--text-secondary)] opacity-70">
           <LockIcon />
-          <span style={{ fontSize: "12px" }}>End-to-end encrypted</span>
+          <span className="text-xs">End-to-end encrypted</span>
         </div>
       </motion.div>
     </div>

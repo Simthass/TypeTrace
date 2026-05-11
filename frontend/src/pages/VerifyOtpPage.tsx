@@ -1,10 +1,10 @@
-// src/pages/VerifyOtpPage.tsx
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
-import { useAuthStore } from "../store/authStore"; // importing our new global state
+import { useAuthStore } from "../store/authStore";
+import { api } from "../lib/api";
 
 function MailIcon() {
   return (
@@ -39,33 +39,28 @@ function MailIcon() {
 export default function VerifyOtpPage() {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // NEW: Dynamic loading text for the Labor Illusion UX
+  const [loadingText, setLoadingText] = useState("Verify Account");
   const [errorMsg, setErrorMsg] = useState("");
 
-  // getting the email user just entered from zustand store
   const pendingEmail = useAuthStore((state) => state.pendingEmail);
   const navigate = useNavigate();
-
-  // refs for auto-focusing the next input box automatically. took me ages to figure this out!
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    // security check: if someone tries to access /verify directly without registering first, kick them out
     if (!pendingEmail) {
       navigate(ROUTES.REGISTER);
     }
   }, [pendingEmail, navigate]);
 
   const handleChange = (index: number, value: string) => {
-    // only allow numbers to prevent malicious inputs
     if (isNaN(Number(value))) return;
-
     const newOtp = [...otp];
-    // only take the last char if they paste multiple things by mistake
     newOtp[index] = value.substring(value.length - 1);
     setOtp(newOtp);
 
-    // auto move to next input if there is a value
     if (value !== "" && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -75,7 +70,6 @@ export default function VerifyOtpPage() {
     index: number,
     e: React.KeyboardEvent<HTMLInputElement>,
   ) => {
-    // if user press backspace on empty input, go to previous input
     if (e.key === "Backspace" && otp[index] === "" && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
@@ -84,12 +78,9 @@ export default function VerifyOtpPage() {
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     const pastedData = e.clipboardData.getData("text/plain").trim();
-
-    // check if pasted data is exactly 6 numbers
     if (/^\d{6}$/.test(pastedData)) {
       const pastedArray = pastedData.split("");
       setOtp(pastedArray);
-      // focus the last input after pasting
       inputRefs.current[5]?.focus();
     }
   };
@@ -105,23 +96,44 @@ export default function VerifyOtpPage() {
 
     setIsLoading(true);
     setErrorMsg("");
+    // Start the loading sequence visually
+    setLoadingText("Validating token...");
 
-    // TODO: Send this to FastAPI backend /verify-otp endpoint
-    console.log(
-      `Sending OTP ${fullOtp} to redis cache for email: ${pendingEmail}`,
-    );
+    try {
+      // 1. The API call happens instantly in the background
+      const response = await api.post("/verify-otp", {
+        email: pendingEmail,
+        otp: fullOtp,
+      });
 
-    // simulating network delay for now
-    setTimeout(() => {
-      // fake success
+      const { user, access_token } = response.data;
+
+      // 2. The API succeeded! Now we trigger the "Labor Illusion"
+      setLoadingText("Verifying cryptographic seal...");
+
+      setTimeout(() => {
+        setLoadingText("Provisioning secure session...");
+
+        setTimeout(() => {
+          // 3. Actually log them in and redirect after the visual sequence finishes
+          useAuthStore.getState().login(user, access_token);
+          navigate(ROUTES.DASHBOARD);
+        }, 1000); // Wait another 1000ms
+      }, 1000); // Wait 1000ms
+    } catch (error: any) {
+      // If it actually fails, we drop the illusion instantly and show the error
+      setErrorMsg(
+        error.response?.data?.detail || "Invalid OTP code. Please try again.",
+      );
+      setOtp(["", "", "", "", "", ""]);
+      inputRefs.current[0]?.focus();
       setIsLoading(false);
-      navigate(ROUTES.DASHBOARD);
-      // if fail, we would show errorMsg("Invalid OTP or expired. Account discarded.")
-    }, 1500);
+      setLoadingText("Verify Account");
+    }
   };
 
   const handleResend = () => {
-    // TODO: call FastAPI to generate a new OTP and replace the one in redis
+    // TODO: wire this up to a /resend-otp endpoint later
     alert("New OTP sent! Check your university email.");
   };
 
@@ -132,7 +144,7 @@ export default function VerifyOtpPage() {
         display: "flex",
         alignItems: "flex-start",
         justifyContent: "center",
-        backgroundColor: colors.text.light, // pure white flat background
+        backgroundColor: colors.text.light,
         padding: "10vh 24px 24px",
         fontFamily: "inherit",
       }}
@@ -141,11 +153,7 @@ export default function VerifyOtpPage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
-        style={{
-          width: "100%",
-          maxWidth: "400px",
-          // no border, no shadow. true borderless design.
-        }}
+        style={{ width: "100%", maxWidth: "400px" }}
       >
         <div
           style={{
@@ -155,7 +163,6 @@ export default function VerifyOtpPage() {
             marginBottom: "32px",
           }}
         >
-          {/* using the brand action color for the icon background to make it pop */}
           <div
             style={{
               width: "56px",
@@ -171,7 +178,6 @@ export default function VerifyOtpPage() {
           >
             <MailIcon />
           </div>
-
           <h1
             style={{
               fontSize: "24px",
@@ -221,6 +227,7 @@ export default function VerifyOtpPage() {
                 onChange={(e) => handleChange(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
                 onPaste={handlePaste}
+                disabled={isLoading}
                 style={{
                   width: "50px",
                   height: "56px",
@@ -228,16 +235,15 @@ export default function VerifyOtpPage() {
                   fontSize: "20px",
                   fontWeight: 700,
                   backgroundColor: colors.surface[50],
-                  // strictly rounded-lg as per the design system
                   borderRadius: "8px",
-                  border: `1.5px solid ${errorMsg ? brand.aiAccent : digit ? brand.action : colors.surface[200]}`,
+                  border: `1px solid ${errorMsg ? brand.aiAccent : digit ? brand.action : colors.surface[200]}`,
                   color: colors.text.primary,
                   outline: "none",
                   transition: "all 0.2s ease",
-                  boxShadow: "none", // no drop shadows allowed
+                  opacity: isLoading ? 0.6 : 1,
                 }}
                 onFocus={(e) => {
-                  if (!errorMsg)
+                  if (!errorMsg && !isLoading)
                     e.currentTarget.style.borderColor = brand.action;
                 }}
                 onBlur={(e) => {
@@ -279,10 +285,10 @@ export default function VerifyOtpPage() {
                   ? "not-allowed"
                   : "pointer",
               transition: "all 0.2s ease",
-              opacity: isLoading || otp.join("").length < 6 ? 0.6 : 1,
+              opacity: isLoading || otp.join("").length < 6 ? 0.8 : 1,
             }}
           >
-            {isLoading ? "Verifying..." : "Verify Account"}
+            {loadingText}
           </button>
         </form>
 
@@ -298,26 +304,26 @@ export default function VerifyOtpPage() {
           <button
             type="button"
             onClick={handleResend}
+            disabled={isLoading}
             style={{
               color: colors.text.primary,
               fontWeight: 500,
               background: "none",
               border: "none",
-              cursor: "pointer",
+              cursor: isLoading ? "not-allowed" : "pointer",
               padding: 0,
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.textDecoration = "underline")
+              !isLoading && (e.currentTarget.style.textDecoration = "underline")
             }
             onMouseLeave={(e) =>
-              (e.currentTarget.style.textDecoration = "none")
+              !isLoading && (e.currentTarget.style.textDecoration = "none")
             }
           >
             Click to resend
           </button>
         </p>
 
-        {/* This proves to the examiner i thought about database bloat! */}
         <div
           style={{
             marginTop: "32px",
