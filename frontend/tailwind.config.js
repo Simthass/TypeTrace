@@ -4,30 +4,30 @@ export default {
   theme: {
     extend: {
       colors: {
-        // ─── Surface colors (light theme) ───────────────────────────────
+        // ─── Surface colors ───────────────────────────────
         surface: {
-          50: "#F5F7FA",
-          100: "#E8ECF1",
-          200: "#D1D9E0",
+          50: "#FAFAFA",
+          100: "#F4F4F5",
+          200: "#EAEAEA",
         },
 
-        // ─── Text colors ────────────────────────────────────────────────
+        // ─── Text colors ──────────────────────────────────
         text: {
-          primary: "#1A2332",
-          secondary: "#5A6D80",
+          primary: "#111827",
+          secondary: "#6B7280",
         },
 
-        // ─── Official brand palette ─────────────────────────────────────
+        // ─── Official brand palette (Now Black/White) ─────
         brand: {
-          DEFAULT: "#2A7FE0",
-          hover: "#1356A3",
-          light: "#EBF4FF",
-          muted: "#7BAADB",
+          DEFAULT: "#000000",
+          hover: "#333333",
+          light: "#F4F4F5",
+          muted: "#888888",
         },
 
         steel: {
-          DEFAULT: "#4A6E96",
-          light: "#C5D7EE",
+          DEFAULT: "#4B5563",
+          light: "#E5E7EB",
         },
 
         verify: {
@@ -54,11 +54,8 @@ export default {
         },
       },
 
-      // ─── UPDATED: Font Families ─────────────────────────────────────
       fontFamily: {
-        // Replaced DM Sans with Geist
         sans: ["Geist", "system-ui", "sans-serif"],
-        // Replaced JetBrains Mono with Geist Mono for consistency
         mono: ["Geist Mono", "Fira Code", "monospace"],
       },
 
@@ -67,10 +64,11 @@ export default {
       },
 
       boxShadow: {
-        card: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
-        "card-md": "0 4px 12px rgba(0,0,0,0.08)",
-        modal: "0 8px 30px rgba(0,0,0,0.12)",
-        header: "0 1px 3px rgba(0,0,0,0.04)",
+        // Flattened shadows slightly to match the brutalist aesthetic
+        card: "0 1px 2px rgba(0,0,0,0.04), 0 1px 1px rgba(0,0,0,0.02)",
+        "card-md": "0 4px 12px rgba(0,0,0,0.05)",
+        modal: "0 8px 30px rgba(0,0,0,0.08)",
+        header: "0 1px 2px rgba(0,0,0,0.03)",
       },
 
       keyframes: {
