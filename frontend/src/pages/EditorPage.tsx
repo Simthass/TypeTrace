@@ -21,17 +21,17 @@ interface SessionStats {
   sessionSeconds: number;
 }
 
-// ─── font options — only css changes, no event interception ───────────────────
+// ─── font options ─────────────────────────────────────────────────────────────
 const FONT_OPTIONS = [
-  { label: "Sans", value: "font-sans", desc: "DM Sans" },
+  { label: "Sans", value: "font-sans", desc: "Geist Sans" },
   { label: "Serif", value: "font-serif", desc: "Georgia" },
-  { label: "Mono", value: "font-mono", desc: "Monospace" },
+  { label: "Mono", value: "font-mono", desc: "Geist Mono" },
 ];
 
 const SIZE_OPTIONS = [
-  { label: "S", value: "text-[16px]", desc: "Small" },
-  { label: "M", value: "text-[18px]", desc: "Medium" },
-  { label: "L", value: "text-[21px]", desc: "Large" },
+  { label: "S", value: "text-[15px]", desc: "Small" },
+  { label: "M", value: "text-[17px]", desc: "Medium" },
+  { label: "L", value: "text-[19px]", desc: "Large" },
 ];
 
 const LINE_OPTIONS = [
@@ -42,7 +42,7 @@ const LINE_OPTIONS = [
 
 const WORD_GOALS = [250, 500, 750, 1000, 1500, 2000];
 
-// ─── animated IKI waveform on canvas – do not change timing values ─────────────
+// ─── animated IKI waveform on canvas ──────────────────────────────────────────
 function IkiWaveform({ active }: { active: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>(0);
@@ -63,7 +63,6 @@ function IkiWaveform({ active }: { active: boolean }) {
       ctx.scale(dpr, dpr);
 
       if (!active) {
-        // flat line when idle
         ctx.beginPath();
         ctx.strokeStyle = colors.surface[200];
         ctx.lineWidth = 1.5;
@@ -77,7 +76,7 @@ function IkiWaveform({ active }: { active: boolean }) {
 
       // subtle bg wave
       ctx.beginPath();
-      ctx.strokeStyle = `${brand.action}25`;
+      ctx.strokeStyle = colors.surface[200];
       ctx.lineWidth = 1.2;
       for (let x = 0; x <= W; x += 2) {
         const y =
@@ -88,9 +87,9 @@ function IkiWaveform({ active }: { active: boolean }) {
       }
       ctx.stroke();
 
-      // primary wave
+      // primary wave (Monochromatic black)
       ctx.beginPath();
-      ctx.strokeStyle = brand.action;
+      ctx.strokeStyle = colors.text.primary;
       ctx.lineWidth = 1.8;
       for (let x = 0; x <= W; x += 2) {
         const y =
@@ -131,7 +130,7 @@ function IkiWaveform({ active }: { active: boolean }) {
   );
 }
 
-// ─── stat pill in the right panel ─────────────────────────────────────────────
+// ─── stat pill (Inspector Style) ──────────────────────────────────────────────
 function StatPill({
   label,
   value,
@@ -142,15 +141,23 @@ function StatPill({
   highlight?: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center gap-0.5 px-3 py-2.5 rounded-xl border border-surface-200 bg-surface-50">
+    <div
+      className="flex flex-col items-start gap-1 px-3 py-2.5 rounded-md border shadow-sm transition-colors"
+      style={{
+        backgroundColor: brand.bgCard,
+        borderColor: colors.surface[200],
+      }}
+    >
+      <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-widest">
+        {label}
+      </span>
       <span
-        className="text-[18px] font-bold leading-none"
-        style={{ color: highlight ? brand.action : colors.text.primary }}
+        className="text-[18px] font-mono font-bold leading-none tracking-tight"
+        style={{
+          color: highlight ? colors.text.primary : colors.text.secondary,
+        }}
       >
         {value}
-      </span>
-      <span className="text-[10px] font-medium text-text-secondary uppercase tracking-wider">
-        {label}
       </span>
     </div>
   );
@@ -173,42 +180,53 @@ function ToolBtn({
       type="button"
       onClick={onClick}
       title={title}
-      className={`flex items-center justify-center h-8 px-3 rounded-lg text-[12px] font-medium transition-all duration-150
-        ${
-          active
-            ? "bg-brand text-white shadow-sm"
-            : "text-text-secondary hover:text-text-primary hover:bg-surface-100"
-        }`}
+      className="flex items-center justify-center h-7 px-2.5 rounded-md text-[12px] font-medium transition-colors"
+      style={{
+        backgroundColor: active ? colors.surface[200] : "transparent",
+        color: active ? colors.text.primary : colors.text.secondary,
+      }}
+      onMouseEnter={(e) =>
+        !active && (e.currentTarget.style.backgroundColor = colors.surface[100])
+      }
+      onMouseLeave={(e) =>
+        !active && (e.currentTarget.style.backgroundColor = "transparent")
+      }
     >
       {children}
     </button>
   );
 }
 
-// ─── word goal progress bar ────────────────────────────────────────────────────
+// ─── word goal progress bar (Sharp Brutalist style) ───────────────────────────
 function WordGoalBar({ current, goal }: { current: number; goal: number }) {
   const pct = Math.min((current / goal) * 100, 100);
   const done = pct >= 100;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5 w-full">
       <div className="flex justify-between items-center">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+        <span
+          className="text-[10px] font-semibold uppercase tracking-widest"
+          style={{ color: colors.text.secondary }}
+        >
           Word Goal
         </span>
         <span
-          className="text-[11px] font-bold"
-          style={{ color: done ? brand.humanAccent : brand.action }}
+          className="text-[11px] font-mono font-bold"
+          style={{ color: done ? brand.humanAccent : colors.text.primary }}
         >
           {current} / {goal}
         </span>
       </div>
-      <div className="h-1.5 rounded-full bg-surface-200 overflow-hidden">
+      <div
+        className="h-1 rounded-none overflow-hidden"
+        style={{ backgroundColor: colors.surface[200] }}
+      >
         <div
-          className="h-full rounded-full transition-all duration-500"
+          className="h-full rounded-none transition-all duration-500"
           style={{
             width: `${pct}%`,
-            background: done ? brand.humanAccent : brand.action,
+            backgroundColor: done ? brand.humanAccent : colors.text.primary,
           }}
         />
       </div>
@@ -216,7 +234,7 @@ function WordGoalBar({ current, goal }: { current: number; goal: number }) {
   );
 }
 
-// ─── session timer ─────────────────────────────────────────────────────────────
+// ─── session timer ────────────────────────────────────────────────────────────
 function useSessionTimer() {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
@@ -247,18 +265,15 @@ export default function EditorPage() {
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // document state
   const [text, setText] = useState("");
   const [title, setTitle] = useState("Untitled Document");
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  // typing state
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // editor presentation — only css class changes, no event interception
   const [fontClass, setFontClass] = useState("font-serif");
-  const [sizeClass, setSizeClass] = useState("text-[18px]");
+  const [sizeClass, setSizeClass] = useState("text-[17px]");
   const [lineClass, setLineClass] = useState("leading-[1.9]");
   const [focusMode, setFocusMode] = useState(false);
   const [wordGoal, setWordGoal] = useState(500);
@@ -266,13 +281,10 @@ export default function EditorPage() {
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
 
-  // keystroke capture data — the core biometric engine
-  // we capture everything here, the ML model will use this later
   const keystrokeRef = useRef<KeystrokeEvent[]>([]);
   const lastKeydownTime = useRef<number | null>(null);
   const ikiValues = useRef<number[]>([]);
 
-  // session stats
   const [stats, setStats] = useState<SessionStats>({
     wpm: 0,
     keystrokes: 0,
@@ -284,24 +296,17 @@ export default function EditorPage() {
 
   const { seconds, fmt: timerFmt } = useSessionTimer();
 
-  // word + char counts
   const wordCount = text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
   const charCount = text.length;
   const readTime = Math.max(1, Math.ceil(wordCount / 200));
 
-  // auto-save every 30 seconds to IndexedDB (placeholder for now)
-  // TODO: wire up real IndexedDB in sprint 5
   useEffect(() => {
     const t = setInterval(() => {
-      if (text.length > 0) {
-        setLastSaved(new Date());
-        // console.log("Auto-saved to IndexedDB:", { title, text, keystrokes: keystrokeRef.current });
-      }
+      if (text.length > 0) setLastSaved(new Date());
     }, 30_000);
     return () => clearInterval(t);
   }, [text, title]);
 
-  // recalculate stats every 3 seconds so the panel feels live
   useEffect(() => {
     const t = setInterval(() => {
       const ikis = ikiValues.current;
@@ -309,7 +314,6 @@ export default function EditorPage() {
         ikis.length > 0
           ? Math.round(ikis.reduce((a, b) => a + b, 0) / ikis.length)
           : 0;
-
       const wpm = seconds > 0 ? Math.round((wordCount / seconds) * 60) : 0;
       const deletions = keystrokeRef.current.filter(
         (k) => k.type === "keydown" && (k.keyCode === 8 || k.keyCode === 46),
@@ -329,23 +333,14 @@ export default function EditorPage() {
     return () => clearInterval(t);
   }, [seconds, wordCount]);
 
-  // ─── THE CORE: raw keydown/keyup capture ──────────────────────────────────
-  // this is the most important part of the whole project, DO NOT touch event.preventDefault
-  // we need the natural browser behavior to work, we only observe
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       const now = Date.now();
-
-      // calculate IKI from previous keydown
       if (lastKeydownTime.current !== null) {
         const iki = now - lastKeydownTime.current;
-        if (iki < 5000) {
-          // ignore huge gaps (user went away)
-          ikiValues.current.push(iki);
-        }
+        if (iki < 5000) ikiValues.current.push(iki);
       }
       lastKeydownTime.current = now;
-
       keystrokeRef.current.push({
         key: e.key,
         keyCode: e.keyCode,
@@ -354,7 +349,6 @@ export default function EditorPage() {
         documentLength: text.length,
       });
 
-      // typing indicator
       setIsTyping(true);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 1200);
@@ -375,16 +369,12 @@ export default function EditorPage() {
     [text.length],
   );
 
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) =>
     setText(e.target.value);
-  };
 
-  // ─── paste detection — important for AI detection ──────────────────────────
-  // large paste events are a key signal of AI generated content
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const pastedText = e.clipboardData.getData("text");
     if (pastedText.length > 50) {
-      // flag this as suspicious paste event in the keystroke log
       keystrokeRef.current.push({
         key: "__PASTE__",
         keyCode: -1,
@@ -395,14 +385,8 @@ export default function EditorPage() {
     }
   };
 
-  // ─── end session ──────────────────────────────────────────────────────────
-  const handleEndSession = () => {
-    // TODO: send keystrokeRef.current to /api/sessions/:id/analyze
-    // for now just navigate to dashboard
-    navigate(ROUTES.DASHBOARD);
-  };
+  const handleEndSession = () => navigate(ROUTES.DASHBOARD);
 
-  // ─── fullscreen toggle ────────────────────────────────────────────────────
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
@@ -413,7 +397,6 @@ export default function EditorPage() {
     }
   };
 
-  // confidence score — simple heuristic for live feedback, real ML runs on end
   const liveConfidence = Math.max(
     20,
     Math.min(
@@ -433,7 +416,6 @@ export default function EditorPage() {
   );
   const confStyle = getConfidenceStyle(liveConfidence);
 
-  // cleanup on unmount
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -442,60 +424,84 @@ export default function EditorPage() {
 
   return (
     <div
-      className="flex flex-col h-screen overflow-hidden"
-      style={{ background: "#fff", fontFamily: "inherit" }}
+      className="flex flex-col h-screen overflow-hidden font-sans"
+      style={{ backgroundColor: brand.bgPage }}
     >
       {/* ══════════════════════════════════════════════════════
-          TOP BAR
+          TOP BAR (Monochromatic & Sharp)
       ══════════════════════════════════════════════════════ */}
       <header
-        className="shrink-0 flex items-center justify-between px-5 gap-4 border-b border-surface-200"
+        className="shrink-0 flex items-center justify-between px-5 gap-4 border-b z-20"
         style={{
-          height: 56,
-          background: colors.surface[50],
+          height: 50,
+          backgroundColor: brand.bgCard,
+          borderColor: colors.surface[200],
         }}
       >
         {/* ── Left: back + title ── */}
         <div className="flex items-center gap-3 min-w-0">
           <Link
             to={ROUTES.DASHBOARD}
-            className="flex items-center justify-center h-8 w-8 rounded-lg border border-surface-200 text-text-secondary hover:text-text-primary hover:bg-surface-100 transition-all shrink-0"
+            className="flex items-center justify-center h-7 w-7 rounded-md border transition-colors shrink-0"
+            style={{
+              borderColor: colors.surface[200],
+              backgroundColor: colors.surface[50],
+              color: colors.text.secondary,
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.color = colors.text.primary)
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.color = colors.text.secondary)
+            }
             title="Back to Dashboard"
           >
-            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-              <path
-                d="M9 3L5 7.5 9 12"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 15 15"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 3L5 7.5 9 12" />
             </svg>
           </Link>
 
-          {/* editable title — just a plain input, nothing fancy */}
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="text-[14px] font-semibold text-text-primary bg-transparent border-none outline-none min-w-0 w-[220px] truncate"
-            style={{ caretColor: brand.action }}
+            className="text-[13px] font-semibold bg-transparent outline-none min-w-0 w-[240px] truncate focus:ring-0 px-2.5 py-1 rounded-md border transition-colors"
+            style={{
+              color: colors.text.primary,
+              caretColor: brand.action,
+              borderColor: colors.surface[200],
+            }}
             placeholder="Untitled Document"
+            onFocus={(e) =>
+              (e.currentTarget.style.borderColor = colors.text.secondary)
+            }
+            onBlur={(e) =>
+              (e.currentTarget.style.borderColor = colors.surface[200])
+            }
           />
-
-          {/* auto-save badge */}
-          <span className="text-[11px] text-text-secondary shrink-0">
-            {lastSaved
-              ? `Saved ${lastSaved.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-              : "Not saved yet"}
-          </span>
         </div>
 
-        {/* ── Centre: presentation toolbar ── */}
-        {/* these only change CSS classes, zero effect on keystroke capture */}
-        <div className="hidden md:flex items-center gap-1 px-2 py-1 rounded-xl border border-surface-200 bg-white">
-          {/* font family */}
-          <div className="flex items-center gap-0.5 pr-2 border-r border-surface-200">
+        {/* ── Centre: presentation toolbar + Save Status ── */}
+        <div
+          className="hidden md:flex items-center gap-1 px-1.5 py-1 rounded-md border"
+          style={{
+            backgroundColor: colors.surface[50],
+            borderColor: colors.surface[200],
+          }}
+        >
+          <div
+            className="flex items-center gap-0.5 pr-1.5 border-r"
+            style={{ borderColor: colors.surface[200] }}
+          >
             {FONT_OPTIONS.map((f) => (
               <ToolBtn
                 key={f.value}
@@ -507,9 +513,10 @@ export default function EditorPage() {
               </ToolBtn>
             ))}
           </div>
-
-          {/* font size */}
-          <div className="flex items-center gap-0.5 px-2 border-r border-surface-200">
+          <div
+            className="flex items-center gap-0.5 px-1.5 border-r"
+            style={{ borderColor: colors.surface[200] }}
+          >
             {SIZE_OPTIONS.map((s) => (
               <ToolBtn
                 key={s.value}
@@ -521,9 +528,10 @@ export default function EditorPage() {
               </ToolBtn>
             ))}
           </div>
-
-          {/* line height */}
-          <div className="flex items-center gap-0.5 px-2 border-r border-surface-200">
+          <div
+            className="flex items-center gap-0.5 px-1.5 border-r"
+            style={{ borderColor: colors.surface[200] }}
+          >
             {LINE_OPTIONS.map((l) => (
               <ToolBtn
                 key={l.value}
@@ -535,17 +543,18 @@ export default function EditorPage() {
               </ToolBtn>
             ))}
           </div>
-
-          {/* focus mode */}
-          <div className="flex items-center gap-0.5 px-2 border-r border-surface-200">
+          <div
+            className="flex items-center gap-0.5 px-1.5 border-r"
+            style={{ borderColor: colors.surface[200] }}
+          >
             <ToolBtn
               active={focusMode}
               onClick={() => setFocusMode((v) => !v)}
-              title="Focus Mode — dims everything outside current paragraph"
+              title="Focus Mode"
             >
               <svg
-                width="14"
-                height="14"
+                width="13"
+                height="13"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -562,8 +571,8 @@ export default function EditorPage() {
               title="Fullscreen"
             >
               <svg
-                width="14"
-                height="14"
+                width="13"
+                height="13"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -581,16 +590,18 @@ export default function EditorPage() {
             </ToolBtn>
           </div>
 
-          {/* word goal picker */}
-          <div className="relative px-2">
+          <div
+            className="relative px-1.5 border-r"
+            style={{ borderColor: colors.surface[200] }}
+          >
             <ToolBtn
-              active={false}
+              active={showGoalPicker}
               onClick={() => setShowGoalPicker((v) => !v)}
               title="Set word goal"
             >
               <svg
-                width="14"
-                height="14"
+                width="12"
+                height="12"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -600,16 +611,22 @@ export default function EditorPage() {
                 <path d="M12 2a10 10 0 1 0 10 10" />
                 <path d="M12 8v4l3 3" />
               </svg>
-              <span className="ml-1 text-[11px]">{wordGoal}w</span>
+              <span className="ml-1 text-[10px] font-mono">{wordGoal}w</span>
             </ToolBtn>
-
             {showGoalPicker && (
               <div
-                className="absolute top-full right-0 mt-2 p-2 bg-white border border-surface-200 rounded-2xl shadow-card-md z-50 flex flex-col gap-1 min-w-[120px]"
+                className="absolute top-full right-0 mt-2 p-1 border rounded-md shadow-md z-50 flex flex-col min-w-[100px]"
+                style={{
+                  backgroundColor: brand.bgCard,
+                  borderColor: colors.surface[200],
+                }}
                 onMouseLeave={() => setShowGoalPicker(false)}
               >
-                <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary px-2 py-1">
-                  Word Goal
+                <span
+                  className="text-[9px] font-bold uppercase tracking-wider px-2 py-1.5"
+                  style={{ color: colors.text.secondary }}
+                >
+                  Goal
                 </span>
                 {WORD_GOALS.map((g) => (
                   <button
@@ -618,70 +635,66 @@ export default function EditorPage() {
                       setWordGoal(g);
                       setShowGoalPicker(false);
                     }}
-                    className={`text-left px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors
-                      ${
-                        wordGoal === g
-                          ? "bg-brand text-white"
-                          : "text-text-primary hover:bg-surface-50"
-                      }`}
+                    className="text-left px-2 py-1.5 rounded-md text-[11px] font-mono transition-colors"
+                    style={{
+                      backgroundColor:
+                        wordGoal === g ? colors.surface[100] : "transparent",
+                      color: colors.text.primary,
+                    }}
+                    onMouseEnter={(e) =>
+                      wordGoal !== g &&
+                      (e.currentTarget.style.backgroundColor =
+                        colors.surface[50])
+                    }
+                    onMouseLeave={(e) =>
+                      wordGoal !== g &&
+                      (e.currentTarget.style.backgroundColor = "transparent")
+                    }
                   >
-                    {g} words
+                    {g}
                   </button>
                 ))}
               </div>
             )}
           </div>
+
+          {/* Save Status Indicator moved to the center bar */}
+          <div className="flex items-center gap-2.5 px-2.5">
+            <span
+              className="text-[10px] font-mono shrink-0 flex items-center gap-1.5"
+              style={{ color: colors.text.secondary }}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{
+                  backgroundColor: lastSaved
+                    ? brand.humanAccent
+                    : colors.surface[200],
+                }}
+              />
+              {lastSaved
+                ? `Saved ${lastSaved.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                : "Unsaved"}
+            </span>
+          </div>
         </div>
 
-        {/* ── Right: live indicators + end session ── */}
+        {/* ── Right: session controls ── */}
         <div className="flex items-center gap-3 shrink-0">
-          {/* session timer */}
-          <div className="hidden sm:flex flex-col items-end">
-            <span className="text-[13px] font-bold text-text-primary tabular-nums">
-              {timerFmt}
-            </span>
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-text-secondary">
-              Session
-            </span>
-          </div>
-
-          {/* word count */}
-          <div className="hidden sm:flex flex-col items-end">
-            <span className="text-[13px] font-bold text-text-primary">
-              {wordCount}
-            </span>
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-text-secondary">
-              Words
-            </span>
-          </div>
-
-          {/* live capture indicator */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-surface-200 bg-white">
-            <span
-              className="h-2 w-2 rounded-full transition-all duration-300"
-              style={{
-                background: isTyping ? brand.humanAccent : colors.surface[200],
-                boxShadow: isTyping
-                  ? `0 0 0 3px ${brand.humanAccent}30`
-                  : "none",
-              }}
-            />
-            <span className="text-[11px] font-semibold text-text-secondary">
-              {isTyping ? "Capturing" : "Ready"}
-            </span>
-          </div>
-
-          {/* right panel toggle */}
           <button
             type="button"
             onClick={() => setRightPanelOpen((v) => !v)}
-            className={`hidden lg:flex items-center justify-center h-8 w-8 rounded-lg border transition-all
-              ${
-                rightPanelOpen
-                  ? "bg-brand border-brand text-white"
-                  : "border-surface-200 text-text-secondary hover:bg-surface-100"
-              }`}
-            title="Toggle analytics panel"
+            className="hidden lg:flex items-center justify-center h-7 w-7 rounded-md border transition-colors"
+            style={{
+              backgroundColor: rightPanelOpen
+                ? colors.text.primary
+                : colors.surface[50],
+              borderColor: rightPanelOpen
+                ? colors.text.primary
+                : colors.surface[200],
+              color: rightPanelOpen ? colors.text.light : colors.text.secondary,
+            }}
+            title="Toggle inspector"
           >
             <svg
               width="14"
@@ -697,22 +710,18 @@ export default function EditorPage() {
             </svg>
           </button>
 
-          {/* end session CTA */}
           <button
             onClick={handleEndSession}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold text-white transition-all duration-150 hover:opacity-90 active:scale-[0.97]"
-            style={{
-              background: colors.text.primary,
-              boxShadow: `0 4px 12px -4px rgba(0,0,0,0.3)`,
-            }}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-md text-[11.5px] font-semibold transition-all shadow-sm"
+            style={{ backgroundColor: brand.action, color: colors.text.light }}
           >
             <svg
-              width="13"
-              height="13"
+              width="12"
+              height="12"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2.2"
+              strokeWidth="2"
               strokeLinecap="round"
             >
               <path d="M5 3l14 9-14 9V3z" fill="currentColor" stroke="none" />
@@ -725,22 +734,20 @@ export default function EditorPage() {
       {/* ══════════════════════════════════════════════════════
           MAIN CONTENT AREA
       ══════════════════════════════════════════════════════ */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         {/* ── WRITING AREA ── */}
-        {/* deliberately keep this as a plain textarea, rich text editors
-            would destroy our keystroke event capture pipeline completely */}
         <main
-          className={`flex-1 overflow-y-auto flex justify-center transition-all duration-300 ${
-            focusMode ? "bg-surface-50" : "bg-white"
-          }`}
+          className="flex-1 overflow-y-auto flex justify-center transition-colors duration-300"
+          style={{ backgroundColor: focusMode ? brand.bgPage : brand.bgCard }}
         >
-          <div className="w-full max-w-[760px] px-8 py-16 flex flex-col gap-0">
-            {/* word goal progress sits right above the writing area */}
-            <div className="mb-8">
+          {/* Expanded text area max-w-[1200px] instead of [720px] */}
+          <div className="w-full max-w-[1200px] px-8 md:px-16 py-16 flex flex-col gap-0 relative mx-auto">
+            {/* Top context / progress */}
+            <div className="mb-10 opacity-60">
               <WordGoalBar current={wordCount} goal={wordGoal} />
             </div>
 
-            {/* THE TEXTAREA — raw DOM events, zero interception */}
+            {/* THE TEXTAREA */}
             <textarea
               ref={textareaRef}
               value={text}
@@ -748,96 +755,75 @@ export default function EditorPage() {
               onKeyDown={handleKeyDown}
               onKeyUp={handleKeyUp}
               onPaste={handlePaste}
-              placeholder="Start writing naturally…"
+              placeholder="Begin typing to generate your cryptographic proof..."
               spellCheck={false}
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="off"
-              className={`
-                w-full flex-1 min-h-[60vh]
-                bg-transparent border-none outline-none resize-none
-                text-text-primary placeholder:text-surface-200
-                focus:ring-0
-                ${fontClass} ${sizeClass} ${lineClass}
-                transition-all duration-200
-              `}
+              className={`w-full flex-1 min-h-[60vh] bg-transparent border-none outline-none resize-none focus:ring-0 ${fontClass} ${sizeClass} ${lineClass} transition-all duration-200`}
               style={{
-                caretColor: brand.action,
-                // focus mode: only current paragraph in full opacity
-                // we cant do this easily with just tailwind, inline style needed
+                color: colors.text.primary,
+                caretColor: colors.text.primary,
                 WebkitTextFillColor: focusMode
                   ? colors.text.secondary
                   : undefined,
               }}
             />
 
-            {/* char count footer below writing area */}
-            <div className="flex items-center justify-between pt-6 border-t border-surface-100 mt-8">
-              <div className="flex items-center gap-6 text-[11px] text-text-secondary">
-                <span>
-                  <strong className="text-text-primary">{wordCount}</strong>{" "}
-                  words
-                </span>
-                <span>
-                  <strong className="text-text-primary">{charCount}</strong>{" "}
-                  characters
-                </span>
-                <span>
-                  <strong className="text-text-primary">~{readTime}</strong> min
-                  read
-                </span>
-                <span>
-                  <strong className="text-text-primary">
-                    {stats.keystrokes}
-                  </strong>{" "}
-                  keystrokes captured
-                </span>
+            {/* Micro-metrics footer inside document */}
+            <div
+              className="flex items-center justify-between pt-6 border-t mt-12"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <div
+                className="flex items-center gap-6 text-[11px] font-mono"
+                style={{ color: colors.text.secondary }}
+              >
+                <span>{wordCount} w</span>
+                <span>{charCount} c</span>
+                <span>~{readTime}m read</span>
               </div>
-              {stats.deletions > 0 && (
-                <span className="text-[11px] text-text-secondary">
-                  <strong className="text-text-primary">
-                    {stats.deletions}
-                  </strong>{" "}
-                  corrections — natural human behaviour ✓
-                </span>
-              )}
             </div>
           </div>
         </main>
 
-        {/* ── RIGHT ANALYTICS PANEL ── */}
-        {/* this panel only reads data, it never writes or intercepts events */}
+        {/* ── RIGHT ANALYTICS PANEL (Inspector Aesthetic) ── */}
         <aside
-          className={`
-            shrink-0 border-l border-surface-200 overflow-y-auto
-            transition-all duration-300 ease-in-out
-            ${rightPanelOpen ? "w-[280px] opacity-100" : "w-0 opacity-0 overflow-hidden"}
-          `}
-          style={{ background: colors.surface[50] }}
+          className={`shrink-0 border-l overflow-y-auto transition-all duration-300 ease-in-out ${rightPanelOpen ? "w-[280px] opacity-100" : "w-0 opacity-0 overflow-hidden"}`}
+          style={{
+            backgroundColor: brand.bgPage,
+            borderColor: colors.surface[200],
+          }}
         >
           <div className="p-5 flex flex-col gap-5 min-w-[280px]">
-            {/* ── Live Confidence Badge ── */}
+            {/* Live Confidence Badge */}
             <div
-              className="rounded-2xl p-4 border"
+              className="rounded-md p-4 border"
               style={{
-                background: confStyle.bg,
-                borderColor: `${confStyle.color}30`,
+                backgroundColor: confStyle.bg,
+                borderColor: `${confStyle.color}40`,
               }}
             >
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-2">
                 <span
-                  className="text-[10px] font-bold uppercase tracking-wider"
+                  className="text-[10px] font-bold uppercase tracking-widest"
                   style={{ color: confStyle.color }}
                 >
-                  Live Classification
+                  Classification
                 </span>
-                <span className="flex items-center gap-1.5">
+                <span
+                  className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-md border"
+                  style={{
+                    backgroundColor: brand.bgCard,
+                    borderColor: `${confStyle.color}30`,
+                  }}
+                >
                   <span
                     className="h-1.5 w-1.5 rounded-full"
-                    style={{ background: confStyle.color }}
+                    style={{ backgroundColor: confStyle.color }}
                   />
                   <span
-                    className="text-[10px] font-bold uppercase tracking-wider"
+                    className="text-[9px] font-bold uppercase tracking-widest"
                     style={{ color: confStyle.color }}
                   >
                     {confStyle.label}
@@ -845,38 +831,47 @@ export default function EditorPage() {
                 </span>
               </div>
               <div
-                className="text-[38px] font-extrabold leading-none"
+                className="text-[32px] font-mono font-bold leading-none tracking-tight"
                 style={{ color: confStyle.color }}
               >
                 {liveConfidence.toFixed(1)}%
               </div>
-              <p
-                className="text-[11px] mt-1.5"
-                style={{ color: confStyle.color, opacity: 0.72 }}
-              >
-                Live estimate — final score runs on End Session
-              </p>
             </div>
 
-            {/* ── IKI waveform ── */}
-            <div className="rounded-2xl border border-surface-200 bg-white p-4">
+            {/* IKI Waveform Inspector */}
+            <div
+              className="rounded-md border p-4 shadow-sm"
+              style={{
+                backgroundColor: brand.bgCard,
+                borderColor: colors.surface[200],
+              }}
+            >
               <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+                <span
+                  className="text-[10px] font-bold uppercase tracking-widest"
+                  style={{ color: colors.text.secondary }}
+                >
                   IKI Waveform
                 </span>
                 <span
-                  className="text-[11px] font-bold"
-                  style={{ color: brand.action }}
+                  className="text-[11px] font-mono font-bold"
+                  style={{ color: colors.text.primary }}
                 >
-                  {stats.avgIki > 0 ? `avg ${stats.avgIki}ms` : "—"}
+                  {stats.avgIki > 0 ? `${stats.avgIki}ms` : "—"}
                 </span>
               </div>
-              <div className="h-12">
+              <div
+                className="h-10 rounded-md overflow-hidden border"
+                style={{
+                  backgroundColor: colors.surface[50],
+                  borderColor: colors.surface[200],
+                }}
+              >
                 <IkiWaveform active={isTyping} />
               </div>
             </div>
 
-            {/* ── Stats grid ── */}
+            {/* Grid Metrics */}
             <div className="grid grid-cols-2 gap-2">
               <StatPill label="WPM" value={stats.wpm} highlight />
               <StatPill label="Keystrokes" value={stats.keystrokes} />
@@ -884,110 +879,114 @@ export default function EditorPage() {
               <StatPill label="Pauses" value={stats.pauses} />
             </div>
 
-            {/* ── Session info ── */}
-            <div className="rounded-2xl border border-surface-200 bg-white p-4 flex flex-col gap-3">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">
-                Session Info
+            {/* Session Metadata */}
+            <div
+              className="rounded-md border p-4 flex flex-col gap-2 shadow-sm"
+              style={{
+                backgroundColor: brand.bgCard,
+                borderColor: colors.surface[200],
+              }}
+            >
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest mb-1"
+                style={{ color: colors.text.secondary }}
+              >
+                Metadata
               </span>
               {[
                 { label: "Duration", value: timerFmt },
-                { label: "Words", value: wordCount },
+                { label: "Total Words", value: wordCount },
                 {
-                  label: "Avg IKI",
-                  value: stats.avgIki > 0 ? `${stats.avgIki}ms` : "—",
+                  label: "Event Array",
+                  value: `${keystrokeRef.current.length} obj`,
                 },
-                { label: "Est. Read", value: `~${readTime}min` },
               ].map(({ label, value }) => (
-                <div key={label} className="flex items-center justify-between">
-                  <span className="text-[12px] text-text-secondary">
+                <div
+                  key={label}
+                  className="flex justify-between items-center border-b last:border-b-0 pb-1.5 last:pb-0"
+                  style={{ borderColor: colors.surface[50] }}
+                >
+                  <span
+                    className="text-[11px]"
+                    style={{ color: colors.text.secondary }}
+                  >
                     {label}
                   </span>
-                  <span className="text-[12px] font-semibold text-text-primary">
+                  <span
+                    className="text-[11.5px] font-mono font-medium"
+                    style={{ color: colors.text.primary }}
+                  >
                     {value}
                   </span>
                 </div>
               ))}
             </div>
 
-            {/* ── Privacy notice ── */}
+            {/* Security Notice */}
             <div
-              className="rounded-xl p-3 flex gap-2.5"
+              className="rounded-md p-3 border mt-2"
               style={{
-                background: `${brand.action}08`,
-                border: `1px solid ${brand.action}18`,
+                backgroundColor: colors.surface[100],
+                borderColor: colors.surface[200],
               }}
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke={brand.action}
-                strokeWidth="2"
-                strokeLinecap="round"
-                className="shrink-0 mt-0.5"
-              >
-                <rect x="5" y="10" width="14" height="11" rx="2" />
-                <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-              </svg>
               <p
-                className="text-[11px] leading-relaxed"
-                style={{ color: brand.action }}
+                className="text-[10px] leading-relaxed"
+                style={{ color: colors.text.secondary }}
               >
-                Keystroke timing data only. Your text content stays local.
+                <strong style={{ color: colors.text.primary }}>
+                  Data Sovereignty:
+                </strong>{" "}
+                Keystroke timing metadata is processed locally. Text content
+                never leaves this browser instance.
               </p>
             </div>
-
-            {/* ── End session button (also in panel for convenience) ── */}
-            <button
-              onClick={handleEndSession}
-              className="w-full py-3 rounded-xl text-[13px] font-semibold text-white transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
-              style={{
-                background: colors.text.primary,
-                boxShadow: `0 4px 14px -4px rgba(0,0,0,0.25)`,
-              }}
-            >
-              End Session & Generate Certificate
-            </button>
           </div>
         </aside>
       </div>
 
       {/* ══════════════════════════════════════════════════════
-          STATUS BAR — very bottom, like VS Code
+          STATUS BAR (Bottom, VS Code Style)
       ══════════════════════════════════════════════════════ */}
       <footer
-        className="shrink-0 flex items-center justify-between px-5 border-t border-surface-200"
-        style={{ height: 28, background: colors.surface[50] }}
+        className="shrink-0 flex items-center justify-between px-4 border-t z-20"
+        style={{
+          height: 26,
+          backgroundColor: brand.action,
+          borderColor: brand.action,
+        }}
       >
-        <div className="flex items-center gap-5 text-[10px] text-text-secondary font-medium">
-          <span>TypeTrace Editor</span>
+        <div
+          className="flex items-center gap-4 text-[10px] font-mono"
+          style={{ color: colors.text.light }}
+        >
+          <span className="font-semibold uppercase tracking-wider">
+            TypeTrace Core
+          </span>
           <span className="flex items-center gap-1.5">
             <span
               className="h-1.5 w-1.5 rounded-full"
               style={{
-                background: isTyping ? brand.humanAccent : colors.surface[200],
+                backgroundColor: isTyping
+                  ? brand.humanAccent
+                  : colors.surface[200],
               }}
             />
-            {isTyping ? "Biometrics Active" : "Idle"}
+            {isTyping ? "Capturing" : "Idle"}
           </span>
-          <span>{stats.keystrokes} events captured</span>
         </div>
 
-        <div className="flex items-center gap-5 text-[10px] text-text-secondary font-medium">
-          <span>
-            {fontClass === "font-sans"
-              ? "Sans"
-              : fontClass === "font-serif"
-                ? "Serif"
-                : "Mono"}
-          </span>
-          <span>Ln 1</span>
-          <span>
-            {wordCount}/{wordGoal}w
-          </span>
-          <span className="font-bold" style={{ color: brand.humanAccent }}>
-            SHA-256 Protected
+        <div
+          className="flex items-center gap-4 text-[10px] font-mono"
+          style={{ color: colors.text.light }}
+        >
+          <span>{fontClass.replace("font-", "")}</span>
+          <span>Ln 1, Col {text.length}</span>
+          <span
+            className="font-bold tracking-wider uppercase"
+            style={{ color: brand.humanAccent }}
+          >
+            SHA-256 Enabled
           </span>
         </div>
       </footer>
