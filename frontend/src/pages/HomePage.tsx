@@ -1,23 +1,22 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import {
+  motion,
+  useScroll,
+  useTransform,
+  AnimatePresence,
+} from "framer-motion";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
 
-// ─── Tiny helper icons ────────────────────────────────────────────────────────
-function ArrowRight({ size = 16 }: { size?: number }) {
+// ─── arrow icon used in buttons ───────────────────────────────────────────────
+function ArrowRight() {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
       <path
-        d="M3 8h10M9 4l4 4-4 4"
+        d="M3 7.5h9M8 3.5l4 4-4 4"
         stroke="currentColor"
-        strokeWidth="1.6"
+        strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -28,8 +27,8 @@ function ArrowRight({ size = 16 }: { size?: number }) {
 function CheckIcon() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="14"
+      height="14"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -37,160 +36,169 @@ function CheckIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <polyline points="20 6 9 17 4 12"></polyline>
+      <polyline points="20 6 9 17 4 12" />
     </svg>
   );
 }
 
-// ─── Interactive Spatial Typing Visualiser (Hero) ────────────────────────────
-const DEMO_SENTENCES = [
-  "Machine learning models require robust behavioral validation...",
-  "Academic integrity demands cryptographic proof of authorship...",
-  "Your unique keystroke rhythm is a biometric fingerprint...",
-];
+// ─── floating hero cards ──────────────────────────────────────────────────────
+function FloatingCard({
+  children,
+  className,
+  delay,
+  yOffset = 0,
+  rotate = 0,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  delay: number;
+  yOffset?: number;
+  rotate?: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: yOffset + 24, rotate }}
+      animate={{
+        opacity: 1,
+        y: [yOffset, yOffset - 12, yOffset],
+        rotate,
+      }}
+      transition={{
+        opacity: { duration: 0.7, delay },
+        y: {
+          duration: 5 + delay,
+          repeat: Infinity,
+          ease: "easeInOut",
+          delay: delay * 0.5,
+        },
+      }}
+      className={`absolute hidden lg:flex items-center gap-3 px-4 py-3 rounded-2xl bg-white border ${className ?? ""}`}
+      style={{
+        borderColor: colors.surface[200],
+        boxShadow: "0 4px 24px -6px rgba(0,0,0,0.1)",
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
-function SpatialTypingVisualizer() {
-  const [typed, setTyped] = useState("");
-  const [ikis, setIkis] = useState<number[]>([]);
+// ─── scroll-reveal dashboard image (Upgraded Industry SaaS Look) ──────────────
+function DashboardReveal() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start end", "center center"],
+  });
 
-  useEffect(() => {
-    let currentSentenceIdx = 0;
-    let charIdx = 0;
-    let isDeleting = false;
-    let timeoutId: ReturnType<typeof setTimeout>;
-
-    const runTypingCycle = () => {
-      const currentSentence = DEMO_SENTENCES[currentSentenceIdx];
-
-      if (isDeleting) {
-        // Backspace logic
-        charIdx--;
-        setTyped(currentSentence.slice(0, charIdx));
-
-        // Backspacing is typically faster and more uniform (holding down or rapid tapping)
-        const deleteLatency = 35 + Math.random() * 40;
-        setIkis((prev) => {
-          const next = [...prev, deleteLatency];
-          return next.length > 35 ? next.slice(next.length - 35) : next;
-        });
-
-        if (charIdx === 0) {
-          isDeleting = false;
-          currentSentenceIdx = (currentSentenceIdx + 1) % DEMO_SENTENCES.length;
-          timeoutId = setTimeout(runTypingCycle, 800); // Pause before typing new sentence
-        } else {
-          timeoutId = setTimeout(runTypingCycle, deleteLatency);
-        }
-      } else {
-        // Forward typing logic
-        charIdx++;
-        setTyped(currentSentence.slice(0, charIdx));
-
-        // Natural typing variance (slower, more variance)
-        const typeLatency = 70 + Math.random() * 160;
-        setIkis((prev) => {
-          const next = [...prev, typeLatency];
-          return next.length > 35 ? next.slice(next.length - 35) : next;
-        });
-
-        if (charIdx === currentSentence.length) {
-          isDeleting = true;
-          timeoutId = setTimeout(runTypingCycle, 3000); // Pause to read the full sentence
-        } else {
-          timeoutId = setTimeout(runTypingCycle, typeLatency);
-        }
-      }
-    };
-
-    timeoutId = setTimeout(runTypingCycle, 1000);
-    return () => clearTimeout(timeoutId);
-  }, []);
+  const scale = useTransform(scrollYProgress, [0, 1], [0.88, 1]);
+  const y = useTransform(scrollYProgress, [0, 1], [80, 0]);
+  const opacity = useTransform(scrollYProgress, [0, 0.4], [0.3, 1]);
+  const borderRadius = useTransform(scrollYProgress, [0, 1], [28, 16]);
 
   return (
-    <div className="flex flex-col gap-8 w-full max-w-lg relative z-10">
-      <div
-        className="text-2xl md:text-3xl font-medium tracking-tight leading-relaxed min-h-[96px]"
-        style={{ color: colors.text.primary, fontFamily: "Georgia, serif" }}
-      >
-        "{typed}
-        <motion.span
-          animate={{ opacity: [1, 0] }}
-          transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
-          className="inline-block w-[3px] h-[1em] ml-1 align-middle rounded-full"
-          style={{ backgroundColor: brand.action }}
-        />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <div
-          className="flex justify-between items-center text-xs font-bold uppercase tracking-widest opacity-60"
-          style={{ color: colors.text.secondary }}
-        >
-          <span>Live IKI Mapping</span>
-          <span style={{ color: brand.action }}>
-            {ikis[ikis.length - 1] ? Math.round(ikis[ikis.length - 1]) : 0}ms
-          </span>
-        </div>
-        <div className="h-24 flex items-end gap-[4px] w-full overflow-hidden relative">
-          <div
-            className="absolute bottom-0 left-0 w-full h-[1px] opacity-20"
-            style={{ backgroundColor: colors.surface[200] }}
-          />
-          {ikis.map((latency, i) => {
-            // Normalise height, capping extremely fast deletes or slow pauses visually
-            const heightPercent = Math.min(
-              100,
-              Math.max(15, (latency / 250) * 100),
-            );
-
-            // Color shift: fast backspaces appear different from normal typing
-            const barColor =
-              latency < 75
-                ? colors.surface[200]
-                : latency > 200
-                  ? brand.humanAccent
-                  : brand.action;
-
-            return (
-              <motion.div
-                key={`${i}-${latency}`}
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: `${heightPercent}%`, opacity: 1 }}
-                className="flex-1 rounded-t-sm"
-                style={{
-                  backgroundColor: barColor,
-                  opacity: 0.5 + (i / ikis.length) * 0.5,
-                }}
-              />
-            );
-          })}
-        </div>
-      </div>
+    <div
+      ref={containerRef}
+      className="w-full max-w-[1240px] mx-auto px-6 md:px-12 relative z-20"
+      style={{ marginTop: "-8vh" }}
+    >
+      {/* Background glow to make it pop off the page */}
+      <motion.div
+        style={{ opacity }}
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] rounded-full pointer-events-none"
+        style={{
+          background: `radial-gradient(circle, ${colors.surface[200]} 0%, transparent 60%)`,
+          filter: "blur(80px)",
+        }}
+      />
 
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 2 }}
-        className="inline-flex items-center gap-3 px-5 py-3 rounded-full backdrop-blur-md w-max shadow-2xl"
-        style={{ backgroundColor: `${colors.text.light}CC` }}
+        style={{
+          scale,
+          y,
+          opacity,
+          borderRadius,
+          borderColor: colors.surface[200],
+        }}
+        className="w-full overflow-hidden bg-white border shadow-[0_30px_100px_-20px_rgba(0,0,0,0.15)] relative z-10"
       >
-        <span
-          className="w-2 h-2 rounded-full animate-pulse"
-          style={{ backgroundColor: brand.humanAccent }}
-        />
-        <span
-          className="text-xs font-bold tracking-widest uppercase"
-          style={{ color: brand.humanText }}
+        {/* Sleek macOS Browser Header */}
+        <div
+          className="h-12 w-full flex items-center px-4 gap-4 border-b"
+          style={{
+            backgroundColor: colors.surface[50],
+            borderColor: colors.surface[200],
+          }}
         >
-          Human Pattern Verified
-        </span>
+          {/* Traffic light dots */}
+          <div className="flex gap-2">
+            <div
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: colors.surface[200] }}
+            />
+            <div
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: colors.surface[200] }}
+            />
+            <div
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: colors.surface[200] }}
+            />
+          </div>
+          {/* Mock URL Bar */}
+          <div
+            className="h-7 flex-1 max-w-[320px] mx-auto rounded-md flex items-center justify-center border"
+            style={{
+              backgroundColor: "#fff",
+              borderColor: colors.surface[200],
+            }}
+          >
+            <span
+              className="text-[11px] font-mono font-medium flex items-center gap-2"
+              style={{ color: colors.text.secondary }}
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              typetrace.com
+            </span>
+          </div>
+          <div className="w-12" /> {/* Spacer to balance dots */}
+        </div>
+
+        {/* User's Actual Screenshot */}
+        <img
+          src="/dashboard-mockup.png"
+          alt="TypeTrace dashboard preview"
+          className="w-full h-auto block"
+          style={{
+            minHeight: 420,
+            objectFit: "cover",
+            background: colors.surface[100],
+          }}
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.minHeight = "480px";
+            (e.currentTarget as HTMLImageElement).style.background =
+              colors.surface[100];
+          }}
+        />
       </motion.div>
     </div>
   );
 }
 
-// ─── Technical Trust Accordion ───────────────────────────────────────────────
-const faqs = [
+// ─── trust accordion with animation ─────────────────────────────────────────
+const FAQ_ITEMS = [
   {
     title: "Zero Server-Side Storage",
     content:
@@ -204,51 +212,53 @@ const faqs = [
   {
     title: "Open-Source Classifier",
     content:
-      "Academic integrity requires absolute transparency. Our Random Forest classification model, including its feature extraction logic and synthetic datasets (SMOTE), is fully auditable by university IT departments.",
+      "Academic integrity requires absolute transparency. Our Random Forest classification model, including its feature extraction logic and synthetic datasets (SMOTE), is fully auditable by university IT departments and researchers worldwide.",
   },
 ];
 
 function TrustAccordion() {
-  const [activeIndex, setActiveIndex] = useState<number>(0);
+  const [active, setActive] = useState<number>(0);
   return (
     <div
       className="flex flex-col w-full border-t"
       style={{ borderColor: colors.surface[200] }}
     >
-      {faqs.map((faq, index) => {
-        const isActive = activeIndex === index;
+      {FAQ_ITEMS.map((item, i) => {
+        const isOpen = active === i;
         return (
           <div
-            key={index}
-            className="border-b overflow-hidden cursor-pointer group"
+            key={i}
+            className="border-b cursor-pointer"
             style={{ borderColor: colors.surface[200] }}
-            onClick={() => setActiveIndex(isActive ? -1 : index)}
+            onClick={() => setActive(isOpen ? -1 : i)}
           >
-            <div className="py-8 flex justify-between items-center transition-colors duration-300">
+            <div className="py-7 flex justify-between items-center gap-6">
               <h3
-                className="text-xl md:text-2xl tracking-tight transition-all duration-300"
+                className="text-xl md:text-2xl tracking-tight transition-all duration-200"
                 style={{
-                  color: isActive ? colors.text.primary : colors.text.secondary,
-                  fontWeight: isActive ? 600 : 400,
+                  color: isOpen ? colors.text.primary : colors.text.secondary,
+                  fontWeight: isOpen ? 600 : 400,
                 }}
               >
-                {faq.title}
+                {item.title}
               </h3>
               <motion.div
-                animate={{ rotate: isActive ? 45 : 0 }}
-                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+                animate={{ rotate: isOpen ? 45 : 0 }}
+                transition={{ duration: 0.22 }}
+                className="h-7 w-7 rounded-full flex items-center justify-center shrink-0 transition-colors"
                 style={{
-                  backgroundColor: isActive ? brand.action : "transparent",
-                  color: isActive ? colors.text.light : colors.text.primary,
+                  background: isOpen ? colors.text.primary : "transparent",
+                  color: isOpen ? "#fff" : colors.text.primary,
+                  border: `1.5px solid ${isOpen ? colors.text.primary : colors.surface[200]}`,
                 }}
               >
                 <svg
-                  width="14"
-                  height="14"
+                  width="12"
+                  height="12"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2"
+                  strokeWidth="2.2"
                   strokeLinecap="round"
                 >
                   <line x1="12" y1="5" x2="12" y2="19" />
@@ -256,19 +266,20 @@ function TrustAccordion() {
                 </svg>
               </motion.div>
             </div>
-            <AnimatePresence>
-              {isActive && (
+            <AnimatePresence initial={false}>
+              {isOpen && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                  transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
+                  style={{ overflow: "hidden" }}
                 >
                   <p
-                    className="pb-8 text-base md:text-lg leading-relaxed max-w-2xl"
+                    className="pb-7 text-base md:text-lg leading-relaxed max-w-2xl"
                     style={{ color: colors.text.secondary }}
                   >
-                    {faq.content}
+                    {item.content}
                   </p>
                 </motion.div>
               )}
@@ -280,418 +291,950 @@ function TrustAccordion() {
   );
 }
 
-// ─── Main Page Assembly ──────────────────────────────────────────────────────
+// ─── feature section row, alternating layout ─────────────────────────────────
+function FeatureRow({
+  tag,
+  tagColor,
+  title,
+  body,
+  bullets,
+  visual,
+  flip = false,
+}: {
+  tag: string;
+  tagColor: string;
+  title: string;
+  body: string;
+  bullets?: string[];
+  visual: React.ReactNode;
+  flip?: boolean;
+}) {
+  return (
+    <div className={`grid grid-cols-1 lg:grid-cols-2 gap-16 items-center`}>
+      <div className={`flex flex-col gap-5 ${flip ? "lg:order-2" : ""}`}>
+        <span
+          className="text-[11px] font-bold uppercase tracking-widest"
+          style={{ color: tagColor }}
+        >
+          {tag}
+        </span>
+        <h3
+          className="text-[2.4rem] md:text-[3rem] font-bold tracking-tight leading-[1.05]"
+          style={{ color: colors.text.primary }}
+        >
+          {title}
+        </h3>
+        <p
+          className="text-lg leading-relaxed"
+          style={{ color: colors.text.secondary }}
+        >
+          {body}
+        </p>
+        {bullets && (
+          <ul className="flex flex-col gap-3 mt-2">
+            {bullets.map((b, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-3 text-[15px]"
+                style={{ color: colors.text.secondary }}
+              >
+                <span
+                  className="mt-0.5 shrink-0"
+                  style={{ color: colors.text.primary }}
+                >
+                  <CheckIcon />
+                </span>
+                {b}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className={flip ? "lg:order-1" : ""}>{visual}</div>
+    </div>
+  );
+}
+
+// ─── stat counter card used in the numbers section ────────────────────────────
+function StatCard({
+  value,
+  label,
+  sub,
+}: {
+  value: string;
+  label: string;
+  sub?: string;
+}) {
+  return (
+    <div
+      className="flex flex-col gap-1 p-8 border-r last:border-r-0"
+      style={{ borderColor: colors.surface[200] }}
+    >
+      <span
+        className="text-[3.5rem] font-extrabold tracking-tight leading-none"
+        style={{ color: colors.text.primary }}
+      >
+        {value}
+      </span>
+      <span
+        className="text-[15px] font-semibold"
+        style={{ color: colors.text.primary }}
+      >
+        {label}
+      </span>
+      {sub && (
+        <span className="text-[13px]" style={{ color: colors.text.secondary }}>
+          {sub}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── classification outcome cards ────────────────────────────────────────────
+function OutcomeCard({
+  label,
+  score,
+  desc,
+  accent,
+  bg,
+  textColor,
+}: {
+  label: string;
+  score: string;
+  desc: string;
+  accent: string;
+  bg: string;
+  textColor: string;
+}) {
+  return (
+    <div
+      className="flex flex-col gap-4 p-7 rounded-2xl border"
+      style={{ background: bg, borderColor: `${accent}28` }}
+    >
+      <div className="flex items-center gap-2">
+        <span className="h-2 w-2 rounded-full" style={{ background: accent }} />
+        <span
+          className="text-[10px] font-bold uppercase tracking-widest"
+          style={{ color: textColor }}
+        >
+          {label}
+        </span>
+      </div>
+      <span
+        className="text-[3.2rem] font-extrabold leading-none"
+        style={{ color: accent }}
+      >
+        {score}
+      </span>
+      <p
+        className="text-[13px] leading-relaxed border-t pt-4"
+        style={{ color: textColor, borderColor: `${accent}22` }}
+      >
+        {desc}
+      </p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN PAGE
+// ─────────────────────────────────────────────────────────────────────────────
 export default function HomePage() {
   return (
     <main
-      className="w-full min-h-screen overflow-x-hidden"
-      style={{ backgroundColor: colors.text.light }}
+      className="w-full min-h-screen overflow-x-hidden font-sans"
+      style={{ background: colors.surface[50] }}
     >
-      {/* ═══════════════════════════════════════════════════════
-          1. HERO SECTION
-      ═══════════════════════════════════════════════════════ */}
-      <section className="relative pt-32 md:pt-20 pb-12 px-6 md:px-12 max-w-[1440px] mx-auto min-h-[90vh] flex items-center">
-        {/* Spatial Backgrounds */}
-        <div
-          className="absolute inset-0 pointer-events-none opacity-40"
-          style={{
-            backgroundImage: `radial-gradient(${colors.surface[200]} 1px, transparent 1px)`,
-            backgroundSize: "32px 32px",
-          }}
-        />
-        <div
-          className="absolute top-0 right-0 w-[800px] h-[800px] rounded-full blur-3xl opacity-20 pointer-events-none translate-x-1/3 -translate-y-1/4"
-          style={{ backgroundColor: brand.action }}
-        />
+      {/* ══════════════════════════════════════════════════════
+          1. HERO — Microsoft Loop style, full-bleed
+      ══════════════════════════════════════════════════════ */}
+      <section className="relative min-h-[95vh] flex flex-col items-center justify-start text-center overflow-hidden pt-12 pb-16">
+        {/* ── Background gradient blobs, black like MS Loop ── */}
+        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+          {/* left radial blob */}
+          <div
+            className="absolute top-[5%] left-[-12%] w-[55vw] h-[55vw] rounded-full"
+            style={{
+              background:
+                "radial-gradient(circle, rgba(0,0,0,0.07) 0%, transparent 65%)",
+              filter: "blur(80px)",
+            }}
+          />
+          {/* right radial blob */}
+          <div
+            className="absolute top-[10%] right-[-12%] w-[50vw] h-[50vw] rounded-full"
+            style={{
+              background:
+                "radial-gradient(circle, rgba(0,0,0,0.06) 0%, transparent 65%)",
+              filter: "blur(90px)",
+            }}
+          />
+          {/* bottom center subtle bloom */}
+          <div
+            className="absolute bottom-0 left-[30%] w-[40vw] h-[30vw] rounded-full"
+            style={{
+              background:
+                "radial-gradient(circle, rgba(0,0,0,0.04) 0%, transparent 70%)",
+              filter: "blur(80px)",
+            }}
+          />
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-8 items-center w-full relative z-10">
-          <div className="lg:col-span-7 flex flex-col items-start gap-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold uppercase tracking-widest"
-              style={{
-                backgroundColor: `${brand.action}11`,
-                borderColor: `${brand.action}33`,
-                color: brand.action,
-              }}
+        {/* ── Floating data cards (Pushed wider to prevent overlap) ── */}
+
+        {/* top-left: human confidence */}
+        <FloatingCard
+          className="top-[15%] left-[2%] xl:left-[6%] 2xl:left-[7%]"
+          delay={0.3}
+          yOffset={0}
+          rotate={-3}
+        >
+          <div
+            className="h-9 w-9 rounded-full flex items-center justify-center shrink-0"
+            style={{
+              background: brand.humanBg,
+              border: `1px solid ${brand.humanAccent}30`,
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={brand.humanAccent}
+              strokeWidth="2.5"
+              strokeLinecap="round"
             >
-              Academic Integrity Infrastructure
-            </motion.div>
-
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="text-5xl md:text-7xl lg:text-[5rem] font-bold tracking-tighter leading-[1.05]"
-              style={{ color: colors.text.primary }}
-            >
-              Your typing is your <br />
-              <span className="relative z-10" style={{ color: brand.action }}>
-                proof of humanity.
-                <span
-                  className="absolute -bottom-2 left-0 w-full h-[6px] opacity-20 rounded-full"
-                  style={{ backgroundColor: brand.action }}
-                />
-              </span>
-            </motion.h1>
-
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-lg md:text-lg max-w-2xl leading-relaxed"
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </div>
+          <div className="flex flex-col items-start gap-0.5">
+            <span
+              className="text-[10px] font-bold uppercase tracking-widest leading-none"
               style={{ color: colors.text.secondary }}
             >
-              TypeTrace captures your behavioral keystroke dynamics to
-              cryptographically prove you authored your own work—protecting
-              innocent students from false AI accusations.
-            </motion.p>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="flex flex-wrap items-center gap-6 mt-4"
+              Authorship Status
+            </span>
+            <span
+              className="text-[15px] font-bold leading-none"
+              style={{ color: colors.text.primary }}
             >
-              <Link
-                to={ROUTES.REGISTER}
-                className="px-10 py-4 rounded-lg font-semibold text-[15px] transition-transform hover:-translate-y-1 inline-flex items-center gap-2"
-                style={{
-                  backgroundColor: brand.action,
-                  color: colors.text.light,
-                  boxShadow: `0 20px 40px -10px ${brand.action}66`,
-                }}
-              >
-                Start Live Session <ArrowRight />
-              </Link>
-              <Link
-                to={ROUTES.HOW_IT_WORKS}
-                className="px-10 py-4 rounded-lg font-semibold text-[15px] transition-colors duration-300"
-                style={{ color: colors.text.primary }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.backgroundColor = `${colors.surface[200]}55`)
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.backgroundColor = "transparent")
-                }
-              >
-                Explore the Tech Stack
-              </Link>
-            </motion.div>
+              99.8% Human
+            </span>
           </div>
+        </FloatingCard>
 
-          <div className="lg:col-span-5 flex justify-center lg:justify-end">
-            <SpatialTypingVisualizer />
+        {/* top-right: IKI histogram */}
+        <FloatingCard
+          className="top-[12%] right-[2%] xl:right-[6%] 2xl:right-[10%]"
+          delay={0.5}
+          yOffset={10}
+          rotate={3}
+        >
+          <div className="flex flex-col gap-2 w-[140px]">
+            <div className="flex justify-between items-center">
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest"
+                style={{ color: colors.text.secondary }}
+              >
+                Avg. IKI
+              </span>
+              <span
+                className="text-[12px] font-bold font-mono"
+                style={{ color: colors.text.primary }}
+              >
+                284ms
+              </span>
+            </div>
+            <div className="flex items-end gap-[3px] h-7">
+              {[35, 55, 28, 72, 48, 85, 42, 68, 50, 78].map((h, i) => (
+                <div
+                  key={i}
+                  className="flex-1 rounded-t-sm"
+                  style={{
+                    height: `${h}%`,
+                    background:
+                      i > 3 && i < 7
+                        ? colors.text.primary
+                        : colors.surface[200],
+                  }}
+                />
+              ))}
+            </div>
           </div>
+        </FloatingCard>
+
+        {/* mid-left: SHA seal */}
+        <FloatingCard
+          className="top-[60%] left-[2%] xl:left-[4%] 2xl:left-[8%]"
+          delay={0.8}
+          yOffset={5}
+          rotate={2}
+        >
+          <div
+            className="h-9 w-9 rounded-md flex items-center justify-center shrink-0"
+            style={{ background: colors.surface[100] }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={colors.text.primary}
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            >
+              <rect x="5" y="10" width="14" height="11" rx="2" />
+              <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+            </svg>
+          </div>
+          <div className="flex flex-col items-start gap-0.5">
+            <span
+              className="text-[13px] font-semibold leading-none"
+              style={{ color: colors.text.primary }}
+            >
+              Certificate Sealed
+            </span>
+            <span
+              className="text-[10px] font-mono leading-none"
+              style={{ color: colors.text.secondary }}
+            >
+              SHA-256 · Verified
+            </span>
+          </div>
+        </FloatingCard>
+
+        {/* mid-right: live WPM with ping dot */}
+        <FloatingCard
+          className="top-[55%] right-[2%] xl:right-[5%] 2xl:right-[8%]"
+          delay={1.0}
+          yOffset={-8}
+          rotate={-2}
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="relative h-2.5 w-2.5">
+              <span
+                className="animate-ping absolute h-full w-full rounded-full opacity-60"
+                style={{ background: brand.humanAccent }}
+              />
+              <span
+                className="relative block h-2.5 w-2.5 rounded-full"
+                style={{ background: brand.humanAccent }}
+              />
+            </div>
+            <div className="flex flex-col items-start gap-0.5">
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest leading-none"
+                style={{ color: colors.text.secondary }}
+              >
+                Live Session
+              </span>
+              <span
+                className="text-[15px] font-bold font-mono leading-none"
+                style={{ color: colors.text.primary }}
+              >
+                WPM: 64
+              </span>
+            </div>
+          </div>
+        </FloatingCard>
+
+        {/* bottom-left: ML classification */}
+        <FloatingCard
+          className="top-[80%] left-[8%] xl:left-[12%]"
+          delay={1.2}
+          yOffset={0}
+          rotate={2}
+        >
+          <div className="flex flex-col gap-1 pr-2">
+            <span
+              className="text-[10px] font-bold uppercase tracking-widest"
+              style={{ color: colors.text.secondary }}
+            >
+              ML Result
+            </span>
+            <div className="flex items-center gap-2">
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: brand.humanAccent }}
+              />
+              <span
+                className="text-[13px] font-bold"
+                style={{ color: brand.humanAccent }}
+              >
+                HUMAN CONFIRMED
+              </span>
+            </div>
+            <span
+              className="text-[11px]"
+              style={{ color: colors.text.secondary }}
+            >
+              96.3% confidence
+            </span>
+          </div>
+        </FloatingCard>
+
+        {/* bottom-right: keystroke count */}
+        <FloatingCard
+          className="top-[78%] right-[6%] xl:right-[10%]"
+          delay={1.4}
+          yOffset={6}
+          rotate={-1}
+        >
+          <div className="flex flex-col gap-1 pr-2">
+            <span
+              className="text-[10px] font-bold uppercase tracking-widest"
+              style={{ color: colors.text.secondary }}
+            >
+              Captured
+            </span>
+            <span
+              className="text-[22px] font-extrabold leading-none"
+              style={{ color: colors.text.primary }}
+            >
+              3,291
+            </span>
+            <span
+              className="text-[11px]"
+              style={{ color: colors.text.secondary }}
+            >
+              keystroke events
+            </span>
+          </div>
+        </FloatingCard>
+
+        {/* ── Hero copy ── */}
+        <div className="relative z-10 max-w-[900px] px-6 flex flex-col items-center mt-16 lg:mt-24">
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.65, delay: 0.12 }}
+            className="text-[4rem] sm:text-[5.5rem] lg:text-[5.5rem] font-bold tracking-tighter leading-[0.96] mb-8"
+            style={{ color: colors.text.primary }}
+          >
+            Prove your humanity.
+            <br />
+            <span style={{ color: colors.text.secondary }}>Line by line.</span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.65, delay: 0.22 }}
+            className="text-lg md:text-xl max-w-2xl leading-relaxed mb-12 text-center"
+            style={{ color: colors.text.secondary }}
+          >
+            The biometric workspace that cryptographically seals your unique
+            typing rhythm into every essay. Protect yourself from false AI
+            accusations with mathematical proof.
+          </motion.p>
+
+          {/* CTA buttons */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.65, delay: 0.3 }}
+            className="flex flex-col sm:flex-row items-center gap-3 mb-8"
+          >
+            <Link
+              to={ROUTES.REGISTER}
+              className="px-8 py-3.5 rounded-md font-semibold text-[15px] text-white transition-all duration-150 hover:opacity-90 active:scale-[0.98] flex items-center gap-2"
+              style={{
+                background: colors.text.primary,
+                boxShadow: "0 4px 20px -6px rgba(0,0,0,0.4)",
+              }}
+            >
+              Get Started Free <ArrowRight />
+            </Link>
+            <Link
+              to={ROUTES.HOW_IT_WORKS}
+              className="px-8 py-3.5 rounded-md font-semibold text-[15px] transition-all duration-150 border hover:bg-surface-100 flex items-center gap-2"
+              style={{
+                color: colors.text.primary,
+                borderColor: colors.surface[200],
+                background: "#fff",
+              }}
+            >
+              Read Documentation
+            </Link>
+          </motion.div>
+
+          {/* trust micro-copy */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.5 }}
+            className="flex flex-wrap justify-center gap-x-6 gap-y-2"
+          >
+            {[
+              "No content ever stored server-side",
+              "GDPR compliant by design",
+              "Free for students",
+            ].map((t) => (
+              <span
+                key={t}
+                className="flex items-center gap-1.5 text-[12.5px]"
+                style={{ color: colors.text.secondary }}
+              >
+                <CheckIcon />
+                {t}
+              </span>
+            ))}
+          </motion.div>
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════
-          2. THE CRISIS (Data-Driven Hook)
-      ═══════════════════════════════════════════════════════ */}
+      {/* ══════════════════════════════════════════════════════
+          2. SCROLL-REVEAL DASHBOARD IMAGE
+      ══════════════════════════════════════════════════════ */}
+      <DashboardReveal />
+
+      {/* ══════════════════════════════════════════════════════
+          3. STATS NUMBERS BAR
+      ══════════════════════════════════════════════════════ */}
       <section
-        className="py-24 px-6 md:px-12"
-        style={{
-          backgroundColor: colors.surface[50],
-          borderTop: `1px solid ${colors.surface[200]}`,
-        }}
+        className="border-y mt-24"
+        style={{ borderColor: colors.surface[200], background: "#fff" }}
       >
-        <div className="max-w-[1000px] mx-auto text-center flex flex-col items-center gap-8">
+        <div className="max-w-[1200px] mx-auto grid grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            value="10k+"
+            label="Sessions Analysed"
+            sub="Across pilot cohorts"
+          />
+          <StatCard
+            value="96.3%"
+            label="Classification Accuracy"
+            sub="Random Forest model"
+          />
+          <StatCard
+            value="<5%"
+            label="False Positive Target"
+            sub="vs 26% industry avg"
+          />
+          <StatCard
+            value="4"
+            label="Universities Piloting"
+            sub="UK higher education"
+          />
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════
+          4. THE PROBLEM — editorial section
+      ══════════════════════════════════════════════════════ */}
+      <section
+        className="py-32 px-6 md:px-12 border-b"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <div className="max-w-[1100px] mx-auto flex flex-col items-center text-center gap-8">
+          <span
+            className="text-[11px] font-bold uppercase tracking-widest"
+            style={{ color: colors.text.secondary }}
+          >
+            The Problem
+          </span>
           <h2
-            className="text-3xl md:text-5xl font-bold tracking-tight leading-tight"
+            className="text-[2.5rem] md:text-[4rem] font-bold tracking-tight leading-[1.05]"
             style={{ color: colors.text.primary }}
           >
             Current AI detectors analyze the{" "}
-            <span className="italic">final text</span>.<br /> That is a
-            fundamental architectural flaw.
+            <em className="not-italic" style={{ color: colors.text.secondary }}>
+              final text.
+            </em>
+            <br />
+            That is a fundamental architectural flaw.
           </h2>
           <p
-            className="text-lg md:text-xl leading-relaxed max-w-3xl"
+            className="text-lg md:text-xl max-w-3xl leading-relaxed"
             style={{ color: colors.text.secondary }}
           >
             Standard AI detectors produce up to a{" "}
             <strong style={{ color: brand.aiAccent }}>
               35% false-positive rate
             </strong>{" "}
-            for ESL students and formal writers. By evaluating <em>what</em> was
-            written rather than <em>how</em> it was written, universities are
-            penalizing authentic human effort.
+            for ESL students and formal writers. Institutions are penalizing
+            authentic human effort by evaluating <em>what</em> was written
+            rather than <em>how</em> it was written. TypeTrace solves this at
+            the source.
           </p>
-        </div>
-      </section>
 
-      {/* ═══════════════════════════════════════════════════════
-          3. DEEP DIVE FEATURES (Alternating Asymmetric Layout)
-      ═══════════════════════════════════════════════════════ */}
-      <section className="py-32 px-6 md:px-12 max-w-[1440px] mx-auto flex flex-col gap-32">
-        {/* Feature 1: Sub-millisecond Capture */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          <div className="flex flex-col gap-6 order-2 lg:order-1">
-            <div
-              className="text-xs font-bold uppercase tracking-widest"
-              style={{ color: brand.action }}
-            >
-              Phase 01 — Data Ingestion
-            </div>
-            <h3
-              className="text-4xl md:text-5xl font-bold tracking-tight"
-              style={{ color: colors.text.primary }}
-            >
-              Sub-millisecond behavioral capture.
-            </h3>
-            <p
-              className="text-lg leading-relaxed"
-              style={{ color: colors.text.secondary }}
-            >
-              TypeTrace does not wait for you to finish writing. Operating at
-              the DOM level, our React 18 frontend intercepts every `keydown`
-              and `keyup` event. We calculate the Inter-Key Interval (IKI) and
-              dwell time with exact precision, creating a time-series dataset of
-              your unique rhythm.
-            </p>
-            <ul className="flex flex-col gap-3 mt-4">
-              {[
-                "Zero UI latency via Virtual DOM optimization",
-                "Captures backspaces, pauses, and cursor jumps",
-                "Browser-agnostic event normalization",
-              ].map((item, i) => (
-                <li
-                  key={i}
-                  className="flex items-center gap-3 text-[15px]"
-                  style={{ color: colors.text.secondary }}
-                >
-                  <span style={{ color: brand.action }}>
-                    <CheckIcon />
-                  </span>{" "}
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-          {/* Abstract Borderless Visual: Data Stream */}
-          <div className="h-[400px] flex flex-col justify-center gap-4 relative order-1 lg:order-2">
-            <div
-              className="absolute inset-0 opacity-10 rounded-full blur-3xl"
-              style={{ backgroundColor: brand.action }}
-            />
-            {[1, 2, 3, 4, 5].map((_, i) => (
-              <motion.div
-                key={i}
-                animate={{ x: [0, -20, 0] }}
-                transition={{
-                  duration: 3 + i,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-                className="w-full flex items-center gap-2 opacity-60"
-              >
-                <div
-                  className="h-[1px] flex-1"
-                  style={{ backgroundColor: colors.surface[200] }}
-                />
-                <span
-                  className="font-mono text-xs font-bold"
-                  style={{ color: brand.action }}
-                >
-                  &#123; keyCode: {65 + i * 2}, iki: {120 + i * 45}ms &#125;
-                </span>
-                <div
-                  className="h-[1px] w-24"
-                  style={{ backgroundColor: colors.surface[200] }}
-                />
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
-        {/* Feature 2: ML Inference */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          <div className="h-[400px] flex items-center justify-center relative">
-            <div
-              className="absolute inset-0 opacity-10 rounded-full blur-3xl"
-              style={{ backgroundColor: brand.humanAccent }}
-            />
-            {/* Abstract ML Tree representation */}
-            <div className="flex flex-col items-center gap-8 z-10">
-              <div
-                className="px-6 py-3 rounded-full text-sm font-bold border"
-                style={{
-                  backgroundColor: colors.surface[50],
-                  borderColor: colors.surface[200],
-                  color: colors.text.primary,
-                }}
-              >
-                Vector Array Extraction
-              </div>
-              <div className="flex gap-16 relative">
-                <div
-                  className="absolute top-[-32px] left-[50%] w-[1px] h-8"
-                  style={{ backgroundColor: colors.surface[200] }}
-                />
-                <div
-                  className="px-6 py-3 rounded-full text-sm font-bold border"
-                  style={{
-                    backgroundColor: brand.humanBg,
-                    borderColor: `${brand.humanAccent}40`,
-                    color: brand.humanAccent,
-                  }}
-                >
-                  Human Pattern
-                </div>
-                <div
-                  className="px-6 py-3 rounded-full text-sm font-bold border opacity-40"
-                  style={{
-                    backgroundColor: colors.surface[50],
-                    borderColor: colors.surface[200],
-                    color: colors.text.secondary,
-                  }}
-                >
-                  Anomalous Paste
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col gap-6">
-            <div
-              className="text-xs font-bold uppercase tracking-widest"
-              style={{ color: brand.humanAccent }}
-            >
-              Phase 02 — Intelligence
-            </div>
-            <h3
-              className="text-4xl md:text-5xl font-bold tracking-tight"
-              style={{ color: colors.text.primary }}
-            >
-              Random Forest Classification.
-            </h3>
-            <p
-              className="text-lg leading-relaxed"
-              style={{ color: colors.text.secondary }}
-            >
-              Raw keystrokes are meaningless without context. Our FastAPI
-              backend processes the raw array into engineered statistical
-              features (mean IKI, standard deviation, deletion frequency). These
-              features are fed into a serialized `scikit-learn` Random Forest
-              model, trained on rigorously balanced datasets using SMOTE, to
-              verify your authorship with 96%+ accuracy.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════
-          4. THE VERIFICATION PROTOCOL (Horizontal Grid Layout)
-          Refactored for perfect alignment and zero "messiness"
-      ═══════════════════════════════════════════════════════ */}
-      <section
-        className="py-32 px-6 md:px-12"
-        style={{
-          backgroundColor: colors.surface[50],
-          borderTop: `1px solid ${colors.surface[200]}`,
-          borderBottom: `1px solid ${colors.surface[200]}`,
-        }}
-      >
-        <div className="max-w-[1440px] mx-auto">
-          <div className="mb-24 md:mb-32">
-            <h2
-              className="text-4xl md:text-5xl font-bold tracking-tight mb-4"
-              style={{ color: colors.text.primary }}
-            >
-              The Verification Protocol
-            </h2>
-            <p
-              className="text-lg max-w-2xl"
-              style={{ color: colors.text.secondary }}
-            >
-              A mathematically precise, four-step integration into your existing
-              academic workflow. Perfectly aligned from capture to cryptographic
-              seal.
-            </p>
-          </div>
-
-          {/* Clean Horizontal Grid Structure */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-12 gap-y-16 relative">
-            {/* Optional: Subtle connecting line for desktop only */}
-            <div
-              className="hidden lg:block absolute top-[11px] left-0 right-0 h-[1px] z-0"
-              style={{ backgroundColor: colors.surface[200] }}
-            />
-
+          {/* comparison grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-[800px] mt-8">
             {[
-              {
-                title: "Initialize Session",
-                desc: "Authenticate via your secure University Google Account. Open the zero-latency, distraction-free TypeTrace editor.",
-              },
-              {
-                title: "Author Document",
-                desc: "Write naturally. The React UI handles Virtual DOM updates locally, ensuring absolute privacy while biometrics are captured.",
-              },
-              {
-                title: "Generate Proof",
-                desc: "Upon completion, a background Celery worker extracts statistical features and runs inference through our ML pipeline.",
-              },
-              {
-                title: "Download Cert",
-                desc: "Receive a ReportLab PDF containing your biometric outcome and a secure SHA-256 hash to submit with your assignment.",
-              },
-            ].map((step, i) => (
-              <div key={i} className="relative z-10 flex flex-col gap-6">
-                {/* Node indicator */}
-                <div className="flex items-center gap-4">
-                  <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center border-[4px]"
-                    style={{
-                      backgroundColor: brand.action,
-                      borderColor: colors.surface[50],
-                    }}
-                  >
-                    <div className="w-2 h-2 rounded-full bg-white" />
-                  </div>
+              { name: "GPTZero (ESL)", rate: 35, color: brand.aiAccent },
+              { name: "Turnitin AI Detector", rate: 26, color: brand.aiAccent },
+              { name: "Copyleaks", rate: 19, color: brand.suspiciousAccent },
+              { name: "TypeTrace Target", rate: 4.2, color: brand.humanAccent },
+            ].map(({ name, rate, color }) => (
+              <div
+                key={name}
+                className="flex flex-col gap-2.5 p-5 rounded-2xl text-left border bg-white"
+                style={{ borderColor: colors.surface[200] }}
+              >
+                <div className="flex justify-between items-center">
                   <span
-                    className="text-3xl font-bold opacity-20 font-mono tracking-tighter"
+                    className="text-[13px] font-medium"
                     style={{ color: colors.text.primary }}
                   >
-                    0{i + 1}
+                    {name}
+                  </span>
+                  <span className="text-[15px] font-bold" style={{ color }}>
+                    {rate}%
                   </span>
                 </div>
-
-                {/* Content */}
-                <div>
-                  <h3
-                    className="text-xl font-bold tracking-tight mb-3"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {step.title}
-                  </h3>
-                  <p
-                    className="text-[15px] leading-relaxed"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {step.desc}
-                  </p>
+                <div
+                  className="h-1.5 rounded-full overflow-hidden"
+                  style={{ background: colors.surface[200] }}
+                >
+                  <motion.div
+                    initial={{ width: 0 }}
+                    whileInView={{ width: `${(rate / 35) * 100}%` }}
+                    transition={{ duration: 1.2, ease: "easeOut" }}
+                    className="h-full rounded-full"
+                    style={{ background: color }}
+                  />
                 </div>
+                <span
+                  className="text-[11px]"
+                  style={{ color: colors.text.secondary }}
+                >
+                  False positive rate
+                </span>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════
-          5. TECHNICAL TRUST (Accordion)
-      ═══════════════════════════════════════════════════════ */}
-      <section className="py-32 px-6 md:px-12 max-w-[1440px] mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-start">
-          <div className="lg:sticky lg:top-32">
+      {/* ══════════════════════════════════════════════════════
+          5. DEEP DIVE FEATURES — alternating rows
+      ══════════════════════════════════════════════════════ */}
+      <section className="py-32 px-6 md:px-12 max-w-[1300px] mx-auto flex flex-col gap-32">
+        <FeatureRow
+          tag="Phase 01 — Data Ingestion"
+          tagColor={brand.action}
+          title="Sub-millisecond behavioral capture."
+          body="TypeTrace operates at the raw DOM level, intercepting every keydown and keyup event with exact timestamp precision. We calculate Inter-Key Intervals and dwell times to build a time-series dataset of your unique typing rhythm — completely invisible to you while you write."
+          bullets={[
+            "Zero UI latency — built on React 18 Virtual DOM optimisation",
+            "Captures backspaces, pauses, cursor jumps, and editing patterns",
+            "Browser-agnostic event normalisation for consistent data",
+          ]}
+          visual={
+            <div
+              className="h-[380px] flex flex-col justify-center gap-5 rounded-3xl border p-10 bg-white overflow-hidden"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <div
+                className="text-[11px] font-bold uppercase tracking-widest mb-2"
+                style={{ color: colors.text.secondary }}
+              >
+                Live Keystroke Event Stream
+              </div>
+              {[
+                { key: "T", iki: "—", dwell: "82ms", idx: 0 },
+                { key: "h", iki: "142ms", dwell: "71ms", idx: 1 },
+                { key: "e", iki: "198ms", dwell: "68ms", idx: 2 },
+                { key: "⌫", iki: "312ms", dwell: "94ms", idx: 3 },
+                { key: "i", iki: "245ms", dwell: "77ms", idx: 4 },
+              ].map((row) => (
+                <motion.div
+                  key={row.idx}
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  transition={{ delay: row.idx * 0.1, duration: 0.4 }}
+                  className="flex items-center gap-4 py-2.5 px-4 rounded-md border"
+                  style={{
+                    borderColor: colors.surface[200],
+                    background: colors.surface[50],
+                  }}
+                >
+                  <span
+                    className="h-8 w-8 rounded-lg flex items-center justify-center font-bold font-mono text-[14px] shrink-0"
+                    style={{
+                      background: colors.surface[200],
+                      color: colors.text.primary,
+                    }}
+                  >
+                    {row.key}
+                  </span>
+                  <div className="flex-1 flex gap-4">
+                    <div>
+                      <div
+                        className="text-[9px] font-bold uppercase tracking-wider"
+                        style={{ color: colors.text.secondary }}
+                      >
+                        IKI
+                      </div>
+                      <div
+                        className="text-[13px] font-bold font-mono"
+                        style={{ color: colors.text.primary }}
+                      >
+                        {row.iki}
+                      </div>
+                    </div>
+                    <div>
+                      <div
+                        className="text-[9px] font-bold uppercase tracking-wider"
+                        style={{ color: colors.text.secondary }}
+                      >
+                        Dwell
+                      </div>
+                      <div
+                        className="text-[13px] font-bold font-mono"
+                        style={{ color: colors.text.primary }}
+                      >
+                        {row.dwell}
+                      </div>
+                    </div>
+                  </div>
+                  <span
+                    className="h-2 w-2 rounded-full shrink-0"
+                    style={{ background: brand.humanAccent }}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          }
+        />
+
+        <FeatureRow
+          flip
+          tag="Phase 02 — Intelligence"
+          tagColor={brand.humanAccent}
+          title="Random Forest Classification."
+          body="Raw keystrokes become a statistical feature vector: mean IKI, standard deviation, deletion frequency, paste event flags, and burst typing ratios. These features are fed into our serialised scikit-learn Random Forest model, trained on authentic student essays and simulated AI paste attacks."
+          bullets={[
+            "96.3% classification accuracy on held-out test set",
+            "SMOTE oversampling ensures balanced class training",
+            "Inference completes in under 2 seconds on session end",
+          ]}
+          visual={
+            <div
+              className="h-[380px] flex flex-col items-center justify-center gap-6 rounded-3xl border p-10 bg-white"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              {/* feature importance bars */}
+              <div className="w-full flex flex-col gap-3">
+                <div
+                  className="text-[11px] font-bold uppercase tracking-widest mb-2"
+                  style={{ color: colors.text.secondary }}
+                >
+                  Feature Importance
+                </div>
+                {[
+                  { label: "IKI Variance", value: 38 },
+                  { label: "Paste Detection", value: 26 },
+                  { label: "Pause Frequency", value: 18 },
+                  { label: "IKI Mean", value: 12 },
+                  { label: "Deletion Rate", value: 6 },
+                ].map(({ label, value }, i) => (
+                  <div key={label} className="flex flex-col gap-1">
+                    <div className="flex justify-between text-[12px]">
+                      <span
+                        style={{ color: colors.text.primary, fontWeight: 500 }}
+                      >
+                        {label}
+                      </span>
+                      <span
+                        style={{
+                          color: colors.text.secondary,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {value}%
+                      </span>
+                    </div>
+                    <div
+                      className="h-2 rounded-full overflow-hidden"
+                      style={{ background: colors.surface[100] }}
+                    >
+                      <motion.div
+                        initial={{ width: 0 }}
+                        whileInView={{ width: `${value}%` }}
+                        transition={{
+                          duration: 1,
+                          delay: i * 0.1,
+                          ease: "easeOut",
+                        }}
+                        className="h-full rounded-full"
+                        style={{
+                          background:
+                            i === 0 ? colors.text.primary : colors.surface[200],
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          }
+        />
+
+        <FeatureRow
+          tag="Phase 03 — Certification"
+          tagColor={brand.suspiciousAccent}
+          title="Cryptographic sealing."
+          body="Once classification completes, the entire session footprint — keystroke timing array, statistical features, and ML result — is hashed using SHA-256. This hash is embedded in a downloadable PDF certificate that university instructors can independently verify via our public endpoint."
+          bullets={[
+            "SHA-256 hash bound to raw keystroke JSON payload",
+            "Any tampering immediately invalidates the certificate",
+            "QR code links to live verification endpoint",
+          ]}
+          visual={
+            <div
+              className="h-[380px] flex items-center justify-center rounded-3xl border p-10 bg-white"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              {/* certificate mockup card */}
+              <div
+                className="w-full max-w-[320px] rounded-2xl border overflow-hidden"
+                style={{ borderColor: colors.surface[200] }}
+              >
+                <div
+                  className="px-5 py-3 border-b flex justify-between items-center"
+                  style={{
+                    background: colors.surface[50],
+                    borderColor: colors.surface[200],
+                  }}
+                >
+                  <span
+                    className="text-[11px] font-bold uppercase tracking-widest"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    Certificate of Authorship
+                  </span>
+                  <span
+                    className="flex items-center gap-1.5 text-[10px] font-bold"
+                    style={{ color: brand.humanAccent }}
+                  >
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: brand.humanAccent }}
+                    />
+                    VALID
+                  </span>
+                </div>
+                <div className="p-5 flex flex-col gap-3 bg-white">
+                  {[
+                    { label: "Student", value: "Simthass MYM" },
+                    { label: "Document", value: "Climate Essay" },
+                    { label: "Classification", value: "HUMAN · 96.3%" },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="flex justify-between">
+                      <span
+                        className="text-[11px]"
+                        style={{ color: colors.text.secondary }}
+                      >
+                        {label}
+                      </span>
+                      <span
+                        className="text-[11px] font-semibold"
+                        style={{ color: colors.text.primary }}
+                      >
+                        {value}
+                      </span>
+                    </div>
+                  ))}
+                  <div
+                    className="mt-2 p-2.5 rounded-md font-mono text-[9px] break-all"
+                    style={{
+                      background: colors.surface[50],
+                      color: colors.text.secondary,
+                    }}
+                  >
+                    SHA-256: a3f5b8c2d94e1f07…
+                  </div>
+                </div>
+              </div>
+            </div>
+          }
+        />
+      </section>
+
+      {/* ══════════════════════════════════════════════════════
+          6. CLASSIFICATION OUTCOMES
+      ══════════════════════════════════════════════════════ */}
+      <section
+        className="py-32 px-6 md:px-12 border-t"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <div className="max-w-[1200px] mx-auto">
+          <div className="flex flex-col items-center text-center gap-4 mb-16">
+            <span
+              className="text-[11px] font-bold uppercase tracking-widest"
+              style={{ color: colors.text.secondary }}
+            >
+              Results
+            </span>
             <h2
-              className="text-4xl md:text-[3.25rem] leading-[1.05] font-bold tracking-tighter mb-8"
+              className="text-[2.5rem] md:text-[3.5rem] font-bold tracking-tight"
+              style={{ color: colors.text.primary }}
+            >
+              Three clear verdicts
+            </h2>
+            <p
+              className="text-lg max-w-xl"
+              style={{ color: colors.text.secondary }}
+            >
+              Every session ends with one of three outcomes — immediately
+              understood by students and educators.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <OutcomeCard
+              label="Human"
+              score="96.3%"
+              desc="Consistent rhythm, natural IKI variance, organic editing patterns. No paste events detected."
+              accent={brand.humanAccent}
+              bg={brand.humanBg}
+              textColor={brand.humanText}
+            />
+            <OutcomeCard
+              label="Suspicious"
+              score="67.2%"
+              desc="Irregular bursts and paste events flagged. Manual review by instructor recommended."
+              accent={brand.suspiciousAccent}
+              bg={brand.suspiciousBg}
+              textColor={brand.suspiciousText}
+            />
+            <OutcomeCard
+              label="AI-Generated"
+              score="94.8%"
+              desc="Entire content pasted at once with near-zero natural keystroke variation. AI strongly detected."
+              accent={brand.aiAccent}
+              bg={brand.aiBg}
+              textColor={brand.aiText}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════
+          7. TRUST ACCORDION
+      ══════════════════════════════════════════════════════ */}
+      <section
+        className="py-32 px-6 md:px-12 border-t"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-start">
+          <div className="lg:sticky lg:top-32">
+            <span
+              className="text-[11px] font-bold uppercase tracking-widest block mb-6"
+              style={{ color: colors.text.secondary }}
+            >
+              Trust & Privacy
+            </span>
+            <h2
+              className="text-[2.8rem] md:text-[3.5rem] font-bold tracking-tight leading-[1.05] mb-6"
               style={{ color: colors.text.primary }}
             >
               Engineered for absolute data sovereignty.
             </h2>
             <p
-              className="text-lg leading-relaxed max-w-md"
+              className="text-lg leading-relaxed"
               style={{ color: colors.text.secondary }}
             >
               Institutional trust requires architectural transparency. TypeTrace
@@ -699,57 +1242,61 @@ export default function HomePage() {
               never monetized, stored unnecessarily, or mishandled.
             </p>
           </div>
-          <div>
-            <TrustAccordion />
-          </div>
+          <TrustAccordion />
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════
-          6. THE ESCALATION (Final CTA Anchor)
-      ═══════════════════════════════════════════════════════ */}
+      {/* ══════════════════════════════════════════════════════
+          8. FINAL CTA — solid brand color block
+      ══════════════════════════════════════════════════════ */}
       <section
         className="py-32 px-6 text-center"
-        style={{ backgroundColor: brand.action }}
+        style={{ background: colors.text.primary }}
       >
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-8">
-          <h2 className="text-4xl md:text-6xl font-bold tracking-tight text-white leading-tight">
+        <div className="max-w-[800px] mx-auto flex flex-col items-center gap-6">
+          <h2
+            className="text-[2.8rem] md:text-[4.5rem] font-bold tracking-tight leading-tight"
+            style={{ color: "#fff" }}
+          >
             Stop worrying about false accusations.
           </h2>
-          <p className="text-lg md:text-xl text-white opacity-90 max-w-xl leading-relaxed">
+          <p
+            className="text-lg md:text-xl max-w-xl leading-relaxed"
+            style={{ color: "rgba(255,255,255,0.65)" }}
+          >
             Create your student account today and generate cryptographic proof
-            of your hard work in minutes.
+            of your hard work in minutes. Completely free.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 mt-8 w-full justify-center">
+          <div className="flex flex-col sm:flex-row gap-3 mt-6">
             <Link
               to={ROUTES.REGISTER}
-              className="px-10 py-4 rounded-lg font-semibold text-[15px] transition-transform hover:-translate-y-1 inline-flex items-center gap-2"
-              style={{
-                backgroundColor: colors.text.light,
-                color: brand.action,
-                boxShadow: `0 20px 40px -10px ${brand.action}66`,
-              }}
+              className="px-8 py-3.5 rounded-md font-semibold text-[15px] transition-all hover:opacity-90 active:scale-[0.98] flex items-center gap-2"
+              style={{ background: "#fff", color: colors.text.primary }}
             >
-              Start Writing Now <ArrowRight />
+              Start Free Session <ArrowRight />
             </Link>
             <Link
-              to={ROUTES.LOGIN}
-              className="px-10 py-4 rounded-lg font-semibold text-[15px] transition-colors duration-300"
-              style={{ color: "white" }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.backgroundColor =
-                  "rgba(255,255,255,0.1)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.backgroundColor = "transparent")
-              }
+              to={ROUTES.HOW_IT_WORKS}
+              className="px-8 py-3.5 rounded-md font-semibold text-[15px] transition-all flex items-center gap-2 border"
+              style={{
+                color: "rgba(255,255,255,0.75)",
+                borderColor: "rgba(255,255,255,0.2)",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor =
+                  "rgba(255,255,255,0.5)";
+                (e.currentTarget as HTMLElement).style.color = "#fff";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor =
+                  "rgba(255,255,255,0.2)";
+                (e.currentTarget as HTMLElement).style.color =
+                  "rgba(255,255,255,0.75)";
+              }}
             >
-              Sign In
+              Read the Docs
             </Link>
           </div>
-          <p className="text-sm text-white/60 mt-4">
-            Free for undergraduate students. GDPR Compliant.
-          </p>
         </div>
       </section>
     </main>
