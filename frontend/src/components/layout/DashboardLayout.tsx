@@ -1,9 +1,9 @@
-import React, { useState } from "react";
-import { Outlet, Link, useLocation } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
-import { brand, colors } from "../../styles/colors";
+import { useAuthStore } from "../../store/authStore";
 
-// ─── sidebar icons, kept these lightweight instead of importing a whole library ─
+// ─── sidebar icons ────────────────────────────────────────────────────────────
 function HomeIcon() {
   return (
     <svg
@@ -96,25 +96,6 @@ function SettingsIcon() {
   );
 }
 
-function HelpIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      viewBox="0 0 24 24"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-      <line x1="12" y1="17" x2="12.01" y2="17" strokeWidth="2.5" />
-    </svg>
-  );
-}
-
 function PlusIcon() {
   return (
     <svg
@@ -147,7 +128,7 @@ function ChevronIcon() {
   );
 }
 
-// ─── nav item types ───────────────────────────────────────────────────────────
+// ─── types ────────────────────────────────────────────────────────────────────
 interface NavItem {
   label: string;
   path: string;
@@ -155,62 +136,30 @@ interface NavItem {
   badge?: string | number;
 }
 
-// ─── reusable nav link component ─────────────────────────────────────────────
+// ─── reusable nav component (Vercel style hover) ──────────────────────────────
 function SideNavItem({ item, isActive }: { item: NavItem; isActive: boolean }) {
   return (
     <Link
       to={item.path}
-      className="group flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 outline-none focus-visible:ring-2"
-      style={{
-        backgroundColor: isActive ? colors.surface[100] : "transparent",
-        color: isActive ? colors.text.primary : colors.text.secondary,
-        // focus ring color cant be done in tailwind with dynamic brand value
-      }}
-      onMouseEnter={(e) => {
-        if (!isActive) {
-          (e.currentTarget as HTMLElement).style.backgroundColor =
-            colors.surface[50];
-          (e.currentTarget as HTMLElement).style.color = colors.text.primary;
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!isActive) {
-          (e.currentTarget as HTMLElement).style.backgroundColor =
-            "transparent";
-          (e.currentTarget as HTMLElement).style.color = colors.text.secondary;
-        }
-      }}
+      // using rounded-md here like vercel sidebar
+      className={`group flex items-center justify-between gap-2.5 px-3 py-2 rounded-md text-[13.5px] font-medium transition-all duration-150 outline-none
+        ${isActive ? "bg-surface-100 text-text-primary" : "text-text-secondary hover:bg-surface-50 hover:text-text-primary"}
+      `}
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <span
-          style={{ color: isActive ? brand.action : "inherit" }}
-          className="shrink-0 transition-colors"
+          className={`shrink-0 transition-colors ${isActive ? "text-brand" : "text-text-secondary group-hover:text-text-primary"}`}
         >
           {item.icon}
         </span>
-        <span className="truncate">{item.label}</span>
+        <span className="truncate tracking-tight">{item.label}</span>
       </div>
 
-      {/* badge for things like session count */}
       {item.badge !== undefined && (
         <span
-          className="text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0"
-          style={{
-            background: isActive ? brand.action : colors.surface[200],
-            color: isActive ? "#fff" : colors.text.secondary,
-          }}
+          className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isActive ? "bg-brand text-white" : "bg-surface-200 text-text-secondary"}`}
         >
           {item.badge}
-        </span>
-      )}
-
-      {/* chevron shows on hover, makes it feel more interactive */}
-      {!item.badge && (
-        <span
-          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ color: colors.text.secondary }}
-        >
-          <ChevronIcon />
         </span>
       )}
     </Link>
@@ -220,11 +169,8 @@ function SideNavItem({ item, isActive }: { item: NavItem; isActive: boolean }) {
 // ─── section label divider ────────────────────────────────────────────────────
 function NavSection({ label }: { label: string }) {
   return (
-    <div className="px-3 pt-5 pb-1.5">
-      <span
-        className="text-[10px] font-bold uppercase tracking-widest"
-        style={{ color: colors.text.secondary }}
-      >
+    <div className="px-3 pt-5 pb-2">
+      <span className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">
         {label}
       </span>
     </div>
@@ -236,7 +182,18 @@ function NavSection({ label }: { label: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DashboardLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // iam grabbing the real user from zustand now instead of hardcoding
+  const { user, logout } = useAuthStore();
+
+  // security check: if no user in memory, kick back to login
+  useEffect(() => {
+    if (!user) {
+      navigate(ROUTES.LOGIN);
+    }
+  }, [user, navigate]);
 
   const primaryNav: NavItem[] = [
     { label: "Overview", path: ROUTES.DASHBOARD, icon: <HomeIcon /> },
@@ -257,65 +214,56 @@ export default function DashboardLayout() {
 
   const secondaryNav: NavItem[] = [
     { label: "Settings", path: ROUTES.SETTINGS, icon: <SettingsIcon /> },
-    { label: "Help & Docs", path: "/#faq", icon: <HelpIcon /> },
   ];
 
+  // Helper to get initials
+  const getInitials = () => {
+    if (!user) return "U";
+    const first = user.first_name ? user.first_name.charAt(0) : "";
+    const last = user.last_name ? user.last_name.charAt(0) : "";
+    return `${first}${last}`.toUpperCase();
+  };
+
+  if (!user) return null; // prevent flicker before redirect
+
   return (
-    <div
-      className="flex h-screen overflow-hidden font-sans"
-      style={{ background: colors.surface[50] }}
-    >
-      {/* ══════════════════════════════════════════════════════
-          SIDEBAR
-      ══════════════════════════════════════════════════════ */}
+    // changed bg to surface-50 so the whole app has that smooth light gray vercel background
+    <div className="flex h-screen overflow-hidden font-sans bg-[#fafafa] selection:bg-brand selection:text-white">
+      {/* ─── SIDEBAR (White background to contrast with main area) ─── */}
       <aside
         className={`
           fixed inset-y-0 left-0 z-40 flex flex-col
-          w-[240px] shrink-0
-          border-r border-surface-200 bg-white
+          w-[250px] shrink-0
+          "bg-[#fafafa] border-r border-surface-200
           transition-transform duration-300
           md:static md:translate-x-0
           ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}
         `}
       >
-        {/* ── Logo area ── */}
-        <div
-          className="flex items-center justify-center px-5 shrink-0 border-b border-surface-200"
-          style={{ height: 60 }}
-        >
-          <Link
-            to={ROUTES.HOME}
-            className="flex items-center outline-none "
-            aria-label="TypeTrace Home"
-          >
+        {/* Logo Area */}
+        <div className="flex items-center justify-center px-6 shrink-0 h-[64px] border-b border-surface-200">
+          <Link to={ROUTES.HOME} className="flex items-center outline-none">
             <img
               src="/Logo.png"
               alt="TypeTrace"
               className="h-9 w-auto object-contain"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-              }}
             />
           </Link>
         </div>
 
-        {/* ── New session button ── */}
-        <div className="px-3 pt-4 pb-2 shrink-0">
+        {/* Action Button */}
+        <div className="px-4 pt-5 pb-2 shrink-0">
           <Link
             to={ROUTES.EDITOR_NEW}
-            className="flex items-center justify-center gap-2 w-full py-2 rounded-lg text-[13px] font-semibold text-white transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
-            style={{
-              background: brand.action,
-              boxShadow: `0 2px 8px -2px ${brand.action}55`,
-            }}
+            className="flex items-center justify-center gap-2 w-full py-2 rounded-md text-[13px] font-semibold bg-text-primary text-white transition-all hover:bg-black active:scale-[0.98] shadow-sm"
           >
             <PlusIcon />
             New Session
           </Link>
         </div>
 
-        {/* ── Navigation ── */}
-        <nav className="flex-1 overflow-y-auto px-2 pb-4">
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-3 pb-4">
           <NavSection label="Workspace" />
           <div className="flex flex-col gap-0.5">
             {primaryNav.map((item) => (
@@ -339,100 +287,49 @@ export default function DashboardLayout() {
           </div>
         </nav>
 
-        {/* ── User profile area — at the bottom like Vercel ── */}
-        <div className="shrink-0 border-t border-surface-200 p-3">
-          {/* usage bar — looks very SaaS, shows session limit */}
-          <div className="px-2 pb-3">
-            <div className="flex justify-between items-center mb-1.5">
-              <span
-                className="text-[10px] font-semibold uppercase tracking-wider"
-                style={{ color: colors.text.secondary }}
-              >
-                Sessions Used
-              </span>
-              <span
-                className="text-[10px] font-bold"
-                style={{ color: brand.action }}
-              >
-                4 / 10
-              </span>
-            </div>
-            <div
-              className="h-1 rounded-full overflow-hidden"
-              style={{ background: colors.surface[200] }}
-            >
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{ width: "40%", background: brand.action }}
-              />
-            </div>
-          </div>
-
+        {/* ── Real User Profile Area (Vercel Style) ── */}
+        <div className="shrink-0 border-t border-surface-200 p-4">
           <Link
             to={ROUTES.SETTINGS}
-            className="flex items-center gap-3 px-2 py-2 rounded-lg transition-colors"
-            style={{ color: colors.text.primary }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background =
-                colors.surface[50];
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "transparent";
-            }}
+            className="flex items-center gap-3 p-2 -mx-2 rounded-md hover:bg-surface-50 transition-colors group"
           >
-            {/* avatar circle — using initials */}
-            <div
-              className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
-              style={{ background: `${brand.action}18`, color: brand.action }}
-            >
-              SM
+            <div className="h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 bg-brand-light text-brand">
+              {getInitials()}
             </div>
             <div className="flex flex-col min-w-0 flex-1">
-              <span
-                className="text-[12.5px] font-semibold truncate leading-tight"
-                style={{ color: colors.text.primary }}
-              >
-                Simthass MYM
+              <span className="text-[13px] font-semibold text-text-primary truncate leading-tight group-hover:text-brand transition-colors">
+                {user.first_name} {user.last_name}
               </span>
-              <span
-                className="text-[11px] truncate"
-                style={{ color: colors.text.secondary }}
-              >
-                Student Account
+              <span className="text-[11.5px] text-text-secondary truncate mt-0.5">
+                {user.email}{" "}
+                {/* now showing real email instead of hardcoded text */}
               </span>
             </div>
-            {/* settings chevron */}
-            <span style={{ color: colors.text.secondary }}>
+            <span className="text-text-secondary group-hover:text-text-primary transition-colors">
               <ChevronIcon />
             </span>
           </Link>
         </div>
       </aside>
 
-      {/* mobile overlay */}
       {mobileNavOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/20 md:hidden"
+          className="fixed inset-0 z-30 bg-text-primary/20 md:hidden backdrop-blur-sm"
           onClick={() => setMobileNavOpen(false)}
         />
       )}
 
-      {/* ══════════════════════════════════════════════════════
-          MAIN CONTENT
-      ══════════════════════════════════════════════════════ */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* mobile top bar — only shows on small screens */}
-        <div
-          className="md:hidden shrink-0 flex items-center justify-between px-4 border-b border-surface-200 bg-white"
-          style={{ height: 56 }}
-        >
+      {/* ─── MAIN CONTENT ─── */}
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Mobile Top Bar */}
+        <div className="md:hidden shrink-0 flex items-center justify-between px-4 h-[60px] border-b border-surface-200 bg-white">
           <button
             onClick={() => setMobileNavOpen(true)}
-            className="flex items-center justify-center h-8 w-8 rounded-lg border border-surface-200 text-text-secondary"
+            className="p-2 -ml-2 text-text-secondary rounded-md hover:bg-surface-50"
           >
             <svg
-              width="16"
-              height="16"
+              width="20"
+              height="20"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -442,13 +339,7 @@ export default function DashboardLayout() {
             </svg>
           </button>
           <img src="/Logo.png" alt="TypeTrace" className="h-6 w-auto" />
-          <Link
-            to={ROUTES.EDITOR_NEW}
-            className="flex items-center justify-center h-8 w-8 rounded-lg text-white"
-            style={{ background: brand.action }}
-          >
-            <PlusIcon />
-          </Link>
+          <div className="w-8" /> {/* spacer for center alignment */}
         </div>
 
         <main className="flex-1 overflow-y-auto">
