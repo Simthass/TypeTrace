@@ -47,6 +47,7 @@ export default function Header() {
   const { user, logout } = useAuthStore();
 
   useEffect(() => {
+    // triggers the background change when scrolling past 10px
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
@@ -95,7 +96,7 @@ export default function Header() {
         role="banner"
         className="fixed top-0 inset-x-0 z-50 transition-colors duration-300"
         style={{
-          backgroundColor: colors.text.light,
+          backgroundColor: colors.surface[50],
           borderBottom: isScrolled
             ? `1px solid ${colors.surface[200]}`
             : "1px solid transparent",
@@ -398,25 +399,54 @@ export default function Header() {
                 className="flex flex-col gap-3 pt-8 border-t"
                 style={{ borderColor: colors.surface[200] }}
               >
-                <Link
-                  to={ROUTES.LOGIN}
-                  // STRICT TOKEN: rounded-lg (8px)
-                  className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center border transition-colors"
-                  style={{
-                    color: colors.text.primary,
-                    borderColor: colors.surface[200],
-                  }}
-                >
-                  Sign In
-                </Link>
-                <Link
-                  to={ROUTES.REGISTER}
-                  // STRICT TOKEN: rounded-lg (8px)
-                  className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center text-white transition-colors"
-                  style={{ backgroundColor: brand.action }}
-                >
-                  Start Free Session
-                </Link>
+                {user ? (
+                  /* --- AUTHENTICATED MOBILE MENU --- */
+                  <>
+                    <Link
+                      to={ROUTES.DASHBOARD}
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center transition-colors"
+                      style={{
+                        backgroundColor: colors.surface[50],
+                        color: colors.text.primary,
+                      }}
+                    >
+                      Dashboard
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center transition-colors"
+                      style={{
+                        color: brand.aiAccent,
+                        border: `1px solid ${brand.aiAccent}30`,
+                      }}
+                    >
+                      Sign Out
+                    </button>
+                  </>
+                ) : (
+                  /* --- UNAUTHENTICATED MOBILE MENU --- */
+                  <>
+                    <Link
+                      to={ROUTES.LOGIN}
+                      // STRICT TOKEN: rounded-lg (8px)
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center border transition-colors"
+                      style={{
+                        color: colors.text.primary,
+                        borderColor: colors.surface[200],
+                      }}
+                    >
+                      Sign In
+                    </Link>
+                    <Link
+                      to={ROUTES.REGISTER}
+                      // STRICT TOKEN: rounded-lg (8px)
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center text-white transition-colors"
+                      style={{ backgroundColor: brand.action }}
+                    >
+                      Start Free Session
+                    </Link>
+                  </>
+                )}
               </motion.div>
             </div>
           </motion.div>
