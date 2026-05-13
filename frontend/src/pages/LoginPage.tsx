@@ -83,12 +83,10 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
     try {
-      // baseURL already includes /api/v1/auth, so we just hit /login
       const response = await api.post("/auth/login", {
         email: data.email,
         password: data.password,
       });
-
       const { user, access_token } = response.data;
       useAuthStore.getState().login(user, access_token);
       navigate(ROUTES.DASHBOARD);
@@ -113,146 +111,179 @@ export default function LoginPage() {
   return (
     <div
       style={authStyles}
-      className="min-h-screen flex items-start justify-center bg-[var(--bg-main)] pt-[10vh] px-6 pb-6 font-sans"
+      className="min-h-screen flex flex-col bg-[var(--bg-main)] font-sans"
     >
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
-        className="w-full max-w-[380px]"
+      {/* ── top bar: logo left, sign up right — same layout as vercel login ── */}
+      <header
+        className="w-full flex items-center justify-between px-12 shrink-0 "
+        style={{ height: 64, borderColor: colors.surface[200] }}
       >
-        <div className="flex flex-col items-center mb-10">
-          <Link
-            to={ROUTES.HOME}
-            className="mb-8 outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)] rounded-md"
-            aria-label="Back to Home"
-          >
-            <img src="/Logo.png" alt="TypeTrace" className="h-[45px] w-auto" />
-          </Link>
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight mb-2 text-center">
-            Sign in to TypeTrace
-          </h1>
-          <p className="text-[15px] text-[var(--text-secondary)] text-center">
-            Welcome back to your secure session.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          className="w-full flex items-center justify-center gap-2.5 p-3 bg-[var(--bg-main)] border border-[var(--surface-200)] rounded-lg text-sm font-medium text-[var(--text-primary)] cursor-pointer transition-colors hover:bg-[var(--surface-50)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)]"
+        <Link
+          to={ROUTES.HOME}
+          className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)] rounded-md"
+          aria-label="Back to Home"
         >
-          <GoogleIcon />
-          Continue with Google
-        </button>
+          <img
+            src="/Logo.png"
+            alt="TypeTrace"
+            className="h-[30px] w-auto object-contain"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+        </Link>
 
-        <div className="flex items-center gap-4 my-6">
-          <div className="flex-1 h-[1px] bg-[var(--surface-200)] opacity-60" />
-          <span className="text-xs text-[var(--text-secondary)] uppercase tracking-widest">
-            Or
-          </span>
-          <div className="flex-1 h-[1px] bg-[var(--surface-200)] opacity-60" />
+        {/* sign in link — users who already have an account can bail out quickly */}
+        <div className="flex items-center gap-3">
+          <Link
+            to={ROUTES.REGISTER}
+            className="px-6 py-2 rounded-md text-[13px] font-semibold border transition-colors hover:bg-[var(--surface-50)]"
+            style={{
+              color: colors.text.primary,
+              borderColor: colors.surface[200],
+            }}
+          >
+            Sign Up
+          </Link>
         </div>
+      </header>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <label className="text-[13px] font-medium text-[var(--text-primary)]">
-              Email Address
-            </label>
-            <input
-              type="email"
-              placeholder="student@uni.ac.uk"
-              {...register("email")}
-              onFocus={() => setFocusedField("email")}
-              onBlur={() => setFocusedField(null)}
-              className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-              style={{
-                border: `1px solid ${errors.email ? "var(--error-color)" : focusedField === "email" ? "var(--brand-action)" : "var(--surface-200)"}`,
-                boxShadow:
-                  focusedField === "email" && !errors.email
-                    ? "0 0 0 1px var(--brand-action)"
-                    : "none",
-              }}
-            />
-            {errors.email && (
-              <span className="text-xs font-medium text-[var(--error-color)]">
-                {errors.email.message}
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <div className="flex justify-between items-center">
-              <label className="text-[13px] font-medium text-[var(--text-primary)]">
-                Password
-              </label>
-              <Link
-                to={ROUTES.FORGOT_PASSWORD}
-                className="text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors outline-none focus-visible:underline"
-              >
-                Forgot password?
-              </Link>
-            </div>
-            <input
-              type="password"
-              placeholder="••••••••"
-              {...register("password")}
-              onFocus={() => setFocusedField("password")}
-              onBlur={() => setFocusedField(null)}
-              className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-              style={{
-                border: `1px solid ${errors.password ? "var(--error-color)" : focusedField === "password" ? "var(--brand-action)" : "var(--surface-200)"}`,
-                boxShadow:
-                  focusedField === "password" && !errors.password
-                    ? "0 0 0 1px var(--brand-action)"
-                    : "none",
-              }}
-            />
-            {errors.password && (
-              <span className="text-xs font-medium text-[var(--error-color)]">
-                {errors.password.message}
-              </span>
-            )}
+      {/* ── main content: centred form, no logo here anymore ── */}
+      <div className="flex-1 flex items-start justify-center pt-[8vh] px-6 pb-6">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
+          className="w-full max-w-[380px]"
+        >
+          {/* page heading — logo removed from here, now in the header */}
+          <div className="flex flex-col items-center mb-10">
+            <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight mb-2 text-center">
+              Sign in to TypeTrace
+            </h1>
+            <p className="text-[15px] text-[var(--text-secondary)] text-center">
+              Welcome back to your secure session.
+            </p>
           </div>
 
           <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full mt-2 p-3 text-white rounded-lg text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--brand-action)]"
-            style={{
-              backgroundColor: isLoading
-                ? "var(--brand-action)"
-                : "var(--brand-action)",
-              opacity: isLoading ? 0.8 : 1,
-              cursor: isLoading ? "not-allowed" : "pointer",
-            }}
-            onMouseEnter={(e) =>
-              !isLoading &&
-              (e.currentTarget.style.backgroundColor = "var(--brand-hover)")
-            }
-            onMouseLeave={(e) =>
-              !isLoading &&
-              (e.currentTarget.style.backgroundColor = "var(--brand-action)")
-            }
+            type="button"
+            className="w-full flex items-center justify-center gap-2.5 p-3 bg-[var(--bg-main)] border border-[var(--surface-200)] rounded-lg text-sm font-medium text-[var(--text-primary)] cursor-pointer transition-colors hover:bg-[var(--surface-50)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)]"
           >
-            {isLoading ? "Authenticating..." : "Sign In"}
+            <GoogleIcon />
+            Continue with Google
           </button>
-        </form>
 
-        <p className="text-sm text-[var(--text-secondary)] text-center mt-8">
-          Don't have an account?{" "}
-          <Link
-            to={ROUTES.REGISTER}
-            className="text-[var(--text-primary)] font-medium hover:underline transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)] rounded-sm"
+          <div className="flex items-center gap-4 my-6">
+            <div className="flex-1 h-[1px] bg-[var(--surface-200)] opacity-60" />
+            <span className="text-xs text-[var(--text-secondary)] uppercase tracking-widest">
+              Or
+            </span>
+            <div className="flex-1 h-[1px] bg-[var(--surface-200)] opacity-60" />
+          </div>
+
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="flex flex-col gap-4"
           >
-            Sign up
-          </Link>
-        </p>
+            <div className="flex flex-col gap-2">
+              <label className="text-[13px] font-medium text-[var(--text-primary)]">
+                Email Address
+              </label>
+              <input
+                type="email"
+                placeholder="student@uni.ac.uk"
+                {...register("email")}
+                onFocus={() => setFocusedField("email")}
+                onBlur={() => setFocusedField(null)}
+                className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
+                style={{
+                  border: `1px solid ${errors.email ? "var(--error-color)" : focusedField === "email" ? "var(--brand-action)" : "var(--surface-200)"}`,
+                  boxShadow:
+                    focusedField === "email" && !errors.email
+                      ? "0 0 0 1px var(--brand-action)"
+                      : "none",
+                }}
+              />
+              {errors.email && (
+                <span className="text-xs font-medium text-[var(--error-color)]">
+                  {errors.email.message}
+                </span>
+              )}
+            </div>
 
-        <div className="flex items-center justify-center gap-1.5 mt-10 text-[var(--text-secondary)] opacity-70">
-          <LockIcon />
-          <span className="text-xs">End-to-end encrypted</span>
-        </div>
-      </motion.div>
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-between items-center">
+                <label className="text-[13px] font-medium text-[var(--text-primary)]">
+                  Password
+                </label>
+                <Link
+                  to={ROUTES.FORGOT_PASSWORD}
+                  className="text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors outline-none focus-visible:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <input
+                type="password"
+                placeholder="••••••••"
+                {...register("password")}
+                onFocus={() => setFocusedField("password")}
+                onBlur={() => setFocusedField(null)}
+                className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
+                style={{
+                  border: `1px solid ${errors.password ? "var(--error-color)" : focusedField === "password" ? "var(--brand-action)" : "var(--surface-200)"}`,
+                  boxShadow:
+                    focusedField === "password" && !errors.password
+                      ? "0 0 0 1px var(--brand-action)"
+                      : "none",
+                }}
+              />
+              {errors.password && (
+                <span className="text-xs font-medium text-[var(--error-color)]">
+                  {errors.password.message}
+                </span>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full mt-2 p-3 text-white rounded-lg text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--brand-action)]"
+              style={{
+                backgroundColor: "var(--brand-action)",
+                opacity: isLoading ? 0.8 : 1,
+                cursor: isLoading ? "not-allowed" : "pointer",
+              }}
+              onMouseEnter={(e) =>
+                !isLoading &&
+                (e.currentTarget.style.backgroundColor = "var(--brand-hover)")
+              }
+              onMouseLeave={(e) =>
+                !isLoading &&
+                (e.currentTarget.style.backgroundColor = "var(--brand-action)")
+              }
+            >
+              {isLoading ? "Authenticating..." : "Sign In"}
+            </button>
+          </form>
+
+          <p className="text-sm text-[var(--text-secondary)] text-center mt-8">
+            Don't have an account?{" "}
+            <Link
+              to={ROUTES.REGISTER}
+              className="text-[var(--text-primary)] font-medium hover:underline transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)] rounded-sm"
+            >
+              Sign up
+            </Link>
+          </p>
+
+          <div className="flex items-center justify-center gap-1.5 mt-10 text-[var(--text-secondary)] opacity-70">
+            <LockIcon />
+            <span className="text-xs">End-to-end encrypted</span>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 }

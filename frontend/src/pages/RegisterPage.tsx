@@ -90,7 +90,6 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterFormValues) => {
     setIsLoading(true);
     try {
-      // baseURL already includes /api/v1/auth, hit /register directly
       await api.post("/auth/register", {
         first_name: data.firstName,
         last_name: data.lastName,
@@ -99,7 +98,6 @@ export default function RegisterPage() {
         password: data.password,
         consent: data.consent,
       });
-
       useAuthStore.getState().setPendingEmail(data.email);
       navigate(ROUTES.VERIFY_OTP);
     } catch (error: any) {
@@ -124,239 +122,281 @@ export default function RegisterPage() {
   return (
     <div
       style={authStyles}
-      className="min-h-screen flex items-start justify-center bg-[var(--bg-main)] pt-[8vh] px-6 pb-6 font-sans"
+      className="min-h-screen flex flex-col bg-[var(--bg-main)] font-sans"
     >
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
-        className="w-full max-w-[420px]"
+      {/* ── top bar: logo left, sign in right — mirrors the login page structure ── */}
+      <header
+        className="w-full flex items-center justify-between px-12 shrink-0 "
+        style={{ height: 64, borderColor: colors.surface[200] }}
       >
-        <div className="flex flex-col items-center mb-8">
-          <Link
-            to={ROUTES.HOME}
-            className="mb-8 outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)] rounded-md"
-            aria-label="Back to Home"
-          >
-            <img src="/Logo.png" alt="TypeTrace" className="h-[45px] w-auto" />
-          </Link>
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight mb-2 text-center">
-            Create Student Account
-          </h1>
-          <p className="text-[15px] text-[var(--text-secondary)] text-center">
-            Secure your academic integrity with biometric proof.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          className="w-full flex items-center justify-center gap-2.5 p-3 bg-[var(--bg-main)] border border-[var(--surface-200)] rounded-lg text-sm font-medium text-[var(--text-primary)] cursor-pointer transition-colors hover:bg-[var(--surface-50)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)]"
+        <Link
+          to={ROUTES.HOME}
+          className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)] rounded-md"
+          aria-label="Back to Home"
         >
-          <GoogleIcon />
-          Sign up with University Google
-        </button>
-
-        <div className="flex items-center gap-4 my-6">
-          <div className="flex-1 h-[1px] bg-[var(--surface-200)] opacity-60" />
-          <span className="text-xs text-[var(--text-secondary)] uppercase tracking-widest">
-            Or register manually
-          </span>
-          <div className="flex-1 h-[1px] bg-[var(--surface-200)] opacity-60" />
-        </div>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-2">
-              <label className="text-[13px] font-medium text-[var(--text-primary)]">
-                First Name
-              </label>
-              <input
-                type="text"
-                placeholder="Ada"
-                {...register("firstName")}
-                onFocus={() => setFocusedField("firstName")}
-                onBlur={() => setFocusedField(null)}
-                className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-                style={{
-                  border: `1px solid ${errors.firstName ? "var(--error-color)" : focusedField === "firstName" ? "var(--brand-action)" : "var(--surface-200)"}`,
-                  boxShadow:
-                    focusedField === "firstName" && !errors.firstName
-                      ? "0 0 0 1px var(--brand-action)"
-                      : "none",
-                }}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-[13px] font-medium text-[var(--text-primary)]">
-                Last Name
-              </label>
-              <input
-                type="text"
-                placeholder="Lovelace"
-                {...register("lastName")}
-                onFocus={() => setFocusedField("lastName")}
-                onBlur={() => setFocusedField(null)}
-                className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-                style={{
-                  border: `1px solid ${errors.lastName ? "var(--error-color)" : focusedField === "lastName" ? "var(--brand-action)" : "var(--surface-200)"}`,
-                  boxShadow:
-                    focusedField === "lastName" && !errors.lastName
-                      ? "0 0 0 1px var(--brand-action)"
-                      : "none",
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-[13px] font-medium text-[var(--text-primary)]">
-              Student ID
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. 2540927"
-              {...register("studentId")}
-              onFocus={() => setFocusedField("studentId")}
-              onBlur={() => setFocusedField(null)}
-              className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-              style={{
-                border: `1px solid ${errors.studentId ? "var(--error-color)" : focusedField === "studentId" ? "var(--brand-action)" : "var(--surface-200)"}`,
-                boxShadow:
-                  focusedField === "studentId" && !errors.studentId
-                    ? "0 0 0 1px var(--brand-action)"
-                    : "none",
-              }}
-            />
-            {errors.studentId && (
-              <span className="text-xs font-medium text-[var(--error-color)]">
-                {errors.studentId.message}
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-[13px] font-medium text-[var(--text-primary)]">
-              University Email
-            </label>
-            <input
-              type="email"
-              placeholder="student@uni.ac.uk"
-              {...register("email")}
-              onFocus={() => setFocusedField("email")}
-              onBlur={() => setFocusedField(null)}
-              className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-              style={{
-                border: `1px solid ${errors.email ? "var(--error-color)" : focusedField === "email" ? "var(--brand-action)" : "var(--surface-200)"}`,
-                boxShadow:
-                  focusedField === "email" && !errors.email
-                    ? "0 0 0 1px var(--brand-action)"
-                    : "none",
-              }}
-            />
-            {errors.email && (
-              <span className="text-xs font-medium text-[var(--error-color)]">
-                {errors.email.message}
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-[13px] font-medium text-[var(--text-primary)]">
-              Password
-            </label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              {...register("password")}
-              onFocus={() => setFocusedField("password")}
-              onBlur={() => setFocusedField(null)}
-              className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-              style={{
-                border: `1px solid ${errors.password ? "var(--error-color)" : focusedField === "password" ? "var(--brand-action)" : "var(--surface-200)"}`,
-                boxShadow:
-                  focusedField === "password" && !errors.password
-                    ? "0 0 0 1px var(--brand-action)"
-                    : "none",
-              }}
-            />
-            {errors.password && (
-              <span className="text-xs font-medium text-[var(--error-color)]">
-                {errors.password.message}
-              </span>
-            )}
-          </div>
-
-          {/* Minimalist Biometric Ethics Consent Box */}
-          <div
-            className="flex items-start gap-3 p-4 bg-[var(--surface-50)] rounded-lg mt-2"
-            style={{
-              border: `1px solid ${errors.consent ? "var(--error-color)" : "var(--surface-200)"}`,
+          <img
+            src="/Logo.png"
+            alt="TypeTrace"
+            className="h-[30px] w-auto object-contain"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
             }}
-          >
-            <input
-              type="checkbox"
-              id="consent"
-              {...register("consent")}
-              className="mt-0.5 w-4 h-4 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--brand-action)]"
-              style={{ accentColor: "var(--brand-action)" }}
-            />
-            <label
-              htmlFor="consent"
-              className="text-[13px] leading-[1.5] text-[var(--text-secondary)] cursor-pointer"
-            >
-              <strong className="block text-[var(--text-primary)] mb-1">
-                Biometric Data Consent
-              </strong>
-              I agree to allow TypeTrace to securely record my keystroke timings
-              (Inter-Key Intervals) solely for cryptographic authorship
-              verification.
-            </label>
-          </div>
-          {errors.consent && (
-            <span className="text-xs font-medium text-[var(--error-color)]">
-              {errors.consent.message}
-            </span>
-          )}
+          />
+        </Link>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full mt-2 p-3 text-white rounded-lg text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--brand-action)]"
-            style={{
-              backgroundColor: isLoading
-                ? "var(--brand-action)"
-                : "var(--brand-action)",
-              opacity: isLoading ? 0.8 : 1,
-              cursor: isLoading ? "not-allowed" : "pointer",
-            }}
-            onMouseEnter={(e) =>
-              !isLoading &&
-              (e.currentTarget.style.backgroundColor = "var(--brand-hover)")
-            }
-            onMouseLeave={(e) =>
-              !isLoading &&
-              (e.currentTarget.style.backgroundColor = "var(--brand-action)")
-            }
-          >
-            {isLoading ? "Creating Profile..." : "Create Account"}
-          </button>
-        </form>
-
-        <p className="text-sm text-[var(--text-secondary)] text-center mt-8">
-          Already have an account?{" "}
+        {/* sign in link — users who already have an account can bail out quickly */}
+        <div className="flex items-center gap-3">
           <Link
             to={ROUTES.LOGIN}
-            className="text-[var(--text-primary)] font-medium hover:underline transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)] rounded-sm"
+            className="px-6 py-2 rounded-md text-[13px] font-semibold border transition-colors hover:bg-[var(--surface-50)]"
+            style={{
+              color: colors.text.primary,
+              borderColor: colors.surface[200],
+            }}
           >
-            Sign in
+            Sign In
           </Link>
-        </p>
-
-        <div className="flex items-center justify-center gap-1.5 mt-10 text-[var(--text-secondary)] opacity-70">
-          <ShieldIcon />
-          <span className="text-xs">Data encrypted at rest via AES-256</span>
         </div>
-      </motion.div>
+      </header>
+
+      {/* ── main form area, logo removed from here ── */}
+      <div className="flex-1 flex items-start justify-center pt-[6vh] px-6 pb-6">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
+          className="w-full max-w-[420px]"
+        >
+          <div className="flex flex-col items-center mb-8">
+            <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight mb-2 text-center">
+              Create Student Account
+            </h1>
+            <p className="text-[15px] text-[var(--text-secondary)] text-center">
+              Secure your academic integrity with biometric proof.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="w-full flex items-center justify-center gap-2.5 p-3 bg-[var(--bg-main)] border border-[var(--surface-200)] rounded-lg text-sm font-medium text-[var(--text-primary)] cursor-pointer transition-colors hover:bg-[var(--surface-50)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)]"
+          >
+            <GoogleIcon />
+            Sign up with University Google
+          </button>
+
+          <div className="flex items-center gap-4 my-6">
+            <div className="flex-1 h-[1px] bg-[var(--surface-200)] opacity-60" />
+            <span className="text-xs text-[var(--text-secondary)] uppercase tracking-widest">
+              Or register manually
+            </span>
+            <div className="flex-1 h-[1px] bg-[var(--surface-200)] opacity-60" />
+          </div>
+
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="flex flex-col gap-4"
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-2">
+                <label className="text-[13px] font-medium text-[var(--text-primary)]">
+                  First Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ada"
+                  {...register("firstName")}
+                  onFocus={() => setFocusedField("firstName")}
+                  onBlur={() => setFocusedField(null)}
+                  className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
+                  style={{
+                    border: `1px solid ${errors.firstName ? "var(--error-color)" : focusedField === "firstName" ? "var(--brand-action)" : "var(--surface-200)"}`,
+                    boxShadow:
+                      focusedField === "firstName" && !errors.firstName
+                        ? "0 0 0 1px var(--brand-action)"
+                        : "none",
+                  }}
+                />
+                {errors.firstName && (
+                  <span className="text-xs font-medium text-[var(--error-color)]">
+                    {errors.firstName.message}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-[13px] font-medium text-[var(--text-primary)]">
+                  Last Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="Lovelace"
+                  {...register("lastName")}
+                  onFocus={() => setFocusedField("lastName")}
+                  onBlur={() => setFocusedField(null)}
+                  className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
+                  style={{
+                    border: `1px solid ${errors.lastName ? "var(--error-color)" : focusedField === "lastName" ? "var(--brand-action)" : "var(--surface-200)"}`,
+                    boxShadow:
+                      focusedField === "lastName" && !errors.lastName
+                        ? "0 0 0 1px var(--brand-action)"
+                        : "none",
+                  }}
+                />
+                {errors.lastName && (
+                  <span className="text-xs font-medium text-[var(--error-color)]">
+                    {errors.lastName.message}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-[13px] font-medium text-[var(--text-primary)]">
+                Student ID
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 2540927"
+                {...register("studentId")}
+                onFocus={() => setFocusedField("studentId")}
+                onBlur={() => setFocusedField(null)}
+                className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
+                style={{
+                  border: `1px solid ${errors.studentId ? "var(--error-color)" : focusedField === "studentId" ? "var(--brand-action)" : "var(--surface-200)"}`,
+                  boxShadow:
+                    focusedField === "studentId" && !errors.studentId
+                      ? "0 0 0 1px var(--brand-action)"
+                      : "none",
+                }}
+              />
+              {errors.studentId && (
+                <span className="text-xs font-medium text-[var(--error-color)]">
+                  {errors.studentId.message}
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-[13px] font-medium text-[var(--text-primary)]">
+                University Email
+              </label>
+              <input
+                type="email"
+                placeholder="student@uni.ac.uk"
+                {...register("email")}
+                onFocus={() => setFocusedField("email")}
+                onBlur={() => setFocusedField(null)}
+                className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
+                style={{
+                  border: `1px solid ${errors.email ? "var(--error-color)" : focusedField === "email" ? "var(--brand-action)" : "var(--surface-200)"}`,
+                  boxShadow:
+                    focusedField === "email" && !errors.email
+                      ? "0 0 0 1px var(--brand-action)"
+                      : "none",
+                }}
+              />
+              {errors.email && (
+                <span className="text-xs font-medium text-[var(--error-color)]">
+                  {errors.email.message}
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-[13px] font-medium text-[var(--text-primary)]">
+                Password
+              </label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                {...register("password")}
+                onFocus={() => setFocusedField("password")}
+                onBlur={() => setFocusedField(null)}
+                className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
+                style={{
+                  border: `1px solid ${errors.password ? "var(--error-color)" : focusedField === "password" ? "var(--brand-action)" : "var(--surface-200)"}`,
+                  boxShadow:
+                    focusedField === "password" && !errors.password
+                      ? "0 0 0 1px var(--brand-action)"
+                      : "none",
+                }}
+              />
+              {errors.password && (
+                <span className="text-xs font-medium text-[var(--error-color)]">
+                  {errors.password.message}
+                </span>
+              )}
+            </div>
+
+            {/* biometric consent — this is actually important for GDPR compliance in the dissertation */}
+            <div
+              className="flex items-start gap-3 p-4 bg-[var(--surface-50)] rounded-lg mt-2"
+              style={{
+                border: `1px solid ${errors.consent ? "var(--error-color)" : "var(--surface-200)"}`,
+              }}
+            >
+              <input
+                type="checkbox"
+                id="consent"
+                {...register("consent")}
+                className="mt-0.5 w-4 h-4 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--brand-action)]"
+                style={{ accentColor: "var(--brand-action)" }}
+              />
+              <label
+                htmlFor="consent"
+                className="text-[13px] leading-[1.5] text-[var(--text-secondary)] cursor-pointer"
+              >
+                <strong className="block text-[var(--text-primary)] mb-1">
+                  Biometric Data Consent
+                </strong>
+                I agree to allow TypeTrace to securely record my keystroke
+                timings (Inter-Key Intervals) solely for cryptographic
+                authorship verification.
+              </label>
+            </div>
+            {errors.consent && (
+              <span className="text-xs font-medium text-[var(--error-color)]">
+                {errors.consent.message}
+              </span>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full mt-2 p-3 text-white rounded-lg text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--brand-action)]"
+              style={{
+                backgroundColor: "var(--brand-action)",
+                opacity: isLoading ? 0.8 : 1,
+                cursor: isLoading ? "not-allowed" : "pointer",
+              }}
+              onMouseEnter={(e) =>
+                !isLoading &&
+                (e.currentTarget.style.backgroundColor = "var(--brand-hover)")
+              }
+              onMouseLeave={(e) =>
+                !isLoading &&
+                (e.currentTarget.style.backgroundColor = "var(--brand-action)")
+              }
+            >
+              {isLoading ? "Creating Profile..." : "Create Account"}
+            </button>
+          </form>
+
+          <p className="text-sm text-[var(--text-secondary)] text-center mt-8">
+            Already have an account?{" "}
+            <Link
+              to={ROUTES.LOGIN}
+              className="text-[var(--text-primary)] font-medium hover:underline transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)] rounded-sm"
+            >
+              Sign in
+            </Link>
+          </p>
+
+          <div className="flex items-center justify-center gap-1.5 mt-10 text-[var(--text-secondary)] opacity-70">
+            <ShieldIcon />
+            <span className="text-xs">Data encrypted at rest via AES-256</span>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 }
