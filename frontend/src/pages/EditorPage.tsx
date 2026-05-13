@@ -6,17 +6,17 @@ import { colors, brand } from "../styles/colors";
 // ─── types ────────────────────────────────────────────────────────────────────
 interface KeystrokeEvent {
   key: string;
-  keyCode: number;
-  type: "keydown" | "keyup";
-  timestamp: number;
-  documentLength: number;
+  down_time: number;
+  up_time: number | null;
+  dwell_time: number | null;
+  flight_time: number | null; // time since LAST keydown
 }
 
 interface SessionStats {
   wpm: number;
   keystrokes: number;
   deletions: number;
-  pauses: number; // pauses over 1000ms
+  pauses: number;
   avgIki: number;
   sessionSeconds: number;
 }
@@ -74,7 +74,6 @@ function IkiWaveform({ active }: { active: boolean }) {
         return;
       }
 
-      // subtle bg wave
       ctx.beginPath();
       ctx.strokeStyle = colors.surface[200];
       ctx.lineWidth = 1.2;
@@ -87,7 +86,6 @@ function IkiWaveform({ active }: { active: boolean }) {
       }
       ctx.stroke();
 
-      // primary wave (Monochromatic black)
       ctx.beginPath();
       ctx.strokeStyle = colors.text.primary;
       ctx.lineWidth = 1.8;
@@ -197,7 +195,7 @@ function ToolBtn({
   );
 }
 
-// ─── word goal progress bar (Sharp Brutalist style) ───────────────────────────
+// ─── word goal progress bar ───────────────────────────────────────────
 function WordGoalBar({ current, goal }: { current: number; goal: number }) {
   const pct = Math.min((current / goal) * 100, 100);
   const done = pct >= 100;
@@ -245,7 +243,6 @@ function useSessionTimer() {
   return { seconds, fmt };
 }
 
-// ─── confidence badge color logic ─────────────────────────────────────────────
 function getConfidenceStyle(score: number) {
   if (score >= 80)
     return { color: brand.humanAccent, bg: brand.humanBg, label: "HUMAN" };
@@ -281,9 +278,12 @@ export default function EditorPage() {
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
 
-  const keystrokeRef = useRef<KeystrokeEvent[]>([]);
-  const lastKeydownTime = useRef<number | null>(null);
-  const ikiValues = useRef<number[]>([]);
+  // --- SPRINT 1: BIOMETRIC ENGINE REFS ---
+  // using refs cos if i put this in state react re-renders on every keystroke and it lags af
+  const keystrokeLog = useRef<KeystrokeEvent[]>([]);
+  const activeKeys = useRef<{ [key: string]: number }>({}); // tracking when a key was pressed to calc dwell time later
+  const lastKeydownTime = useRef<number | null>(null); // need this to calc flight time between keys
+  const ikiValues = useRef<number[]>([]); // keeping a separate array just for stats panel math so its fast
 
   const [stats, setStats] = useState<SessionStats>({
     wpm: 0,
@@ -295,11 +295,11 @@ export default function EditorPage() {
   });
 
   const { seconds, fmt: timerFmt } = useSessionTimer();
-
   const wordCount = text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
   const charCount = text.length;
   const readTime = Math.max(1, Math.ceil(wordCount / 200));
 
+  // auto save mock
   useEffect(() => {
     const t = setInterval(() => {
       if (text.length > 0) setLastSaved(new Date());
@@ -307,6 +307,7 @@ export default function EditorPage() {
     return () => clearInterval(t);
   }, [text, title]);
 
+  // stats updater
   useEffect(() => {
     const t = setInterval(() => {
       const ikis = ikiValues.current;
@@ -315,15 +316,18 @@ export default function EditorPage() {
           ? Math.round(ikis.reduce((a, b) => a + b, 0) / ikis.length)
           : 0;
       const wpm = seconds > 0 ? Math.round((wordCount / seconds) * 60) : 0;
-      const deletions = keystrokeRef.current.filter(
-        (k) => k.type === "keydown" && (k.keyCode === 8 || k.keyCode === 46),
+
+      // counting backspaces cos lots of backspaces means human making mistakes
+      const deletions = keystrokeLog.current.filter(
+        (k) => k.key === "Backspace" || k.key === "Delete",
       ).length;
+
+      // if flight time is > 1000ms its a pause. AI doesn't pause to think lol.
       const pauses = ikis.filter((v) => v > 1000).length;
 
       setStats({
         wpm,
-        keystrokes: keystrokeRef.current.filter((k) => k.type === "keydown")
-          .length,
+        keystrokes: keystrokeLog.current.length,
         deletions,
         pauses,
         avgIki,
@@ -333,19 +337,36 @@ export default function EditorPage() {
     return () => clearInterval(t);
   }, [seconds, wordCount]);
 
+  // --- ENGINE: KEYDOWN ---
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       const now = Date.now();
+
+      // ignore holding down the key auto-repeat otherwise data gets super weird
+      if (e.repeat) return;
+
+      // calc flight time from previous key
+      let flightTime = null;
       if (lastKeydownTime.current !== null) {
-        const iki = now - lastKeydownTime.current;
-        if (iki < 5000) ikiValues.current.push(iki);
+        flightTime = now - lastKeydownTime.current;
+        // capping it at 5s cos if they go for lunch we dont want a 30 min IKI ruining the average
+        if (flightTime < 5000) ikiValues.current.push(flightTime);
       }
       lastKeydownTime.current = now;
-      keystrokeRef.current.push({
+
+      // save the down time for this specific key so we can subtract later on keyup
+      activeKeys.current[e.key] = now;
+
+      // push the initial down event to the master log
+      keystrokeLog.current.push({
         key: e.key,
         keyCode: e.keyCode,
         type: "keydown",
         timestamp: now,
+        down_time: now,
+        up_time: null,
+        dwell_time: null,
+        flight_time: flightTime,
         documentLength: text.length,
       });
 
@@ -356,13 +377,28 @@ export default function EditorPage() {
     [text.length],
   );
 
+  // --- ENGINE: KEYUP ---
   const handleKeyUp = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      keystrokeRef.current.push({
+      const now = Date.now();
+      const downTime = activeKeys.current[e.key];
+
+      let dwellTime = null;
+      if (downTime) {
+        dwellTime = now - downTime;
+        delete activeKeys.current[e.key]; // clean up memory
+      }
+
+      // prof said to update the original object if possible but appending a new keyup event is easier for the json parser later
+      keystrokeLog.current.push({
         key: e.key,
         keyCode: e.keyCode,
         type: "keyup",
-        timestamp: Date.now(),
+        timestamp: now,
+        down_time: downTime || now,
+        up_time: now,
+        dwell_time: dwellTime,
+        flight_time: null,
         documentLength: text.length,
       });
     },
@@ -372,20 +408,40 @@ export default function EditorPage() {
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) =>
     setText(e.target.value);
 
+  // --- ENGINE: PASTE DETECTION ---
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const pastedText = e.clipboardData.getData("text");
-    if (pastedText.length > 50) {
-      keystrokeRef.current.push({
-        key: "__PASTE__",
+    // if they paste more than 20 chars flag it immediately.
+    // a single word paste might just be them moving a sentence around.
+    if (pastedText.length > 20) {
+      keystrokeLog.current.push({
+        key: "__PASTE_EVENT__",
         keyCode: -1,
         type: "keydown",
         timestamp: Date.now(),
+        down_time: Date.now(),
+        up_time: Date.now(),
+        dwell_time: 0,
+        flight_time: 0,
         documentLength: text.length,
       });
+      // maybe add a toast notification here later saying "Paste detected!"
     }
   };
 
-  const handleEndSession = () => navigate(ROUTES.DASHBOARD);
+  const handleEndSession = () => {
+    // printing payload so i can see what it looks like before we build the backend api
+    console.log("FINAL PAYLOAD TO SEND TO FASTAPI:", {
+      title,
+      text_content: text,
+      keystroke_array: keystrokeLog.current,
+      stats,
+    });
+    alert(
+      "Check browser console for the JSON payload! Routing to dashboard...",
+    );
+    navigate(ROUTES.DASHBOARD);
+  };
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -658,7 +714,6 @@ export default function EditorPage() {
             )}
           </div>
 
-          {/* Save Status Indicator moved to the center bar */}
           <div className="flex items-center gap-2.5 px-2.5">
             <span
               className="text-[10px] font-mono shrink-0 flex items-center gap-1.5"
@@ -740,14 +795,11 @@ export default function EditorPage() {
           className="flex-1 overflow-y-auto flex justify-center transition-colors duration-300"
           style={{ backgroundColor: focusMode ? brand.bgPage : brand.bgCard }}
         >
-          {/* Expanded text area max-w-[1200px] instead of [720px] */}
           <div className="w-full max-w-[1200px] px-8 md:px-16 py-16 flex flex-col gap-0 relative mx-auto">
-            {/* Top context / progress */}
             <div className="mb-10 opacity-60">
               <WordGoalBar current={wordCount} goal={wordGoal} />
             </div>
 
-            {/* THE TEXTAREA */}
             <textarea
               ref={textareaRef}
               value={text}
@@ -770,7 +822,6 @@ export default function EditorPage() {
               }}
             />
 
-            {/* Micro-metrics footer inside document */}
             <div
               className="flex items-center justify-between pt-6 border-t mt-12"
               style={{ borderColor: colors.surface[200] }}
@@ -898,7 +949,7 @@ export default function EditorPage() {
                 { label: "Total Words", value: wordCount },
                 {
                   label: "Event Array",
-                  value: `${keystrokeRef.current.length} obj`,
+                  value: `${keystrokeLog.current.length} obj`,
                 },
               ].map(({ label, value }) => (
                 <div
