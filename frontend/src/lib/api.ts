@@ -2,9 +2,10 @@
 import axios from "axios";
 import { useAuthStore } from "../store/authStore";
 
+// bro i removed the /auth from the end of these urls so it acts as a true global base
 const API_URL = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api/v1/auth`
-  : "http://localhost:8000/api/v1/auth";
+  ? `${import.meta.env.VITE_API_URL}/api/v1`
+  : "http://localhost:8000/api/v1";
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -29,17 +30,17 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // 1. Check if the error is a 401
     const isUnauthorized = error.response && error.response.status === 401;
 
-    // 2. Check if the request was made to an auth endpoint where 401 is normal
     const requestUrl = error.config?.url || "";
+    // updated this to match the new auth paths we are about to fix
     const isAuthEndpoint =
-      requestUrl.includes("/login") || requestUrl.includes("/verify-otp");
+      requestUrl.includes("/auth/login") ||
+      requestUrl.includes("/auth/verify-otp") ||
+      requestUrl.includes("/auth/password-reset");
 
-    // 3. ONLY trigger the global logout if it's a 401 on a protected route
     if (isUnauthorized && !isAuthEndpoint) {
-      console.warn("Token expired or invalid. Auto-logging out.");
+      console.warn("Token expired bro. Auto-logging out.");
       useAuthStore.getState().logout();
       window.location.href = "/login";
     }

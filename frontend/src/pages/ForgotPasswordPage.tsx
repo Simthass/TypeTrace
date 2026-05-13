@@ -78,7 +78,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
     try {
       // TODO: build this in FastAPI next
-      await api.post("/password-reset/request", { email: data.email });
+      await api.post("/auth/password-reset/request", { email: data.email });
       setTargetEmail(data.email);
       setStep(2);
     } catch (error: any) {
@@ -119,7 +119,7 @@ export default function ForgotPasswordPage() {
     try {
       // TODO: build this in FastAPI
       // This should return a temporary reset_token so we can authorize the password change
-      const response = await api.post("/password-reset/verify", {
+      const response = await api.post("/auth/password-reset/verify", {
         email: targetEmail,
         otp: fullOtp,
       });
@@ -139,7 +139,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
     try {
       // TODO: build this in FastAPI
-      await api.post("/password-reset/confirm", {
+      await api.post("/auth/password-reset/confirm", {
         email: targetEmail,
         reset_token: resetToken,
         new_password: data.password,

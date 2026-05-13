@@ -84,7 +84,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       // baseURL already includes /api/v1/auth, so we just hit /login
-      const response = await api.post("/login", {
+      const response = await api.post("/auth/login", {
         email: data.email,
         password: data.password,
       });

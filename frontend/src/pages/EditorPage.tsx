@@ -2,14 +2,19 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
+import { api } from "../lib/api"; // importing the global axios instance
 
 // ─── types ────────────────────────────────────────────────────────────────────
 interface KeystrokeEvent {
   key: string;
+  keyCode: number;
+  type: "keydown" | "keyup";
+  timestamp: number;
   down_time: number;
   up_time: number | null;
   dwell_time: number | null;
-  flight_time: number | null; // time since LAST keydown
+  flight_time: number | null;
+  documentLength: number;
 }
 
 interface SessionStats {
@@ -263,7 +268,7 @@ export default function EditorPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [text, setText] = useState("");
-  const [title, setTitle] = useState("Untitled Document");
+  const [title, setTitle] = useState("");
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   const [isTyping, setIsTyping] = useState(false);
@@ -277,13 +282,14 @@ export default function EditorPage() {
   const [showGoalPicker, setShowGoalPicker] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- SPRINT 1: BIOMETRIC ENGINE REFS ---
   // using refs cos if i put this in state react re-renders on every keystroke and it lags af
   const keystrokeLog = useRef<KeystrokeEvent[]>([]);
-  const activeKeys = useRef<{ [key: string]: number }>({}); // tracking when a key was pressed to calc dwell time later
-  const lastKeydownTime = useRef<number | null>(null); // need this to calc flight time between keys
-  const ikiValues = useRef<number[]>([]); // keeping a separate array just for stats panel math so its fast
+  const activeKeys = useRef<{ [key: string]: number }>({}); // tracking physical keys using e.code now so shift doesnt break it
+  const lastKeydownTime = useRef<number | null>(null);
+  const ikiValues = useRef<number[]>([]);
 
   const [stats, setStats] = useState<SessionStats>({
     wpm: 0,
@@ -307,9 +313,9 @@ export default function EditorPage() {
     return () => clearInterval(t);
   }, [text, title]);
 
-  // stats updater
+  // UI stats updater (runs every 3 seconds so it doesnt spam re-renders)
   useEffect(() => {
-    const t = setInterval(() => {
+    if (seconds > 0 && seconds % 3 === 0) {
       const ikis = ikiValues.current;
       const avgIki =
         ikis.length > 0
@@ -317,24 +323,21 @@ export default function EditorPage() {
           : 0;
       const wpm = seconds > 0 ? Math.round((wordCount / seconds) * 60) : 0;
 
-      // counting backspaces cos lots of backspaces means human making mistakes
       const deletions = keystrokeLog.current.filter(
         (k) => k.key === "Backspace" || k.key === "Delete",
       ).length;
-
-      // if flight time is > 1000ms its a pause. AI doesn't pause to think lol.
       const pauses = ikis.filter((v) => v > 1000).length;
 
       setStats({
         wpm,
-        keystrokes: keystrokeLog.current.length,
+        keystrokes: keystrokeLog.current.filter((k) => k.type === "keydown")
+          .length,
         deletions,
         pauses,
         avgIki,
         sessionSeconds: seconds,
       });
-    }, 3000);
-    return () => clearInterval(t);
+    }
   }, [seconds, wordCount]);
 
   // --- ENGINE: KEYDOWN ---
@@ -349,15 +352,14 @@ export default function EditorPage() {
       let flightTime = null;
       if (lastKeydownTime.current !== null) {
         flightTime = now - lastKeydownTime.current;
-        // capping it at 5s cos if they go for lunch we dont want a 30 min IKI ruining the average
+        // capping it at 5s cos if they go for lunch we dont want a 30 min IKI ruining the average math
         if (flightTime < 5000) ikiValues.current.push(flightTime);
       }
       lastKeydownTime.current = now;
 
-      // save the down time for this specific key so we can subtract later on keyup
-      activeKeys.current[e.key] = now;
+      // BUG FIX: using e.code (the physical key) instead of e.key so Shift doesn't break the dwell time calculation lol
+      activeKeys.current[e.code] = now;
 
-      // push the initial down event to the master log
       keystrokeLog.current.push({
         key: e.key,
         keyCode: e.keyCode,
@@ -381,15 +383,16 @@ export default function EditorPage() {
   const handleKeyUp = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       const now = Date.now();
-      const downTime = activeKeys.current[e.key];
+
+      // BUG FIX: pulling the start time using e.code to match the keydown
+      const downTime = activeKeys.current[e.code];
 
       let dwellTime = null;
       if (downTime) {
         dwellTime = now - downTime;
-        delete activeKeys.current[e.key]; // clean up memory
+        delete activeKeys.current[e.code];
       }
 
-      // prof said to update the original object if possible but appending a new keyup event is easier for the json parser later
       keystrokeLog.current.push({
         key: e.key,
         keyCode: e.keyCode,
@@ -411,8 +414,6 @@ export default function EditorPage() {
   // --- ENGINE: PASTE DETECTION ---
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const pastedText = e.clipboardData.getData("text");
-    // if they paste more than 20 chars flag it immediately.
-    // a single word paste might just be them moving a sentence around.
     if (pastedText.length > 20) {
       keystrokeLog.current.push({
         key: "__PASTE_EVENT__",
@@ -425,22 +426,68 @@ export default function EditorPage() {
         flight_time: 0,
         documentLength: text.length,
       });
-      // maybe add a toast notification here later saying "Paste detected!"
     }
   };
 
-  const handleEndSession = () => {
-    // printing payload so i can see what it looks like before we build the backend api
-    console.log("FINAL PAYLOAD TO SEND TO FASTAPI:", {
-      title,
-      text_content: text,
-      keystroke_array: keystrokeLog.current,
-      stats,
-    });
-    alert(
-      "Check browser console for the JSON payload! Routing to dashboard...",
-    );
-    navigate(ROUTES.DASHBOARD);
+  // --- ENGINE: SEND DATA TO BACKEND ---
+  const handleEndSession = async () => {
+    // block double clicks so we dont spam the database
+    if (isSubmitting) return;
+
+    // prof said validate before sending to save server costs
+    if (keystrokeLog.current.length < 10 || text.trim().length === 0) {
+      alert("Session too short bro, type some more words first.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // calculating final stats here right before sending so react state delays dont mess up my db payload
+      const finalIkis = ikiValues.current;
+      const finalAvgIki =
+        finalIkis.length > 0
+          ? Math.round(finalIkis.reduce((a, b) => a + b, 0) / finalIkis.length)
+          : 0;
+      const finalDeletions = keystrokeLog.current.filter(
+        (k) => k.key === "Backspace" || k.key === "Delete",
+      ).length;
+      const finalPauses = finalIkis.filter((v) => v > 1000).length;
+      const finalWpm = seconds > 0 ? Math.round((wordCount / seconds) * 60) : 0;
+
+      const finalStats = {
+        wpm: finalWpm,
+        keystrokes: keystrokeLog.current.filter((k) => k.type === "keydown")
+          .length,
+        deletions: finalDeletions,
+        pauses: finalPauses,
+        avgIki: finalAvgIki,
+        sessionSeconds: seconds,
+      };
+
+      const payload = {
+        title: title || "Untitled Document",
+        text_content: text,
+        keystroke_array: keystrokeLog.current,
+        stats: finalStats,
+      };
+
+      console.log("sending this massive blob to fastAPI...", payload);
+
+      // my global axios interceptor automatically attaches the Bearer token here!
+      const response = await api.post("/sessions/analyze", payload);
+
+      console.log("Success! DB saved it with ID:", response.data.id);
+      navigate(ROUTES.DASHBOARD);
+    } catch (error: any) {
+      console.error("bruh the api failed:", error);
+      alert(
+        error.response?.data?.detail ||
+          "Failed to analyze session. Is the python server running?",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const toggleFullscreen = () => {
@@ -495,7 +542,7 @@ export default function EditorPage() {
         }}
       >
         {/* ── Left: back + title ── */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 flex-1 max-w-[400px]">
           <Link
             to={ROUTES.DASHBOARD}
             className="flex items-center justify-center h-7 w-7 rounded-md border transition-colors shrink-0"
@@ -530,7 +577,7 @@ export default function EditorPage() {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="text-[13px] font-semibold bg-transparent outline-none min-w-0 w-[240px] truncate focus:ring-0 px-2.5 py-1 rounded-md border transition-colors"
+            className="text-[13px] font-semibold bg-transparent outline-none w-full truncate focus:ring-0 px-2.5 py-1 rounded-md border transition-colors"
             style={{
               color: colors.text.primary,
               caretColor: brand.action,
@@ -767,8 +814,14 @@ export default function EditorPage() {
 
           <button
             onClick={handleEndSession}
+            disabled={isSubmitting}
             className="flex items-center gap-2 px-3 py-1.5 rounded-md text-[11.5px] font-semibold transition-all shadow-sm"
-            style={{ backgroundColor: brand.action, color: colors.text.light }}
+            style={{
+              backgroundColor: brand.action,
+              color: colors.text.light,
+              opacity: isSubmitting ? 0.7 : 1,
+              cursor: isSubmitting ? "not-allowed" : "pointer",
+            }}
           >
             <svg
               width="12"
@@ -778,10 +831,11 @@ export default function EditorPage() {
               stroke="currentColor"
               strokeWidth="2"
               strokeLinecap="round"
+              className={isSubmitting ? "animate-pulse" : ""}
             >
               <path d="M5 3l14 9-14 9V3z" fill="currentColor" stroke="none" />
             </svg>
-            End & Analyse
+            {isSubmitting ? "Analyzing..." : "End & Analyse"}
           </button>
         </div>
       </header>

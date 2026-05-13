@@ -91,7 +91,7 @@ export default function RegisterPage() {
     setIsLoading(true);
     try {
       // baseURL already includes /api/v1/auth, hit /register directly
-      await api.post("/register", {
+      await api.post("/auth/register", {
         first_name: data.firstName,
         last_name: data.lastName,
         student_id: data.studentId,

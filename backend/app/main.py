@@ -3,7 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
-from app.api.routes import auth
+# bruh i forgot to import the sessions router here last time, no wonder it 404'd
+from app.api.routes import auth, sessions 
 from app.db.database import engine, Base
 
 # setting up basic logging so we can see what happens in the terminal
@@ -38,8 +39,10 @@ async def startup_event():
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables verified.")
 
-# Registering the router we built earlier
+# Registering the routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+# linking the new sessions endpoint so the frontend can actually reach it
+app.include_router(sessions.router, prefix="/api/v1/sessions", tags=["Sessions"]) 
 
 @app.get("/")
 async def root():
