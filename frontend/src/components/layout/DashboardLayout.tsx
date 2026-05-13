@@ -277,7 +277,7 @@ export default function DashboardLayout() {
   // im keeping these separated cos they link out of the dashboard layout now
   const secondaryItems = [
     { name: "Settings", path: ROUTES.SETTINGS, icon: <SettingsIcon /> },
-    { name: "Help & Docs", path: "/#faq", icon: <HelpIcon /> },
+    { name: "Help & Docs", path: "/help", icon: <HelpIcon /> },
   ];
 
   return (

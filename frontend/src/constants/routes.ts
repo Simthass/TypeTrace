@@ -21,6 +21,7 @@ export const ROUTES = {
   CERTIFICATE: "/certificate/:sessionId",
   REPORTS: "/reports",
   SETTINGS: "/settings",
+  HELP_DOCS: "/help",
   NOT_FOUND: "*",
 } as const;
 
