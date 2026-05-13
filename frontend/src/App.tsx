@@ -12,10 +12,11 @@ import VerifyOtpPage from "./pages/VerifyOtpPage";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import DashboardPage from "./pages/DashboardPage";
 import EditorPage from "./pages/EditorPage";
-import SessionsPage from "./pages/SessionsPage"; // <-- IMPORT THE NEW PAGE
+import SessionsPage from "./pages/SessionsPage";
 import { ROUTES } from "./constants/routes";
 import AuthLayout from "./components/layout/AuthLayout";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import CertificatesPage from "./pages/CertificatesPage";
 
 export default function App() {
   return (
@@ -45,19 +46,19 @@ export default function App() {
         {/* AUTHENTICATED ROUTES (With Sidebar) */}
         <Route element={<DashboardLayout />}>
           <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
-
-          {/* MOVE ROUTES.EDITOR HERE SO IT GETS THE SIDEBAR */}
           <Route path={ROUTES.EDITOR} element={<SessionsPage />} />
 
+          {/* REPLACE THE PLACEHOLDER WITH OUR NEW PAGE */}
+          <Route path="/certificates" element={<CertificatesPage />} />
+
+          <Route
+            path="/analytics"
+            element={<PlaceholderPage title="Analytics" />}
+          />
           <Route
             path={ROUTES.SETTINGS}
             element={<PlaceholderPage title="Settings" />}
           />
-          <Route
-            path={ROUTES.REPORTS}
-            element={<PlaceholderPage title="Reports" />}
-          />
-          {/* Add other authenticated routes here later like /certificates, /analytics */}
         </Route>
 
         {/* AUTHENTICATION FLOW ROUTES */}
