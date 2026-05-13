@@ -1,23 +1,26 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
 import { useAuthStore } from "../../store/authStore";
+import { colors, brand } from "../../styles/colors";
 
-// ─── sidebar icons ────────────────────────────────────────────────────────────
-function HomeIcon() {
+// ─── sidebar icons — kept lightweight, no heavy library needed ────────────────
+function OverviewIcon() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      viewBox="0 0 24 24"
     >
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
     </svg>
   );
 }
@@ -25,14 +28,14 @@ function HomeIcon() {
 function SessionsIcon() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      viewBox="0 0 24 24"
     >
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
       <polyline points="14 2 14 8 20 8" />
@@ -42,17 +45,17 @@ function SessionsIcon() {
   );
 }
 
-function CertIcon() {
+function CertificatesIcon() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      viewBox="0 0 24 24"
     >
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
       <path d="M9 12l2 2 4-4" />
@@ -63,14 +66,14 @@ function CertIcon() {
 function AnalyticsIcon() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      viewBox="0 0 24 24"
     >
       <path d="M3 3v18h18" />
       <path d="M18 9l-5 5-4-4-5 5" />
@@ -81,17 +84,53 @@ function AnalyticsIcon() {
 function SettingsIcon() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      viewBox="0 0 24 24"
     >
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function HelpIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" strokeWidth="2.5" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    >
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   );
 }
@@ -103,7 +142,7 @@ function PlusIcon() {
       height="14"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="2.2"
       strokeLinecap="round"
       viewBox="0 0 24 24"
     >
@@ -112,65 +151,32 @@ function PlusIcon() {
   );
 }
 
-function ChevronIcon() {
+function ChevronUpDownIcon() {
   return (
     <svg
-      width="12"
-      height="12"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
-      viewBox="0 0 24 24"
+      strokeLinejoin="round"
     >
-      <path d="M9 18l6-6-6-6" />
+      <polyline points="7 15 12 20 17 15" />
+      <polyline points="7 9 12 4 17 9" />
     </svg>
   );
 }
 
-// ─── types ────────────────────────────────────────────────────────────────────
-interface NavItem {
-  label: string;
-  path: string;
-  icon: React.ReactNode;
-  badge?: string | number;
-}
-
-// ─── reusable nav component (Vercel style hover) ──────────────────────────────
-function SideNavItem({ item, isActive }: { item: NavItem; isActive: boolean }) {
+// ─── nav section label ────────────────────────────────────────────────────────
+function SidebarSection({ label }: { label: string }) {
   return (
-    <Link
-      to={item.path}
-      // using rounded-md here like vercel sidebar
-      className={`group flex items-center justify-between gap-2.5 px-3 py-2 rounded-md text-[13.5px] font-medium transition-all duration-150 outline-none
-        ${isActive ? "bg-surface-100 text-text-primary" : "text-text-secondary hover:bg-surface-50 hover:text-text-primary"}
-      `}
-    >
-      <div className="flex items-center gap-2.5 min-w-0">
-        <span
-          className={`shrink-0 transition-colors ${isActive ? "text-brand" : "text-text-secondary group-hover:text-text-primary"}`}
-        >
-          {item.icon}
-        </span>
-        <span className="truncate tracking-tight">{item.label}</span>
-      </div>
-
-      {item.badge !== undefined && (
-        <span
-          className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isActive ? "bg-brand text-white" : "bg-surface-200 text-text-secondary"}`}
-        >
-          {item.badge}
-        </span>
-      )}
-    </Link>
-  );
-}
-
-// ─── section label divider ────────────────────────────────────────────────────
-function NavSection({ label }: { label: string }) {
-  return (
-    <div className="px-3 pt-5 pb-2">
-      <span className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">
+    <div className="px-3 pt-4 pb-1">
+      <span
+        className="text-[10px] font-bold uppercase tracking-widest"
+        style={{ color: colors.text.secondary }}
+      >
         {label}
       </span>
     </div>
@@ -178,171 +184,431 @@ function NavSection({ label }: { label: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN LAYOUT
+// LAYOUT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  // iam grabbing the real user from zustand now instead of hardcoding
   const { user, logout } = useAuthStore();
 
-  // security check: if no user in memory, kick back to login
+  // sidebar resizable — same as before, this feature is really cool for a dissertation
+  const [sidebarWidth, setSidebarWidth] = useState(250);
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // page title derived from path — so the header always shows the right thing
+  const pageTitle = (() => {
+    if (location.pathname === ROUTES.DASHBOARD) return "Overview";
+    if (location.pathname === ROUTES.EDITOR) return "Sessions";
+    if (location.pathname === "/certificates") return "Certificates";
+    if (location.pathname === "/analytics") return "Analytics";
+    if (location.pathname === ROUTES.SETTINGS) return "Settings";
+    return "Dashboard";
+  })();
+
   useEffect(() => {
-    if (!user) {
-      navigate(ROUTES.LOGIN);
-    }
+    if (!user) navigate(ROUTES.LOGIN);
   }, [user, navigate]);
 
-  const primaryNav: NavItem[] = [
-    { label: "Overview", path: ROUTES.DASHBOARD, icon: <HomeIcon /> },
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = useCallback(() => setIsResizing(false), []);
+
+  const resize = useCallback(
+    (e: MouseEvent) => {
+      if (isResizing) {
+        const w = e.clientX;
+        if (w >= 250 && w <= 480) setSidebarWidth(w);
+      }
+    },
+    [isResizing],
+  );
+
+  useEffect(() => {
+    window.addEventListener("mousemove", resize);
+    window.addEventListener("mouseup", stopResizing);
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [resize, stopResizing]);
+
+  if (!user) return null;
+
+  // get user initials for avatar
+  const initials =
+    `${user.first_name?.charAt(0) ?? ""}${user.last_name?.charAt(0) ?? ""}`.toUpperCase();
+
+  const navItems = [
+    { name: "Overview", path: ROUTES.DASHBOARD, icon: <OverviewIcon /> },
     {
-      label: "My Sessions",
+      name: "Sessions",
       path: ROUTES.EDITOR,
       icon: <SessionsIcon />,
-      badge: 4,
+      badge: "6",
     },
     {
-      label: "Certificates",
-      path: ROUTES.REPORTS,
-      icon: <CertIcon />,
-      badge: 2,
+      name: "Certificates",
+      path: "/certificates",
+      icon: <CertificatesIcon />,
+      badge: "4",
     },
-    { label: "Analytics", path: "/analytics", icon: <AnalyticsIcon /> },
+    { name: "Analytics", path: "/analytics", icon: <AnalyticsIcon /> },
   ];
 
-  const secondaryNav: NavItem[] = [
-    { label: "Settings", path: ROUTES.SETTINGS, icon: <SettingsIcon /> },
+  const secondaryItems = [
+    { name: "Settings", path: ROUTES.SETTINGS, icon: <SettingsIcon /> },
+    { name: "Help & Docs", path: "/#faq", icon: <HelpIcon /> },
   ];
-
-  // Helper to get initials
-  const getInitials = () => {
-    if (!user) return "U";
-    const first = user.first_name ? user.first_name.charAt(0) : "";
-    const last = user.last_name ? user.last_name.charAt(0) : "";
-    return `${first}${last}`.toUpperCase();
-  };
-
-  if (!user) return null; // prevent flicker before redirect
 
   return (
-    // changed bg to surface-50 so the whole app has that smooth light gray vercel background
-    <div className="flex h-screen overflow-hidden font-sans bg-[#fafafa] selection:bg-brand selection:text-white">
-      {/* ─── SIDEBAR (White background to contrast with main area) ─── */}
+    <div
+      className="flex h-screen overflow-hidden font-sans"
+      style={{ background: colors.surface[50] }}
+    >
+      {/* invisible drag overlay so mouse doesnt flicker during resize */}
+      {isResizing && (
+        <div className="fixed inset-0 z-50 cursor-col-resize select-none" />
+      )}
+
+      {/* ══════════════════════════════════════════════
+          SIDEBAR
+      ══════════════════════════════════════════════ */}
       <aside
-        className={`
-          fixed inset-y-0 left-0 z-40 flex flex-col
-          w-[250px] shrink-0
-          "bg-[#fafafa] border-r border-surface-200
-          transition-transform duration-300
-          md:static md:translate-x-0
-          ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}
-        `}
+        ref={sidebarRef}
+        style={{
+          width: sidebarWidth,
+          background: "#fff",
+          borderColor: colors.surface[200],
+        }}
+        className="shrink-0 flex flex-col border-r relative z-40 transition-none"
       >
-        {/* Logo Area */}
-        <div className="flex items-center justify-center px-6 shrink-0 h-[64px] border-b border-surface-200">
-          <Link to={ROUTES.HOME} className="flex items-center outline-none">
-            <img
-              src="/Logo.png"
-              alt="TypeTrace"
-              className="h-9 w-auto object-contain"
-            />
-          </Link>
+        {/* ── workspace switcher ── */}
+        <div
+          className="h-14 flex items-center justify-between px-3.5 shrink-0 border-b cursor-pointer select-none transition-colors hover:bg-surface-50"
+          style={{ borderColor: colors.surface[200] }}
+          onClick={() => {
+            /* workspace switcher dropdown — future sprint */
+          }}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* avatar — using initials like linear/vercel */}
+            <div
+              className="h-6 w-6 rounded-md flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+              style={{ background: colors.text.primary }}
+            >
+              {initials}
+            </div>
+            <span
+              className="text-[13.5px] font-semibold truncate"
+              style={{ color: colors.text.primary }}
+            >
+              {user.first_name}'s Workspace
+            </span>
+            {/* student plan tag */}
+            <span
+              className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border shrink-0"
+              style={{
+                background: colors.surface[50],
+                borderColor: colors.surface[200],
+                color: colors.text.secondary,
+              }}
+            >
+              Student
+            </span>
+          </div>
+          <span style={{ color: colors.text.secondary }}>
+            <ChevronUpDownIcon />
+          </span>
         </div>
 
-        {/* Action Button */}
-        <div className="px-4 pt-5 pb-2 shrink-0">
+        {/* ── search ── */}
+        <div className="px-3 py-2.5">
+          <div className="relative flex items-center">
+            <span
+              className="absolute left-2.5"
+              style={{ color: colors.text.secondary }}
+            >
+              <SearchIcon />
+            </span>
+            <input
+              type="text"
+              placeholder="Find session…"
+              className="w-full h-8 pl-8 pr-8 rounded-md text-[13px] outline-none border transition-shadow"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.primary,
+                background: colors.surface[50],
+              }}
+            />
+            {/* keyboard shortcut hint */}
+            <span
+              className="absolute right-2 text-[10px] font-mono border rounded px-1"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.secondary,
+              }}
+            >
+              F
+            </span>
+          </div>
+        </div>
+
+        {/* ── new session button ── */}
+        <div className="px-3 pb-2">
           <Link
             to={ROUTES.EDITOR_NEW}
-            className="flex items-center justify-center gap-2 w-full py-2 rounded-md text-[13px] font-semibold bg-text-primary text-white transition-all hover:bg-black active:scale-[0.98] shadow-sm"
+            className="flex items-center justify-center gap-1.5 w-full h-8 rounded-md text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ background: colors.text.primary }}
           >
             <PlusIcon />
             New Session
           </Link>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 pb-4">
-          <NavSection label="Workspace" />
-          <div className="flex flex-col gap-0.5">
-            {primaryNav.map((item) => (
-              <SideNavItem
-                key={item.path}
-                item={item}
-                isActive={location.pathname === item.path}
-              />
-            ))}
-          </div>
+        {/* ── primary nav ── */}
+        <nav className="flex-1 overflow-y-auto px-2 py-1 flex flex-col">
+          <SidebarSection label="Workspace" />
+          {navItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <Link
+                key={item.name}
+                to={item.path}
+                className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-md text-[13.5px] font-medium transition-colors outline-none"
+                style={{
+                  background: isActive ? colors.surface[100] : "transparent",
+                  color: isActive ? colors.text.primary : colors.text.secondary,
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive)
+                    (e.currentTarget as HTMLElement).style.background =
+                      colors.surface[50];
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive)
+                    (e.currentTarget as HTMLElement).style.background =
+                      "transparent";
+                }}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className="shrink-0"
+                    style={{
+                      color: isActive ? colors.text.primary : "inherit",
+                    }}
+                  >
+                    {item.icon}
+                  </span>
+                  {item.name}
+                </div>
+                {item.badge && (
+                  <span
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0"
+                    style={{
+                      background: isActive
+                        ? colors.surface[200]
+                        : colors.surface[100],
+                      color: colors.text.secondary,
+                    }}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
 
-          <NavSection label="Account" />
-          <div className="flex flex-col gap-0.5">
-            {secondaryNav.map((item) => (
-              <SideNavItem
-                key={item.path}
-                item={item}
-                isActive={location.pathname === item.path}
-              />
-            ))}
-          </div>
+          <SidebarSection label="Account" />
+          {secondaryItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <Link
+                key={item.name}
+                to={item.path}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-md text-[13.5px] font-medium transition-colors outline-none"
+                style={{
+                  background: isActive ? colors.surface[100] : "transparent",
+                  color: isActive ? colors.text.primary : colors.text.secondary,
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive)
+                    (e.currentTarget as HTMLElement).style.background =
+                      colors.surface[50];
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive)
+                    (e.currentTarget as HTMLElement).style.background =
+                      "transparent";
+                }}
+              >
+                <span className="shrink-0">{item.icon}</span>
+                {item.name}
+              </Link>
+            );
+          })}
         </nav>
 
-        {/* ── Real User Profile Area (Vercel Style) ── */}
-        <div className="shrink-0 border-t border-surface-200 p-4">
-          <Link
-            to={ROUTES.SETTINGS}
-            className="flex items-center gap-3 p-2 -mx-2 rounded-md hover:bg-surface-50 transition-colors group"
+        {/* ── user profile at bottom — account info + logout ── */}
+        {/* This is the key difference from vercel, we show full name + email + logout */}
+        <div
+          className="shrink-0 border-t p-3"
+          style={{ borderColor: colors.surface[200] }}
+        >
+          {/* session usage bar — unique to TypeTrace */}
+          <div className="px-1 pb-3">
+            <div className="flex justify-between items-center mb-1.5">
+              <span
+                className="text-[10px] font-semibold uppercase tracking-wider"
+                style={{ color: colors.text.secondary }}
+              >
+                Sessions this month
+              </span>
+              <span
+                className="text-[10px] font-bold"
+                style={{ color: colors.text.primary }}
+              >
+                6 / 10
+              </span>
+            </div>
+            <div
+              className="h-1 rounded-md overflow-hidden"
+              style={{ background: colors.surface[200] }}
+            >
+              <div
+                className="h-full rounded-md transition-all duration-500"
+                style={{ width: "60%", background: colors.text.primary }}
+              />
+            </div>
+          </div>
+
+          {/* user card — full name + email stacked */}
+          <div
+            className="flex items-center gap-2.5 px-2 py-2 rounded-md transition-colors cursor-pointer group"
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background =
+                colors.surface[50];
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "transparent";
+            }}
           >
-            <div className="h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 bg-brand-light text-brand">
-              {getInitials()}
+            <div
+              className="h-7 w-7 rounded-md flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+              style={{ background: colors.text.primary }}
+            >
+              {initials}
             </div>
             <div className="flex flex-col min-w-0 flex-1">
-              <span className="text-[13px] font-semibold text-text-primary truncate leading-tight group-hover:text-brand transition-colors">
+              <span
+                className="text-[12.5px] font-semibold truncate leading-tight"
+                style={{ color: colors.text.primary }}
+              >
                 {user.first_name} {user.last_name}
               </span>
-              <span className="text-[11.5px] text-text-secondary truncate mt-0.5">
-                {user.email}{" "}
-                {/* now showing real email instead of hardcoded text */}
+              <span
+                className="text-[11px] truncate"
+                style={{ color: colors.text.secondary }}
+              >
+                {user.email}
               </span>
             </div>
-            <span className="text-text-secondary group-hover:text-text-primary transition-colors">
-              <ChevronIcon />
-            </span>
-          </Link>
+            {/* logout icon on hover */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                logout();
+                navigate(ROUTES.HOME);
+              }}
+              title="Sign out"
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-surface-200"
+              style={{ color: colors.text.secondary }}
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
+          </div>
         </div>
+
+        {/* drag resize handle */}
+        <div
+          className="absolute top-0 right-0 bottom-0 w-1 cursor-col-resize z-50 transition-colors hover:bg-black/10"
+          onMouseDown={startResizing}
+        />
       </aside>
 
-      {mobileNavOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-text-primary/20 md:hidden backdrop-blur-sm"
-          onClick={() => setMobileNavOpen(false)}
-        />
-      )}
-
-      {/* ─── MAIN CONTENT ─── */}
-      <div className="flex-1 flex flex-col overflow-hidden relative">
-        {/* Mobile Top Bar */}
-        <div className="md:hidden shrink-0 flex items-center justify-between px-4 h-[60px] border-b border-surface-200 bg-white">
-          <button
-            onClick={() => setMobileNavOpen(true)}
-            className="p-2 -ml-2 text-text-secondary rounded-md hover:bg-surface-50"
+      {/* ══════════════════════════════════════════════
+          MAIN CONTENT
+      ══════════════════════════════════════════════ */}
+      <div className="flex-1 flex flex-col min-w-0 bg-white overflow-hidden">
+        {/* top bar — page title centred, breadcrumb left, action right */}
+        <header
+          className="h-14 border-b flex items-center justify-between px-5 shrink-0 relative"
+          style={{ borderColor: colors.surface[200], background: "#fff" }}
+        >
+          {/* breadcrumb left */}
+          <div
+            className="flex items-center gap-1.5 text-[13.5px]"
+            style={{ color: colors.text.secondary }}
           >
+            <span className="hover:text-black cursor-pointer transition-colors">
+              TypeTrace
+            </span>
             <svg
-              width="20"
-              height="20"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
               strokeLinecap="round"
             >
-              <path d="M3 6h18M3 12h18M3 18h18" />
+              <path d="M9 18l6-6-6-6" />
             </svg>
-          </button>
-          <img src="/Logo.png" alt="TypeTrace" className="h-6 w-auto" />
-          <div className="w-8" /> {/* spacer for center alignment */}
-        </div>
+            <span style={{ color: colors.text.primary, fontWeight: 500 }}>
+              {pageTitle}
+            </span>
+          </div>
 
-        <main className="flex-1 overflow-y-auto">
+          {/* centred page title */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+            <span
+              className="text-[13.5px] font-semibold"
+              style={{ color: colors.text.primary }}
+            >
+              {pageTitle}
+            </span>
+          </div>
+
+          {/* right: new session CTA */}
+          <Link
+            to={ROUTES.EDITOR_NEW}
+            className="flex items-center gap-1.5 h-8 px-3.5 rounded-md text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ background: colors.text.primary }}
+          >
+            <PlusIcon />
+            New Session
+          </Link>
+        </header>
+
+        <main
+          className="flex-1 overflow-y-auto"
+          style={{ background: colors.surface[50] }}
+        >
           <Outlet />
         </main>
       </div>
