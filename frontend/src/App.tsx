@@ -8,10 +8,11 @@ import FeaturesPage from "./pages/FeaturesPage";
 import AboutPage from "./pages/AboutPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import VerifyOtpPage from "./pages/VerifyOtpPage"; // <-- 1. IMPORT THIS
+import VerifyOtpPage from "./pages/VerifyOtpPage";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import DashboardPage from "./pages/DashboardPage";
 import EditorPage from "./pages/EditorPage";
+import SessionsPage from "./pages/SessionsPage"; // <-- IMPORT THE NEW PAGE
 import { ROUTES } from "./constants/routes";
 import AuthLayout from "./components/layout/AuthLayout";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
@@ -31,15 +32,6 @@ export default function App() {
             element={<PlaceholderPage title="Pricing" />}
           />
           <Route
-            path={ROUTES.EDITOR}
-            element={
-              <PlaceholderPage
-                title="Sessions"
-                description="Session list — coming soon."
-              />
-            }
-          />
-          <Route
             path={ROUTES.NOT_FOUND}
             element={
               <PlaceholderPage
@@ -53,15 +45,26 @@ export default function App() {
         {/* AUTHENTICATED ROUTES (With Sidebar) */}
         <Route element={<DashboardLayout />}>
           <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
-          {/* ... settings etc ... */}
+
+          {/* MOVE ROUTES.EDITOR HERE SO IT GETS THE SIDEBAR */}
+          <Route path={ROUTES.EDITOR} element={<SessionsPage />} />
+
+          <Route
+            path={ROUTES.SETTINGS}
+            element={<PlaceholderPage title="Settings" />}
+          />
+          <Route
+            path={ROUTES.REPORTS}
+            element={<PlaceholderPage title="Reports" />}
+          />
+          {/* Add other authenticated routes here later like /certificates, /analytics */}
         </Route>
 
         {/* AUTHENTICATION FLOW ROUTES */}
         <Route element={<AuthLayout />}>
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
           <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
-          <Route path={ROUTES.VERIFY_OTP} element={<VerifyOtpPage />} />{" "}
-          {/* <-- 2. ADD THIS ROUTE */}
+          <Route path={ROUTES.VERIFY_OTP} element={<VerifyOtpPage />} />
           <Route
             path={ROUTES.FORGOT_PASSWORD}
             element={<ForgotPasswordPage />}
