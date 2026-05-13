@@ -4,7 +4,7 @@ import { ROUTES } from "../../constants/routes";
 import { useAuthStore } from "../../store/authStore";
 import { colors, brand } from "../../styles/colors";
 
-// ─── sidebar icons — kept lightweight, no heavy library needed ────────────────
+// ─── sidebar icons ────────────────
 function OverviewIcon() {
   return (
     <svg
@@ -169,7 +169,26 @@ function ChevronUpDownIcon() {
   );
 }
 
-// ─── nav section label ────────────────────────────────────────────────────────
+// ─── new icon for outgoing links ─────────────────────────────────────────────
+function OutgoingArrowIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  );
+}
+
 function SidebarSection({ label }: { label: string }) {
   return (
     <div className="px-3 pt-4 pb-1">
@@ -191,18 +210,15 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
 
-  // sidebar resizable — same as before, this feature is really cool for a dissertation
   const [sidebarWidth, setSidebarWidth] = useState(250);
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
-  // page title derived from path — so the header always shows the right thing
   const pageTitle = (() => {
     if (location.pathname === ROUTES.DASHBOARD) return "Overview";
     if (location.pathname === ROUTES.EDITOR) return "Sessions";
     if (location.pathname === "/certificates") return "Certificates";
     if (location.pathname === "/analytics") return "Analytics";
-    if (location.pathname === ROUTES.SETTINGS) return "Settings";
     return "Dashboard";
   })();
 
@@ -238,7 +254,6 @@ export default function DashboardLayout() {
 
   if (!user) return null;
 
-  // get user initials for avatar
   const initials =
     `${user.first_name?.charAt(0) ?? ""}${user.last_name?.charAt(0) ?? ""}`.toUpperCase();
 
@@ -259,6 +274,7 @@ export default function DashboardLayout() {
     { name: "Analytics", path: "/analytics", icon: <AnalyticsIcon /> },
   ];
 
+  // im keeping these separated cos they link out of the dashboard layout now
   const secondaryItems = [
     { name: "Settings", path: ROUTES.SETTINGS, icon: <SettingsIcon /> },
     { name: "Help & Docs", path: "/#faq", icon: <HelpIcon /> },
@@ -269,7 +285,6 @@ export default function DashboardLayout() {
       className="flex h-screen overflow-hidden font-sans"
       style={{ background: colors.surface[50] }}
     >
-      {/* invisible drag overlay so mouse doesnt flicker during resize */}
       {isResizing && (
         <div className="fixed inset-0 z-50 cursor-col-resize select-none" />
       )}
@@ -286,16 +301,11 @@ export default function DashboardLayout() {
         }}
         className="shrink-0 flex flex-col border-r relative z-40 transition-none"
       >
-        {/* ── workspace switcher ── */}
         <div
           className="h-14 flex items-center justify-between px-3.5 shrink-0 border-b cursor-pointer select-none transition-colors hover:bg-surface-50"
           style={{ borderColor: colors.surface[200] }}
-          onClick={() => {
-            /* workspace switcher dropdown — future sprint */
-          }}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            {/* avatar — using initials like linear/vercel */}
             <div
               className="h-6 w-6 rounded-md flex items-center justify-center text-[11px] font-bold text-white shrink-0"
               style={{ background: colors.text.primary }}
@@ -308,7 +318,6 @@ export default function DashboardLayout() {
             >
               {user.first_name}'s Workspace
             </span>
-            {/* student plan tag */}
             <span
               className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border shrink-0"
               style={{
@@ -325,7 +334,6 @@ export default function DashboardLayout() {
           </span>
         </div>
 
-        {/* ── search ── */}
         <div className="px-3 py-2.5">
           <div className="relative flex items-center">
             <span
@@ -344,7 +352,6 @@ export default function DashboardLayout() {
                 background: colors.surface[50],
               }}
             />
-            {/* keyboard shortcut hint */}
             <span
               className="absolute right-2 text-[10px] font-mono border rounded px-1"
               style={{
@@ -357,7 +364,6 @@ export default function DashboardLayout() {
           </div>
         </div>
 
-        {/* ── new session button ── */}
         <div className="px-3 pb-2">
           <Link
             to={ROUTES.EDITOR_NEW}
@@ -369,7 +375,6 @@ export default function DashboardLayout() {
           </Link>
         </div>
 
-        {/* ── primary nav ── */}
         <nav className="flex-1 overflow-y-auto px-2 py-1 flex flex-col">
           <SidebarSection label="Workspace" />
           {navItems.map((item) => {
@@ -423,42 +428,43 @@ export default function DashboardLayout() {
           })}
 
           <SidebarSection label="Account" />
-          {secondaryItems.map((item) => {
-            const isActive = location.pathname === item.path;
-            return (
-              <Link
-                key={item.name}
-                to={item.path}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-md text-[13.5px] font-medium transition-colors outline-none"
-                style={{
-                  background: isActive ? colors.surface[100] : "transparent",
-                  color: isActive ? colors.text.primary : colors.text.secondary,
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive)
-                    (e.currentTarget as HTMLElement).style.background =
-                      colors.surface[50];
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive)
-                    (e.currentTarget as HTMLElement).style.background =
-                      "transparent";
-                }}
-              >
-                <span className="shrink-0">{item.icon}</span>
+          {/* Changed this so it shows the outgoing arrow cos it links to the root layout now */}
+          {secondaryItems.map((item) => (
+            <Link
+              key={item.name}
+              to={item.path}
+              className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-md text-[13.5px] font-medium transition-colors outline-none group"
+              style={{ color: colors.text.secondary }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background =
+                  colors.surface[50];
+                (e.currentTarget as HTMLElement).style.color =
+                  colors.text.primary;
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background =
+                  "transparent";
+                (e.currentTarget as HTMLElement).style.color =
+                  colors.text.secondary;
+              }}
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="shrink-0 group-hover:text-text-primary transition-colors">
+                  {item.icon}
+                </span>
                 {item.name}
-              </Link>
-            );
-          })}
+              </div>
+              <span className="opacity-60 group-hover:opacity-100 transition-opacity">
+                <OutgoingArrowIcon />
+              </span>
+            </Link>
+          ))}
         </nav>
 
-        {/* ── user profile at bottom — account info + logout ── */}
-        {/* This is the key difference from vercel, we show full name + email + logout */}
         <div
           className="shrink-0 border-t p-3"
           style={{ borderColor: colors.surface[200] }}
         >
-          {/* session usage bar — unique to TypeTrace */}
           <div className="px-1 pb-3">
             <div className="flex justify-between items-center mb-1.5">
               <span
@@ -485,7 +491,6 @@ export default function DashboardLayout() {
             </div>
           </div>
 
-          {/* user card — full name + email stacked */}
           <div
             className="flex items-center gap-2.5 px-2 py-2 rounded-md transition-colors cursor-pointer group"
             onMouseEnter={(e) => {
@@ -516,7 +521,6 @@ export default function DashboardLayout() {
                 {user.email}
               </span>
             </div>
-            {/* logout icon on hover */}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -544,7 +548,6 @@ export default function DashboardLayout() {
           </div>
         </div>
 
-        {/* drag resize handle */}
         <div
           className="absolute top-0 right-0 bottom-0 w-1 cursor-col-resize z-50 transition-colors hover:bg-black/10"
           onMouseDown={startResizing}
@@ -555,12 +558,10 @@ export default function DashboardLayout() {
           MAIN CONTENT
       ══════════════════════════════════════════════ */}
       <div className="flex-1 flex flex-col min-w-0 bg-white overflow-hidden">
-        {/* top bar — page title centred, breadcrumb left, action right */}
         <header
           className="h-14 border-b flex items-center justify-between px-5 shrink-0 relative"
           style={{ borderColor: colors.surface[200], background: "#fff" }}
         >
-          {/* breadcrumb left */}
           <div
             className="flex items-center gap-1.5 text-[13.5px]"
             style={{ color: colors.text.secondary }}
@@ -584,7 +585,6 @@ export default function DashboardLayout() {
             </span>
           </div>
 
-          {/* centred page title */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
             <span
               className="text-[13.5px] font-semibold"
@@ -594,14 +594,12 @@ export default function DashboardLayout() {
             </span>
           </div>
 
-          {/* right: new session CTA */}
           <Link
             to={ROUTES.EDITOR_NEW}
             className="flex items-center gap-1.5 h-8 px-3.5 rounded-md text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
             style={{ background: colors.text.primary }}
           >
-            <PlusIcon />
-            New Session
+            <PlusIcon /> New Session
           </Link>
         </header>
 

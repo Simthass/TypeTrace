@@ -18,6 +18,7 @@ import AuthLayout from "./components/layout/AuthLayout";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import CertificatesPage from "./pages/CertificatesPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
+import SettingsPage from "./pages/SettingsPage";
 
 export default function App() {
   return (
@@ -29,6 +30,8 @@ export default function App() {
           <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
           <Route path={ROUTES.FEATURES} element={<FeaturesPage />} />
           <Route path={ROUTES.ABOUT} element={<AboutPage />} />
+          <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
+
           <Route
             path={ROUTES.PRICING}
             element={<PlaceholderPage title="Pricing" />}
@@ -53,10 +56,6 @@ export default function App() {
           <Route path="/certificates" element={<CertificatesPage />} />
 
           <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route
-            path={ROUTES.SETTINGS}
-            element={<PlaceholderPage title="Settings" />}
-          />
         </Route>
 
         {/* AUTHENTICATION FLOW ROUTES */}
