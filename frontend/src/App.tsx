@@ -17,6 +17,7 @@ import { ROUTES } from "./constants/routes";
 import AuthLayout from "./components/layout/AuthLayout";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import CertificatesPage from "./pages/CertificatesPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
 
 export default function App() {
   return (
@@ -51,10 +52,7 @@ export default function App() {
           {/* REPLACE THE PLACEHOLDER WITH OUR NEW PAGE */}
           <Route path="/certificates" element={<CertificatesPage />} />
 
-          <Route
-            path="/analytics"
-            element={<PlaceholderPage title="Analytics" />}
-          />
+          <Route path="/analytics" element={<AnalyticsPage />} />
           <Route
             path={ROUTES.SETTINGS}
             element={<PlaceholderPage title="Settings" />}
