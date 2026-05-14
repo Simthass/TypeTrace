@@ -41,6 +41,149 @@ function CheckIcon() {
   );
 }
 
+// ─── Vercel-style grid background with + corner markers ──────────────────────
+// this took me ages to get the cell sizes right so it doesnt look weird on diff screen sizes
+function HeroGridBackground() {
+  // the + crosshair marker at each intersection point
+  const CrossMarker = ({ x, y }: { x: string; y: string }) => (
+    <g transform={`translate(${x}, ${y})`}>
+      <line
+        x1="-6"
+        y1="0"
+        x2="6"
+        y2="0"
+        stroke={colors.surface[200]}
+        strokeWidth="1"
+      />
+      <line
+        x1="0"
+        y1="-6"
+        x2="0"
+        y2="6"
+        stroke={colors.surface[200]}
+        strokeWidth="1"
+      />
+    </g>
+  );
+
+  // grid config — 8 columns, rows fill the viewport height
+  // using percentages so it stays responsive
+  const cols = 8;
+  const rows = 5;
+
+  // colPositions as percentages of the SVG width
+  const colPositions = Array.from(
+    { length: cols + 1 },
+    (_, i) => `${(i / cols) * 100}%`,
+  );
+  const rowPositions = Array.from(
+    { length: rows + 1 },
+    (_, i) => `${(i / rows) * 100}%`,
+  );
+
+  return (
+    <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+      <svg
+        width="100%"
+        height="100%"
+        xmlns="http://www.w3.org/2000/svg"
+        preserveAspectRatio="xMidYMid slice"
+      >
+        <defs>
+          {/* fade out towards centre so the grid doesnt compete with the text */}
+          <radialGradient
+            id="grid-fade"
+            cx="50%"
+            cy="50%"
+            r="55%"
+            fx="50%"
+            fy="50%"
+          >
+            <stop offset="0%" stopColor={colors.surface[50]} stopOpacity="1" />
+            <stop offset="70%" stopColor={colors.surface[50]} stopOpacity="0" />
+          </radialGradient>
+
+          {/* fade mask that makes the top edge solid and fades to nothing at bottom */}
+          <linearGradient id="grid-vertical-fade" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="white" stopOpacity="1" />
+            <stop offset="100%" stopColor="white" stopOpacity="0" />
+          </linearGradient>
+
+          <mask id="grid-mask">
+            <rect width="100%" height="100%" fill="url(#grid-vertical-fade)" />
+          </mask>
+        </defs>
+
+        {/* vertical grid lines */}
+        <g mask="url(#grid-mask)" opacity="0.6">
+          {colPositions.map((x, i) => (
+            <line
+              key={`v${i}`}
+              x1={x}
+              y1="0%"
+              x2={x}
+              y2="100%"
+              stroke={colors.surface[200]}
+              strokeWidth="1"
+            />
+          ))}
+
+          {/* horizontal grid lines */}
+          {rowPositions.map((y, i) => (
+            <line
+              key={`h${i}`}
+              x1="0%"
+              y1={y}
+              x2="100%"
+              y2={y}
+              stroke={colors.surface[200]}
+              strokeWidth="1"
+            />
+          ))}
+
+          {/* + crosshair markers at every intersection point */}
+          {colPositions.map((x, ci) =>
+            rowPositions.map((y, ri) => (
+              <CrossMarker key={`cross-${ci}-${ri}`} x={x} y={y} />
+            )),
+          )}
+        </g>
+
+        {/* radial fade overlay — punches a soft hole in the centre so grid
+            pulls back from the headline and doesnt distract from it */}
+        <rect width="100%" height="100%" fill="url(#grid-fade)" />
+      </svg>
+
+      {/* the original soft black gradient blobs still sit on top of the grid,
+          they add depth and prevent it from looking flat like a spreadsheet */}
+      <div
+        className="absolute top-[5%] left-[-12%] w-[55vw] h-[55vw] rounded-full"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(0,0,0,0.05) 0%, transparent 65%)",
+          filter: "blur(80px)",
+        }}
+      />
+      <div
+        className="absolute top-[10%] right-[-12%] w-[50vw] h-[50vw] rounded-full"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(0,0,0,0.04) 0%, transparent 65%)",
+          filter: "blur(90px)",
+        }}
+      />
+      <div
+        className="absolute bottom-0 left-[30%] w-[40vw] h-[30vw] rounded-full"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(0,0,0,0.03) 0%, transparent 70%)",
+          filter: "blur(80px)",
+        }}
+      />
+    </div>
+  );
+}
+
 // ─── floating hero cards ──────────────────────────────────────────────────────
 function FloatingCard({
   children,
@@ -83,7 +226,7 @@ function FloatingCard({
   );
 }
 
-// ─── scroll-reveal dashboard image (Upgraded Industry SaaS Look) ──────────────
+// ─── scroll-reveal dashboard image ───────────────────────────────────────────
 function DashboardReveal() {
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
@@ -102,13 +245,14 @@ function DashboardReveal() {
       className="w-full max-w-[1240px] mx-auto px-6 md:px-12 relative z-20"
       style={{ marginTop: "-8vh" }}
     >
-      {/* Background glow to make it pop off the page */}
       <motion.div
         style={{ opacity }}
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] rounded-full pointer-events-none"
+        // @ts-ignore — framer-motion style prop accepts these fine
         style={{
           background: `radial-gradient(circle, ${colors.surface[200]} 0%, transparent 60%)`,
           filter: "blur(80px)",
+          opacity,
         }}
       />
 
@@ -122,7 +266,6 @@ function DashboardReveal() {
         }}
         className="w-full overflow-hidden bg-white border shadow-[0_30px_100px_-20px_rgba(0,0,0,0.15)] relative z-10"
       >
-        {/* Sleek macOS Browser Header */}
         <div
           className="h-12 w-full flex items-center px-4 gap-4 border-b"
           style={{
@@ -130,7 +273,6 @@ function DashboardReveal() {
             borderColor: colors.surface[200],
           }}
         >
-          {/* Traffic light dots */}
           <div className="flex gap-2">
             <div
               className="w-3 h-3 rounded-full"
@@ -145,7 +287,6 @@ function DashboardReveal() {
               style={{ backgroundColor: colors.surface[200] }}
             />
           </div>
-          {/* Mock URL Bar */}
           <div
             className="h-7 flex-1 max-w-[320px] mx-auto rounded-md flex items-center justify-center border"
             style={{
@@ -167,16 +308,15 @@ function DashboardReveal() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
               typetrace.com
             </span>
           </div>
-          <div className="w-12" /> {/* Spacer to balance dots */}
+          <div className="w-12" />
         </div>
 
-        {/* User's Actual Screenshot */}
         <img
           src="/dashboard-mockup.png"
           alt="TypeTrace dashboard preview"
@@ -197,7 +337,7 @@ function DashboardReveal() {
   );
 }
 
-// ─── trust accordion with animation ─────────────────────────────────────────
+// ─── trust accordion ─────────────────────────────────────────────────────────
 const FAQ_ITEMS = [
   {
     title: "Zero Server-Side Storage",
@@ -291,7 +431,7 @@ function TrustAccordion() {
   );
 }
 
-// ─── feature section row, alternating layout ─────────────────────────────────
+// ─── feature section row ──────────────────────────────────────────────────────
 function FeatureRow({
   tag,
   tagColor,
@@ -310,7 +450,7 @@ function FeatureRow({
   flip?: boolean;
 }) {
   return (
-    <div className={`grid grid-cols-1 lg:grid-cols-2 gap-16 items-center`}>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
       <div className={`flex flex-col gap-5 ${flip ? "lg:order-2" : ""}`}>
         <span
           className="text-[11px] font-bold uppercase tracking-widest"
@@ -355,7 +495,6 @@ function FeatureRow({
   );
 }
 
-// ─── stat counter card used in the numbers section ────────────────────────────
 function StatCard({
   value,
   label,
@@ -391,7 +530,6 @@ function StatCard({
   );
 }
 
-// ─── classification outcome cards ────────────────────────────────────────────
 function OutcomeCard({
   label,
   score,
@@ -447,43 +585,13 @@ export default function HomePage() {
       style={{ background: colors.surface[50] }}
     >
       {/* ══════════════════════════════════════════════════════
-          1. HERO — Microsoft Loop style, full-bleed
+          1. HERO — Vercel grid BG + floating cards
       ══════════════════════════════════════════════════════ */}
       <section className="relative min-h-[95vh] flex flex-col items-center justify-start text-center overflow-hidden pt-12 pb-16">
-        {/* ── Background gradient blobs, black like MS Loop ── */}
-        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-          {/* left radial blob */}
-          <div
-            className="absolute top-[5%] left-[-12%] w-[55vw] h-[55vw] rounded-full"
-            style={{
-              background:
-                "radial-gradient(circle, rgba(0,0,0,0.07) 0%, transparent 65%)",
-              filter: "blur(80px)",
-            }}
-          />
-          {/* right radial blob */}
-          <div
-            className="absolute top-[10%] right-[-12%] w-[50vw] h-[50vw] rounded-full"
-            style={{
-              background:
-                "radial-gradient(circle, rgba(0,0,0,0.06) 0%, transparent 65%)",
-              filter: "blur(90px)",
-            }}
-          />
-          {/* bottom center subtle bloom */}
-          <div
-            className="absolute bottom-0 left-[30%] w-[40vw] h-[30vw] rounded-full"
-            style={{
-              background:
-                "radial-gradient(circle, rgba(0,0,0,0.04) 0%, transparent 70%)",
-              filter: "blur(80px)",
-            }}
-          />
-        </div>
+        {/* ── NEW: Vercel-style grid background with + markers ── */}
+        <HeroGridBackground />
 
-        {/* ── Floating data cards (Pushed wider to prevent overlap) ── */}
-
-        {/* top-left: human confidence */}
+        {/* ── Floating data cards ── */}
         <FloatingCard
           className="top-[15%] left-[2%] xl:left-[6%] 2xl:left-[7%]"
           delay={0.3}
@@ -525,7 +633,6 @@ export default function HomePage() {
           </div>
         </FloatingCard>
 
-        {/* top-right: IKI histogram */}
         <FloatingCard
           className="top-[12%] right-[2%] xl:right-[6%] 2xl:right-[10%]"
           delay={0.5}
@@ -565,7 +672,6 @@ export default function HomePage() {
           </div>
         </FloatingCard>
 
-        {/* mid-left: SHA seal */}
         <FloatingCard
           className="top-[60%] left-[2%] xl:left-[4%] 2xl:left-[8%]"
           delay={0.8}
@@ -605,7 +711,6 @@ export default function HomePage() {
           </div>
         </FloatingCard>
 
-        {/* mid-right: live WPM with ping dot */}
         <FloatingCard
           className="top-[55%] right-[2%] xl:right-[5%] 2xl:right-[8%]"
           delay={1.0}
@@ -640,7 +745,6 @@ export default function HomePage() {
           </div>
         </FloatingCard>
 
-        {/* bottom-left: ML classification */}
         <FloatingCard
           className="top-[80%] left-[8%] xl:left-[12%]"
           delay={1.2}
@@ -675,7 +779,6 @@ export default function HomePage() {
           </div>
         </FloatingCard>
 
-        {/* bottom-right: keystroke count */}
         <FloatingCard
           className="top-[78%] right-[6%] xl:right-[10%]"
           delay={1.4}
@@ -730,7 +833,6 @@ export default function HomePage() {
             accusations with mathematical proof.
           </motion.p>
 
-          {/* CTA buttons */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -760,7 +862,6 @@ export default function HomePage() {
             </Link>
           </motion.div>
 
-          {/* trust micro-copy */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -822,7 +923,7 @@ export default function HomePage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════
-          4. THE PROBLEM — editorial section
+          4. THE PROBLEM
       ══════════════════════════════════════════════════════ */}
       <section
         className="py-32 px-6 md:px-12 border-b"
@@ -859,8 +960,6 @@ export default function HomePage() {
             rather than <em>how</em> it was written. TypeTrace solves this at
             the source.
           </p>
-
-          {/* comparison grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-[800px] mt-8">
             {[
               { name: "GPTZero (ESL)", rate: 35, color: brand.aiAccent },
@@ -909,7 +1008,7 @@ export default function HomePage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════
-          5. DEEP DIVE FEATURES — alternating rows
+          5. DEEP DIVE FEATURES
       ══════════════════════════════════════════════════════ */}
       <section className="py-32 px-6 md:px-12 max-w-[1300px] mx-auto flex flex-col gap-32">
         <FeatureRow
@@ -1016,7 +1115,6 @@ export default function HomePage() {
               className="h-[380px] flex flex-col items-center justify-center gap-6 rounded-3xl border p-10 bg-white"
               style={{ borderColor: colors.surface[200] }}
             >
-              {/* feature importance bars */}
               <div className="w-full flex flex-col gap-3">
                 <div
                   className="text-[11px] font-bold uppercase tracking-widest mb-2"
@@ -1088,7 +1186,6 @@ export default function HomePage() {
               className="h-[380px] flex items-center justify-center rounded-3xl border p-10 bg-white"
               style={{ borderColor: colors.surface[200] }}
             >
-              {/* certificate mockup card */}
               <div
                 className="w-full max-w-[320px] rounded-2xl border overflow-hidden"
                 style={{ borderColor: colors.surface[200] }}
@@ -1247,7 +1344,7 @@ export default function HomePage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════
-          8. FINAL CTA — solid brand color block
+          8. FINAL CTA
       ══════════════════════════════════════════════════════ */}
       <section
         className="py-32 px-6 text-center"
