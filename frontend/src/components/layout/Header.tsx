@@ -218,7 +218,7 @@ export default function Header() {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 10, scale: 0.95 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute right-0 mt-2 w-56 rounded-xl border flex flex-col overflow-hidden"
+                      className="absolute right-0 mt-2 w-56 rounded-xl border flex flex-col overflow-hidden shadow-lg"
                       style={{
                         backgroundColor: colors.text.light,
                         borderColor: colors.surface[200],
@@ -235,7 +235,7 @@ export default function Header() {
                           className="text-[13px] font-semibold truncate"
                           style={{ color: colors.text.primary }}
                         >
-                          {user.first_name}
+                          {user.first_name} {user.last_name}
                         </p>
                         <p
                           className="text-[12px] truncate mt-0.5"
@@ -244,6 +244,8 @@ export default function Header() {
                           {user.email}
                         </p>
                       </div>
+
+                      {/* MAIN ACTIONS */}
                       <div className="p-1.5 flex flex-col">
                         <Link
                           to={ROUTES.DASHBOARD}
@@ -275,7 +277,51 @@ export default function Header() {
                         >
                           New Verification Session
                         </Link>
+
+                        {/* subtle divider */}
+                        <div
+                          className="my-1 border-t mx-2"
+                          style={{ borderColor: colors.surface[100] }}
+                        />
+
+                        {/* SECONDARY ACTIONS (Settings & Help) */}
+                        <Link
+                          to={ROUTES.SETTINGS}
+                          className="px-3 py-2 text-[13px] font-medium rounded-md transition-colors"
+                          style={{ color: colors.text.secondary }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              colors.surface[50];
+                            e.currentTarget.style.color = colors.text.primary;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              "transparent";
+                            e.currentTarget.style.color = colors.text.secondary;
+                          }}
+                        >
+                          Settings
+                        </Link>
+                        <Link
+                          to="/help"
+                          className="px-3 py-2 text-[13px] font-medium rounded-md transition-colors"
+                          style={{ color: colors.text.secondary }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              colors.surface[50];
+                            e.currentTarget.style.color = colors.text.primary;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              "transparent";
+                            e.currentTarget.style.color = colors.text.secondary;
+                          }}
+                        >
+                          Help & Docs
+                        </Link>
                       </div>
+
+                      {/* LOGOUT */}
                       <div
                         className="p-1.5 border-t"
                         style={{ borderColor: colors.surface[200] }}
@@ -319,7 +365,7 @@ export default function Header() {
                 </Link>
                 <Link
                   to={ROUTES.REGISTER}
-                  className="px-5 py-2 rounded-lg text-[13.5px] font-medium text-white transition-all duration-200 outline-none"
+                  className="px-5 py-2 rounded-lg text-[13.5px] font-medium text-white transition-all duration-200 outline-none shadow-sm"
                   style={{ backgroundColor: brand.action }}
                   onMouseEnter={(e) =>
                     (e.currentTarget.style.backgroundColor = brand.actionHover)
@@ -376,7 +422,6 @@ export default function Header() {
                     >
                       <Link
                         to={item.path}
-                        // STRICT TOKEN: rounded-lg (8px)
                         className="block px-4 py-3 rounded-lg text-xl font-semibold tracking-tight transition-colors"
                         style={{
                           color: isActive ? brand.action : colors.text.primary,
@@ -404,17 +449,29 @@ export default function Header() {
                   <>
                     <Link
                       to={ROUTES.DASHBOARD}
-                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center transition-colors"
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center transition-colors shadow-sm"
                       style={{
                         backgroundColor: colors.surface[50],
                         color: colors.text.primary,
+                        border: `1px solid ${colors.surface[200]}`,
                       }}
                     >
                       Dashboard
                     </Link>
+                    <Link
+                      to={ROUTES.SETTINGS}
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center transition-colors shadow-sm"
+                      style={{
+                        backgroundColor: colors.surface[50],
+                        color: colors.text.primary,
+                        border: `1px solid ${colors.surface[200]}`,
+                      }}
+                    >
+                      Settings
+                    </Link>
                     <button
                       onClick={handleLogout}
-                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center transition-colors"
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center transition-colors mt-2"
                       style={{
                         color: brand.aiAccent,
                         border: `1px solid ${brand.aiAccent}30`,
@@ -428,8 +485,7 @@ export default function Header() {
                   <>
                     <Link
                       to={ROUTES.LOGIN}
-                      // STRICT TOKEN: rounded-lg (8px)
-                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center border transition-colors"
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center border transition-colors shadow-sm"
                       style={{
                         color: colors.text.primary,
                         borderColor: colors.surface[200],
@@ -439,8 +495,7 @@ export default function Header() {
                     </Link>
                     <Link
                       to={ROUTES.REGISTER}
-                      // STRICT TOKEN: rounded-lg (8px)
-                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center text-white transition-colors"
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center text-white transition-colors shadow-sm"
                       style={{ backgroundColor: brand.action }}
                     >
                       Start Free Session

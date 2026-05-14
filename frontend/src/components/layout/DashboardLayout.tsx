@@ -151,24 +151,6 @@ function PlusIcon() {
   );
 }
 
-function ChevronUpDownIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="7 15 12 20 17 15" />
-      <polyline points="7 9 12 4 17 9" />
-    </svg>
-  );
-}
-
 // ─── new icon for outgoing links ─────────────────────────────────────────────
 function OutgoingArrowIcon() {
   return (
@@ -274,7 +256,7 @@ export default function DashboardLayout() {
     { name: "Analytics", path: "/analytics", icon: <AnalyticsIcon /> },
   ];
 
-  // im keeping these separated cos they link out of the dashboard layout now
+  // linking out of the dashboard layout
   const secondaryItems = [
     { name: "Settings", path: ROUTES.SETTINGS, icon: <SettingsIcon /> },
     { name: "Help & Docs", path: "/help", icon: <HelpIcon /> },
@@ -301,10 +283,8 @@ export default function DashboardLayout() {
         }}
         className="shrink-0 flex flex-col border-r relative z-40 transition-none"
       >
-        <div
-          className="h-14 flex items-center justify-between px-3.5 shrink-0 border-b cursor-pointer select-none transition-colors hover:bg-surface-50"
-          style={{ borderColor: colors.surface[200] }}
-        >
+        {/* ── Workspace Identity ── */}
+        <div className="pt-4 pb-2 px-3.5 flex items-center shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div
               className="h-6 w-6 rounded-md flex items-center justify-center text-[11px] font-bold text-white shrink-0"
@@ -329,12 +309,9 @@ export default function DashboardLayout() {
               Student
             </span>
           </div>
-          <span style={{ color: colors.text.secondary }}>
-            <ChevronUpDownIcon />
-          </span>
         </div>
 
-        <div className="px-3 py-2.5">
+        <div className="px-3 pb-2.5 pt-1">
           <div className="relative flex items-center">
             <span
               className="absolute left-2.5"
@@ -428,7 +405,6 @@ export default function DashboardLayout() {
           })}
 
           <SidebarSection label="Account" />
-          {/* Changed this so it shows the outgoing arrow cos it links to the root layout now */}
           {secondaryItems.map((item) => (
             <Link
               key={item.name}
