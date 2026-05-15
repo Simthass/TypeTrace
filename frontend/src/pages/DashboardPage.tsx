@@ -1,68 +1,28 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { ROUTES } from "../constants/routes";
-import { useAuthStore } from "../store/authStore";
 import { colors, brand } from "../styles/colors";
+import { api } from "../lib/api";
 
-// ─── mock data — swap for real API call in sprint 5 ──────────────────────────
-const mockSessions = [
-  {
-    id: "ses_1",
-    title: "Cloud Computing Essay",
-    subject: "CS-401",
-    details: "1,240 words · 58 WPM · 1h 12m",
-    date: "1d ago",
-    status: "HUMAN" as const,
-    score: 96.3,
-  },
-  {
-    id: "ses_2",
-    title: "Distributed Systems Notes",
-    subject: "CS-405",
-    details: "450 words · 42 WPM · 28m",
-    date: "3d ago",
-    status: "SUSPICIOUS" as const,
-    score: 67.2,
-  },
-  {
-    id: "ses_3",
-    title: "Literature Review — AI",
-    subject: "ENG-201",
-    details: "2,100 words · 64 WPM · 2h 47m",
-    date: "Apr 26",
-    status: "HUMAN" as const,
-    score: 98.1,
-  },
-  {
-    id: "ses_4",
-    title: "Final Year Project Report",
-    subject: "PRJ-500",
-    details: "8,500 words · 61 WPM · 12h 4m",
-    date: "Apr 21",
-    status: "HUMAN" as const,
-    score: 94.7,
-  },
-  {
-    id: "ses_5",
-    title: "CopyPaste_Test.txt",
-    subject: "Sandbox",
-    details: "850 words · 212 WPM · 4m",
-    date: "Feb 14",
-    status: "AI-GENERATED" as const,
-    score: 99.4,
-  },
-  {
-    id: "ses_6",
-    title: "Ethics in Tech Essay",
-    subject: "PHIL-302",
-    details: "1,500 words · 55 WPM · 1h 45m",
-    date: "Jan 10",
-    status: "HUMAN" as const,
-    score: 91.2,
-  },
-];
+// ─── TYPES ────────────────────────────────────────────────────────────────────
+interface Session {
+  id: number;
+  title: string;
+  wpm: number;
+  duration: number;
+  classification: "HUMAN" | "SUSPICIOUS" | "AI-GENERATED";
+  confidence: number;
+  date: string;
+}
 
-// ─── status style helper ──────────────────────────────────────────────────────
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function formatDuration(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  if (m === 0) return `${s}s`;
+  return `${m}m ${s}s`;
+}
+
 function getStatusStyle(status: "HUMAN" | "SUSPICIOUS" | "AI-GENERATED") {
   if (status === "HUMAN")
     return {
@@ -86,141 +46,105 @@ function getStatusStyle(status: "HUMAN" | "SUSPICIOUS" | "AI-GENERATED") {
   };
 }
 
-// ─── icons ────────────────────────────────────────────────────────────────────
-function SearchIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
-}
+// ─── ICONS ────────────────────────────────────────────────────────────────────
+const SearchIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+  >
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
+const FilterIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+  >
+    <line x1="4" y1="21" x2="4" y2="14" />
+    <line x1="4" y1="10" x2="4" y2="3" />
+    <line x1="12" y1="21" x2="12" y2="12" />
+    <line x1="12" y1="8" x2="12" y2="3" />
+    <line x1="20" y1="21" x2="20" y2="16" />
+    <line x1="20" y1="12" x2="20" y2="3" />
+    <line x1="1" y1="14" x2="7" y2="14" />
+    <line x1="9" y1="8" x2="15" y2="8" />
+    <line x1="17" y1="16" x2="23" y2="16" />
+  </svg>
+);
+const GridIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+  >
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+  </svg>
+);
+const ListIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+  >
+    <line x1="8" y1="6" x2="21" y2="6" />
+    <line x1="8" y1="12" x2="21" y2="12" />
+    <line x1="8" y1="18" x2="21" y2="18" />
+    <line x1="3" y1="6" x2="3.01" y2="6" />
+    <line x1="3" y1="12" x2="3.01" y2="12" />
+    <line x1="3" y1="18" x2="3.01" y2="18" />
+  </svg>
+);
+const PlusIcon = () => (
+  <svg
+    width="13"
+    height="13"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    viewBox="0 0 24 24"
+  >
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+const ClockIcon = () => (
+  <svg
+    width="11"
+    height="11"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
 
-function FilterIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    >
-      <line x1="4" y1="21" x2="4" y2="14" />
-      <line x1="4" y1="10" x2="4" y2="3" />
-      <line x1="12" y1="21" x2="12" y2="12" />
-      <line x1="12" y1="8" x2="12" y2="3" />
-      <line x1="20" y1="21" x2="20" y2="16" />
-      <line x1="20" y1="12" x2="20" y2="3" />
-      <line x1="1" y1="14" x2="7" y2="14" />
-      <line x1="9" y1="8" x2="15" y2="8" />
-      <line x1="17" y1="16" x2="23" y2="16" />
-    </svg>
-  );
-}
-
-function GridIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    >
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-    </svg>
-  );
-}
-
-function ListIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    >
-      <line x1="8" y1="6" x2="21" y2="6" />
-      <line x1="8" y1="12" x2="21" y2="12" />
-      <line x1="8" y1="18" x2="21" y2="18" />
-      <line x1="3" y1="6" x2="3.01" y2="6" />
-      <line x1="3" y1="12" x2="3.01" y2="12" />
-      <line x1="3" y1="18" x2="3.01" y2="18" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      viewBox="0 0 24 24"
-    >
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  );
-}
-
-function ClockIcon() {
-  return (
-    <svg
-      width="11"
-      height="11"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  );
-}
-
-function DownloadIcon() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    >
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  );
-}
-
-// ─── mini sparkline — unique to TypeTrace, shows IKI rhythm per session ───────
-// its not a real chart just decorative, looks professional though
+// ─── IKI SPARKLINE ────────────────────────────────────────────────────────────
 function IkiSparkline({ status }: { status: string }) {
   const bars =
     status === "AI-GENERATED"
@@ -247,15 +171,16 @@ function IkiSparkline({ status }: { status: string }) {
   );
 }
 
-// ─── session card ─────────────────────────────────────────────────────────────
+// ─── SESSION CARD ─────────────────────────────────────────────────────────────
 function SessionCard({
   session,
   view,
 }: {
-  session: (typeof mockSessions)[0];
+  session: Session;
   view: "grid" | "list";
 }) {
-  const st = getStatusStyle(session.status);
+  const st = getStatusStyle(session.classification);
+  const detailsStr = `${session.wpm} WPM · ${formatDuration(session.duration)}`;
 
   if (view === "list") {
     return (
@@ -270,15 +195,12 @@ function SessionCard({
           (e.currentTarget as HTMLElement).style.background = "transparent";
         }}
       >
-        {/* icon */}
         <div
           className="h-8 w-8 rounded-md flex items-center justify-center text-white font-bold font-mono text-[13px] shrink-0"
           style={{ background: colors.text.primary }}
         >
-          {session.title.charAt(0)}
+          {session.title.charAt(0).toUpperCase()}
         </div>
-
-        {/* title + meta */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span
@@ -294,23 +216,19 @@ function SessionCard({
                 color: colors.text.secondary,
               }}
             >
-              {session.subject}
+              Document
             </span>
           </div>
           <p
-            className="text-[12px] mt-0.5"
+            className="text-[12px] mt-0.5 font-mono"
             style={{ color: colors.text.secondary }}
           >
-            {session.details}
+            {detailsStr}
           </p>
         </div>
-
-        {/* IKI sparkline — unique TypeTrace element */}
         <div className="hidden lg:block w-[72px]">
-          <IkiSparkline status={session.status} />
+          <IkiSparkline status={session.classification} />
         </div>
-
-        {/* status + score */}
         <div className="flex items-center gap-2 shrink-0">
           <div
             className="flex items-center gap-1.5 px-2 py-1 rounded-md border"
@@ -324,38 +242,28 @@ function SessionCard({
               className="text-[10px] font-bold uppercase tracking-widest"
               style={{ color: st.text }}
             >
-              {session.status === "AI-GENERATED" ? "AI" : session.status}
+              {session.classification === "AI-GENERATED"
+                ? "AI"
+                : session.classification}
             </span>
           </div>
           <span
             className="text-[12px] font-bold w-12 text-right"
             style={{ color: st.dot }}
           >
-            {session.score}%
+            {session.confidence}%
           </span>
         </div>
-
-        {/* date */}
         <span
-          className="text-[12px] w-14 text-right shrink-0"
+          className="text-[12px] w-32 text-right shrink-0 truncate"
           style={{ color: colors.text.secondary }}
         >
           {session.date}
         </span>
-
-        {/* actions — fade in on hover */}
-        <button
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-100"
-          style={{ color: colors.text.secondary }}
-          title="Download certificate"
-        >
-          <DownloadIcon />
-        </button>
       </div>
     );
   }
 
-  // grid view
   return (
     <div
       className="bg-white border rounded-md p-5 flex flex-col justify-between h-[168px] transition-all cursor-pointer group hover:border-black/20"
@@ -374,7 +282,7 @@ function SessionCard({
             className="h-7 w-7 rounded-md flex items-center justify-center text-white font-bold font-mono text-[12px] shrink-0"
             style={{ background: colors.text.primary }}
           >
-            {session.title.charAt(0)}
+            {session.title.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
             <p
@@ -383,12 +291,14 @@ function SessionCard({
             >
               {session.title}
             </p>
-            <p className="text-[12px]" style={{ color: colors.text.secondary }}>
-              {session.subject}
+            <p
+              className="text-[12px] font-mono"
+              style={{ color: colors.text.secondary }}
+            >
+              {detailsStr}
             </p>
           </div>
         </div>
-
         <div
           className="flex items-center gap-1.5 px-2 py-1 rounded-md border shrink-0"
           style={{ background: st.bg, borderColor: st.border }}
@@ -401,19 +311,15 @@ function SessionCard({
             className="text-[10px] font-bold uppercase tracking-widest"
             style={{ color: st.text }}
           >
-            {session.status === "AI-GENERATED" ? "AI" : session.status}
+            {session.classification === "AI-GENERATED"
+              ? "AI"
+              : session.classification}
           </span>
         </div>
       </div>
-
-      {/* IKI sparkline — this is our unique biometric fingerprint visualisation */}
-      <IkiSparkline status={session.status} />
-
+      <IkiSparkline status={session.classification} />
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-[12.5px]" style={{ color: colors.text.primary }}>
-            {session.details}
-          </p>
           <div
             className="flex items-center gap-1.5 mt-0.5 text-[11px]"
             style={{ color: colors.text.secondary }}
@@ -423,7 +329,7 @@ function SessionCard({
           </div>
         </div>
         <span className="text-[14px] font-extrabold" style={{ color: st.dot }}>
-          {session.score}%
+          {session.confidence}%
         </span>
       </div>
     </div>
@@ -431,7 +337,7 @@ function SessionCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN PAGE
+// MAIN DASHBOARD PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const [search, setSearch] = useState("");
@@ -439,19 +345,68 @@ export default function DashboardPage() {
   const [statusFilter, setStatusFilter] = useState<
     "ALL" | "HUMAN" | "SUSPICIOUS" | "AI-GENERATED"
   >("ALL");
-  const { user } = useAuthStore();
 
-  const filtered = mockSessions.filter((s) => {
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch real data from FastAPI
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const response = await api.get("/sessions/history/student");
+        if (response.data.status === "success") {
+          setSessions(response.data.sessions);
+        }
+      } catch (error) {
+        console.error("Failed to fetch session history:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchHistory();
+  }, []);
+
+  // Filter Logic
+  const filtered = sessions.filter((s) => {
     const matchSearch = s.title.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "ALL" || s.status === statusFilter;
+    const matchStatus =
+      statusFilter === "ALL" || s.classification === statusFilter;
     return matchSearch && matchStatus;
   });
 
+  // RESTRICT TO TOP 6 FOR DASHBOARD
+  const displayedSessions = filtered.slice(0, 6);
+
+  // Dynamic Real-World Metrics Calculation
+  const totalSessions = sessions.length;
+  const humanSessions = sessions.filter(
+    (s) => s.classification === "HUMAN",
+  ).length;
+  const avgConfidence =
+    totalSessions > 0
+      ? (
+          sessions.reduce((acc, s) => acc + s.confidence, 0) / totalSessions
+        ).toFixed(1)
+      : "0";
+  const passRate =
+    totalSessions > 0 ? Math.round((humanSessions / totalSessions) * 100) : 0;
+
+  // Calculate Real Global Usage
+  const totalDurationSeconds = sessions.reduce((acc, s) => acc + s.duration, 0);
+  const formattedTotalTime =
+    totalDurationSeconds > 3600
+      ? `${(totalDurationSeconds / 3600).toFixed(1)}h`
+      : `${Math.round(totalDurationSeconds / 60)}m`;
+
+  // Words = (WPM * Minutes)
+  const totalWords = Math.round(
+    sessions.reduce((acc, s) => acc + s.wpm * (s.duration / 60), 0),
+  );
+
   return (
-    <div className="p-6 md:p-8 max-w-[1600px] mx-auto w-full flex flex-col gap-6">
-      {/* ── toolbar: search + filters + view toggle ── */}
+    <div className="p-6 md:p-8 max-w-[1600px] mx-auto w-full flex flex-col gap-6 font-sans bg-brand-bgPage min-h-screen">
+      {/* ── TOOLBAR ── */}
       <div className="flex items-center gap-2.5 flex-wrap">
-        {/* search */}
         <div className="relative flex-1 min-w-[200px]">
           <span
             className="absolute left-3 top-1/2 -translate-y-1/2"
@@ -469,7 +424,6 @@ export default function DashboardPage() {
               borderColor: colors.surface[200],
               color: colors.text.primary,
             }}
-            // make focus ring use our brand color, not tailwinds default blue
             onFocus={(e) => {
               e.currentTarget.style.boxShadow = `0 0 0 2px ${colors.text.primary}20`;
             }}
@@ -479,13 +433,12 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* status filter pills */}
         <div
           className="flex items-center border rounded-md shadow-sm overflow-hidden bg-white"
           style={{ borderColor: colors.surface[200] }}
         >
           {(["ALL", "HUMAN", "SUSPICIOUS", "AI-GENERATED"] as const).map(
-            (f, i) => (
+            (f) => (
               <button
                 key={f}
                 onClick={() => setStatusFilter(f)}
@@ -502,19 +455,6 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* filter button */}
-        <button
-          className="h-9 w-9 bg-white border rounded-md flex items-center justify-center shadow-sm transition-colors hover:bg-surface-50"
-          style={{
-            borderColor: colors.surface[200],
-            color: colors.text.secondary,
-          }}
-          title="Filter options"
-        >
-          <FilterIcon />
-        </button>
-
-        {/* grid / list toggle */}
         <div
           className="flex border rounded-md shadow-sm overflow-hidden bg-white"
           style={{ borderColor: colors.surface[200] }}
@@ -547,17 +487,22 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── main two-column layout ── */}
+      {/* ── MAIN LAYOUT ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
-        {/* ── LEFT COLUMN ── */}
+        {/* ── LEFT COLUMN: ANALYTICS ── */}
         <div className="flex flex-col gap-5">
-          {/* ── quick stats row — unique TypeTrace element ── */}
+          {/* Dynamic Top-Level Stats */}
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: "Verified Words", value: "14.6K" },
-              { label: "Avg Confidence", value: "91.2%" },
-              { label: "Sessions", value: "6" },
-              { label: "Certificates", value: "4" },
+              { label: "Total Sessions", value: totalSessions },
+              { label: "Avg Confidence", value: `${avgConfidence}%` },
+              { label: "Human Rate", value: `${passRate}%` },
+              {
+                label: "AI Flags",
+                value: sessions.filter(
+                  (s) => s.classification === "AI-GENERATED",
+                ).length,
+              },
             ].map(({ label, value }) => (
               <div
                 key={label}
@@ -571,7 +516,7 @@ export default function DashboardPage() {
                   {label}
                 </p>
                 <p
-                  className="text-[22px] font-extrabold leading-none"
+                  className="text-[22px] font-extrabold leading-none font-mono"
                   style={{ color: colors.text.primary }}
                 >
                   {value}
@@ -580,240 +525,173 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* ── usage card ── */}
-          <div>
+          {/* Real Global Metrics (Replaces the 'Upgrade to Pro' usage block) */}
+          <div
+            className="bg-white border rounded-md shadow-sm p-5"
+            style={{ borderColor: colors.surface[200] }}
+          >
             <h3
-              className="text-[13px] font-semibold mb-2"
+              className="text-[13px] font-semibold mb-4"
               style={{ color: colors.text.primary }}
             >
-              Usage
+              Global Metrics
             </h3>
-            <div
-              className="bg-white border rounded-md shadow-sm p-5"
-              style={{ borderColor: colors.surface[200] }}
-            >
-              <div className="flex justify-between items-center mb-5">
-                <span
-                  className="text-[13px] font-medium"
-                  style={{ color: colors.text.secondary }}
+            <div className="flex flex-col gap-3">
+              {[
+                {
+                  label: "Total Verified Words",
+                  value: totalWords.toLocaleString(),
+                },
+                { label: "Total Analysis Time", value: formattedTotalTime },
+                { label: "Ledger Entries", value: totalSessions },
+              ].map(({ label, value }) => (
+                <div
+                  key={label}
+                  className="flex justify-between items-center border-b last:border-b-0 pb-2 last:pb-0"
+                  style={{ borderColor: colors.surface[50] }}
                 >
-                  Last 30 days
-                </span>
-                <Link
-                  to={ROUTES.SETTINGS}
-                  className="px-2.5 py-1 rounded-md text-[11px] font-bold text-white transition-opacity hover:opacity-90"
-                  style={{ background: colors.text.primary }}
-                >
-                  Upgrade
-                </Link>
-              </div>
-
-              <div className="flex flex-col gap-3.5">
-                {[
-                  {
-                    label: "Keystrokes Analysed",
-                    used: 3700,
-                    total: 10000,
-                    display: "3.7K / 10K",
-                  },
-                  {
-                    label: "Certificates Issued",
-                    used: 4,
-                    total: 10,
-                    display: "4 / 10",
-                  },
-                  {
-                    label: "Processing Time",
-                    used: 277,
-                    total: 14400,
-                    display: "4m 37s / 4h",
-                  },
-                  {
-                    label: "Verification Requests",
-                    used: 142,
-                    total: 1000,
-                    display: "142 / 1K",
-                  },
-                ].map(({ label, used, total, display }) => (
-                  <div key={label} className="flex flex-col gap-1.5">
-                    <div className="flex justify-between text-[12.5px]">
-                      <span style={{ color: colors.text.secondary }}>
-                        {label}
-                      </span>
-                      <span
-                        className="font-mono font-semibold"
-                        style={{ color: colors.text.primary }}
-                      >
-                        {display}
-                      </span>
-                    </div>
-                    <div
-                      className="h-1 rounded-md overflow-hidden"
-                      style={{ background: colors.surface[200] }}
-                    >
-                      <div
-                        className="h-full rounded-md transition-all duration-700"
-                        style={{
-                          width: `${Math.min((used / total) * 100, 100)}%`,
-                          background: colors.text.primary,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* ── biometric health card — TypeTrace exclusive, not in vercel ── */}
-          <div>
-            <h3
-              className="text-[13px] font-semibold mb-2"
-              style={{ color: colors.text.primary }}
-            >
-              Biometric Health
-            </h3>
-            <div
-              className="bg-white border rounded-md shadow-sm p-5"
-              style={{ borderColor: colors.surface[200] }}
-            >
-              <div className="flex flex-col gap-4">
-                {[
-                  { label: "Avg IKI Variance", value: "±134ms", good: true },
-                  { label: "Avg Deletion Rate", value: "8.2%", good: true },
-                  { label: "Paste Events", value: "1 detected", good: false },
-                  { label: "Avg WPM", value: "61 WPM", good: true },
-                ].map(({ label, value, good }) => (
-                  <div
-                    key={label}
-                    className="flex items-center justify-between"
+                  <span
+                    className="text-[12px]"
+                    style={{ color: colors.text.secondary }}
                   >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="h-1.5 w-1.5 rounded-full shrink-0"
-                        style={{
-                          background: good ? brand.humanAccent : brand.aiAccent,
-                        }}
-                      />
-                      <span
-                        className="text-[12.5px]"
-                        style={{ color: colors.text.secondary }}
-                      >
-                        {label}
-                      </span>
-                    </div>
-                    <span
-                      className="text-[12.5px] font-semibold font-mono"
-                      style={{
-                        color: good ? colors.text.primary : brand.aiAccent,
-                      }}
-                    >
-                      {value}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                    {label}
+                  </span>
+                  <span
+                    className="text-[13px] font-mono font-semibold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {value}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* ── alerts card ── */}
-          <div>
-            <h3
-              className="text-[13px] font-semibold mb-2"
+          <div
+            className="bg-white border rounded-md shadow-sm p-5 flex flex-col items-center text-center gap-3"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <div
+              className="h-9 w-9 rounded-md border flex items-center justify-center"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.secondary,
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4M12 8h.01" />
+              </svg>
+            </div>
+            <p
+              className="text-[13px] font-semibold"
               style={{ color: colors.text.primary }}
             >
-              Alerts
-            </h3>
-            <div
-              className="bg-white border rounded-md shadow-sm p-5 flex flex-col items-center text-center gap-3"
-              style={{ borderColor: colors.surface[200] }}
+              Cryptographic Sealing Active
+            </p>
+            <p
+              className="text-[12px] leading-relaxed max-w-[200px]"
+              style={{ color: colors.text.secondary }}
             >
-              <div
-                className="h-9 w-9 rounded-md border flex items-center justify-center"
+              All captured sessions are bound to your user identity and
+              immutable in the PostgreSQL ledger.
+            </p>
+          </div>
+        </div>
+
+        {/* ── RIGHT COLUMN: SESSION GRID/LIST ── */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3
+              className="text-[13px] font-semibold"
+              style={{ color: colors.text.primary }}
+            >
+              Recent Sessions
+              <span
+                className="ml-2 text-[11px] font-normal"
+                style={{ color: colors.text.secondary }}
+              >
+                Showing {displayedSessions.length} of {filtered.length}
+              </span>
+            </h3>
+            <div className="flex items-center gap-2">
+              <Link
+                to="/sessions"
+                className="flex items-center h-8 px-3 rounded-md text-[12px] font-semibold border transition-colors hover:bg-surface-50 shadow-sm"
                 style={{
                   borderColor: colors.surface[200],
                   color: colors.text.secondary,
                 }}
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 16v-4M12 8h.01" />
-                </svg>
-              </div>
-              <p
-                className="text-[13px] font-semibold"
-                style={{ color: colors.text.primary }}
+                View All
+              </Link>
+              <Link
+                to={ROUTES.EDITOR_NEW}
+                className="flex items-center gap-1.5 h-8 px-3 rounded-md text-[12px] font-semibold text-white transition-opacity hover:opacity-90 shadow-sm"
+                style={{ background: colors.text.primary }}
               >
-                Get anomaly alerts
-              </p>
-              <p
-                className="text-[12px] leading-relaxed max-w-[180px]"
-                style={{ color: colors.text.secondary }}
-              >
-                Monitor sessions for AI paste events and get notified
-                automatically.
-              </p>
-              <button
-                className="mt-1 px-4 py-1.5 rounded-md border text-[12px] font-semibold hover:bg-surface-50 transition-colors"
-                style={{
-                  borderColor: colors.surface[200],
-                  color: colors.text.primary,
-                }}
-              >
-                Upgrade to Pro
-              </button>
+                <PlusIcon /> New Session
+              </Link>
             </div>
           </div>
-        </div>
 
-        {/* ── RIGHT COLUMN: sessions ── */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3
-              className="text-[13px] font-semibold"
-              style={{ color: colors.text.primary }}
+          {isLoading ? (
+            <div
+              className="py-16 text-center border rounded-md border-dashed flex flex-col items-center justify-center gap-3"
+              style={{ borderColor: colors.surface[200] }}
             >
-              Sessions
-              <span
-                className="ml-2 text-[11px] font-normal"
+              <svg
+                className="animate-spin h-6 w-6"
+                style={{ color: colors.text.secondary }}
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              <p
+                className="text-[13.5px] font-medium"
                 style={{ color: colors.text.secondary }}
               >
-                {filtered.length} of {mockSessions.length}
-              </span>
-            </h3>
-            <Link
-              to={ROUTES.EDITOR_NEW}
-              className="flex items-center gap-1.5 h-8 px-3 rounded-md text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-              style={{ background: colors.text.primary }}
-            >
-              <PlusIcon />
-              New Session
-            </Link>
-          </div>
-
-          {/* sessions grid or list */}
-          {filtered.length === 0 ? (
+                Syncing with Ledger...
+              </p>
+            </div>
+          ) : displayedSessions.length === 0 ? (
             <div
               className="py-16 text-center border rounded-md border-dashed"
               style={{ borderColor: colors.surface[200] }}
             >
               <p
-                className="text-[13.5px]"
+                className="text-[13.5px] font-medium"
                 style={{ color: colors.text.secondary }}
               >
-                No sessions match "{search}"
+                {sessions.length === 0
+                  ? "No cryptographic records found. Start typing to build your profile."
+                  : `No sessions match "${search}"`}
               </p>
             </div>
           ) : view === "grid" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filtered.map((s) => (
+              {displayedSessions.map((s) => (
                 <SessionCard key={s.id} session={s} view="grid" />
               ))}
             </div>
@@ -822,16 +700,15 @@ export default function DashboardPage() {
               className="bg-white border rounded-md overflow-hidden shadow-sm"
               style={{ borderColor: colors.surface[200] }}
             >
-              {/* list header */}
               <div
                 className="grid px-5 py-2.5 border-b"
                 style={{
-                  gridTemplateColumns: "2fr 80px 120px 80px 60px 32px",
+                  gridTemplateColumns: "2fr 80px 120px 80px 140px",
                   borderColor: colors.surface[200],
                   background: colors.surface[50],
                 }}
               >
-                {["Document", "IKI Pattern", "Status", "Score", "Date", ""].map(
+                {["Document", "IKI Pattern", "Status", "Score", "Date"].map(
                   (h) => (
                     <span
                       key={h}
@@ -843,7 +720,7 @@ export default function DashboardPage() {
                   ),
                 )}
               </div>
-              {filtered.map((s) => (
+              {displayedSessions.map((s) => (
                 <SessionCard key={s.id} session={s} view="list" />
               ))}
             </div>
