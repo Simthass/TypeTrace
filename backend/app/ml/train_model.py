@@ -414,15 +414,15 @@ def train_random_forest():
     print(f"After SMOTE:  {pd.Series(y_train_resampled).value_counts().to_dict()}")
 
     # ── 5. Train the Random Forest ──
-    print(f"\nTraining Random Forest with 200 estimators...")
+    print(f"\nTraining Optimized Random Forest...")
     rf_model = RandomForestClassifier(
-        n_estimators=200,
-        max_depth=12,
-        min_samples_split=5,
+        n_estimators=50,
+        max_depth=24,
+        min_samples_split=6,
         min_samples_leaf=2,
-        class_weight="balanced",  # handles any remaining class imbalance
+        class_weight="balanced", 
         random_state=42,
-        n_jobs=-1,  # use all CPU cores for training speed
+        n_jobs=-1, 
     )
     rf_model.fit(X_train_resampled, y_train_resampled)
 

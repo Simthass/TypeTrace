@@ -55,6 +55,8 @@ Datasets/
 *.h5
 *.hdf5
 *.model
+opt_history.html
+opt_importances.html
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
