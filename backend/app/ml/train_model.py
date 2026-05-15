@@ -305,6 +305,33 @@ def generate_synthetic_suspicious_data(n: int) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def generate_synthetic_autotyper_data(n: int) -> pd.DataFrame:
+    """
+    Models an Auto-Typer script (like pyautogui).
+    Slow/normal WPM, but ZERO variance and ZERO bursts.
+    """
+    np.random.seed(404)
+    rows = []
+    for _ in range(n):
+        net_wpm = max(30, np.random.normal(80, 20))    # Normal human speed
+        wpm_variance = max(0, np.random.normal(1, 1))  # No variance across windows
+        iki_std_dev = max(0, np.random.normal(2, 2))   # VERY LOW variance (Robotic!)
+        iki_mean = max(50, np.random.normal(150, 40))  # Normal human IKI delay
+        burst_ratio = 0.0                              # No pastes/bursts
+        paste_count = 0.0
+        deletion_ratio = 0.0                           # Scripts don't make typos
+        pause_count = 0.0                              # Scripts don't pause to think
+        editing_entropy = max(0, np.random.normal(0.2, 0.1)) # Low entropy
+
+        rows.append({
+            "net_wpm": net_wpm, "wpm_variance": wpm_variance, "iki_std_dev": iki_std_dev,
+            "iki_mean": iki_mean, "burst_ratio": burst_ratio, "paste_event_count": paste_count,
+            "deletion_ratio": deletion_ratio, "pause_count": pause_count, "editing_entropy": editing_entropy,
+            "label": "AI-GENERATED", # Teach the AI to flag this as a machine!
+        })
+    return pd.DataFrame(rows)
+
+
 def augment_real_sessions(db_df: pd.DataFrame, n_augmented: int = 400) -> pd.DataFrame:
     """
     Takes the small number of real database sessions and creates augmented variants
@@ -350,8 +377,11 @@ def train_random_forest():
     synthetic_human = generate_synthetic_human_data(1500)
     synthetic_ai = generate_synthetic_ai_data(1500)
     synthetic_suspicious = generate_synthetic_suspicious_data(800)
+    
+    # NEW: Add the Auto-Typer data
+    synthetic_autotyper = generate_synthetic_autotyper_data(800)
 
-    all_dfs = [synthetic_human, synthetic_ai, synthetic_suspicious]
+    all_dfs = [synthetic_human, synthetic_ai, synthetic_suspicious, synthetic_autotyper]
     if len(db_augmented) > 0:
         all_dfs.append(db_augmented)
         print(f"Included {len(db_augmented)} augmented real sessions as anchor data.")

@@ -83,18 +83,26 @@ async def analyze_session(data: KeystrokeSession):
         text_length=len(data.text_content)
     )
 
-    # 2. DETERMINISTIC KILL SWITCH (Heuristics)
-    # Using the new true Net WPM and Burst Ratios
+    # Rule 1: The Biological Speed Limit (Catches raw Copy/Paste)
     if extracted_features["net_wpm"] > 180 or extracted_features["paste_event_count"] > 0:
         classification_result = "AI-GENERATED"
         confidence_score = 99.9
         print(f"🚨 KILL SWITCH: Blocked. Net WPM: {extracted_features['net_wpm']}, Pastes: {extracted_features['paste_event_count']}")
 
-    elif extracted_features["burst_ratio"] > 0.4:
-        # If more than 40% of keys are typed in under 50ms, it's a script.
+    # Rule 2: The Mechanical Ghost (Catches pyautogui & Auto-Typers)
+    # Humans physically cannot maintain a timing variance (StdDev) under 15ms over multiple keystrokes.
+    # A low entropy (< 0.5) means every keystroke fell into the exact same millisecond bucket.
+    elif data.stats.keystrokes > 30 and (extracted_features["iki_std_dev"] < 15 or extracted_features["editing_entropy"] < 0.5):
+        classification_result = "AI-GENERATED"
+        confidence_score = 99.9
+        print(f"🚨 KILL SWITCH: Auto-Typer Script Detected! Variance: {extracted_features['iki_std_dev']:.2f}ms, Entropy: {extracted_features['editing_entropy']:.2f}")
+
+    # Rule 3: Instant Flight Times (Catches advanced injection scripts)
+    elif extracted_features["burst_ratio"] > 0.4 and data.stats.keystrokes > 50:
         classification_result = "AI-GENERATED"
         confidence_score = 99.9
         print(f"🚨 KILL SWITCH: Mechanical Burst Ratio detected ({extracted_features['burst_ratio']})")
+
 
     # 3. PROBABILISTIC ML ENGINE
     elif rf_model:
