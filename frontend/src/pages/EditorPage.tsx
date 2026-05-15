@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
-import { api } from "../lib/api"; // importing the global axios instance
+import { api } from "../lib/api";
 
-// ─── types ────────────────────────────────────────────────────────────────────
+// ─── TYPES ────────────────────────────────────────────────────────────────────
 interface KeystrokeEvent {
   key: string;
   keyCode: number;
@@ -26,7 +26,13 @@ interface SessionStats {
   sessionSeconds: number;
 }
 
-// ─── font options ─────────────────────────────────────────────────────────────
+interface AnalysisResult {
+  classification: string;
+  confidence: number;
+  stats: SessionStats;
+}
+
+// ─── OPTIONS ──────────────────────────────────────────────────────────────────
 const FONT_OPTIONS = [
   { label: "Sans", value: "font-sans", desc: "Geist Sans" },
   { label: "Serif", value: "font-serif", desc: "Georgia" },
@@ -47,7 +53,7 @@ const LINE_OPTIONS = [
 
 const WORD_GOALS = [250, 500, 750, 1000, 1500, 2000];
 
-// ─── animated IKI waveform on canvas ──────────────────────────────────────────
+// ─── ANIMATED IKI WAVEFORM ────────────────────────────────────────────────────
 function IkiWaveform({ active }: { active: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>(0);
@@ -133,7 +139,7 @@ function IkiWaveform({ active }: { active: boolean }) {
   );
 }
 
-// ─── stat pill (Inspector Style) ──────────────────────────────────────────────
+// ─── UI COMPONENTS ────────────────────────────────────────────────────────────
 function StatPill({
   label,
   value,
@@ -166,7 +172,6 @@ function StatPill({
   );
 }
 
-// ─── toolbar icon button ──────────────────────────────────────────────────────
 function ToolBtn({
   active,
   onClick,
@@ -200,7 +205,6 @@ function ToolBtn({
   );
 }
 
-// ─── word goal progress bar ───────────────────────────────────────────
 function WordGoalBar({ current, goal }: { current: number; goal: number }) {
   const pct = Math.min((current / goal) * 100, 100);
   const done = pct >= 100;
@@ -237,7 +241,149 @@ function WordGoalBar({ current, goal }: { current: number; goal: number }) {
   );
 }
 
-// ─── session timer ────────────────────────────────────────────────────────────
+// ─── PREMIUM RECEIPT MODAL ────────────────────────────────────────────────────
+// Clean, Linear/Vercel inspired. No glassmorphism. Crisp borders and smooth animations.
+function PremiumReceiptModal({
+  result,
+  onClose,
+}: {
+  result: AnalysisResult;
+  onClose: () => void;
+}) {
+  const [displayScore, setDisplayScore] = useState(0);
+
+  // Smooth count-up animation for the confidence score
+  useEffect(() => {
+    let start = 0;
+    const end = result.confidence;
+    const duration = 1200; // 1.2 seconds
+    const startTime = performance.now();
+
+    const animate = (time: number) => {
+      const progress = Math.min((time - startTime) / duration, 1);
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+      setDisplayScore(
+        Number((start + (end - start) * easeOutQuart).toFixed(1)),
+      );
+      if (progress < 1) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+  }, [result.confidence]);
+
+  const isHuman = result.classification === "HUMAN";
+  const badgeColor = isHuman ? brand.humanAccent : brand.aiAccent;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#050505]/80 transition-opacity">
+      <div
+        className="w-full max-w-[420px] rounded-xl shadow-2xl animate-in slide-in-from-bottom-8 fade-in duration-500 overflow-hidden border"
+        style={{
+          backgroundColor: brand.bgCard,
+          borderColor: colors.surface[200],
+        }}
+      >
+        {/* Header */}
+        <div
+          className="px-6 py-5 border-b flex justify-between items-center"
+          style={{ borderColor: colors.surface[100] }}
+        >
+          <div>
+            <h2
+              className="text-[15px] font-bold"
+              style={{ color: colors.text.primary }}
+            >
+              Session Analysis
+            </h2>
+            <div
+              className="text-[11px] font-mono mt-0.5"
+              style={{ color: colors.text.secondary }}
+            >
+              ID: {Math.random().toString(36).substring(2, 10).toUpperCase()}
+            </div>
+          </div>
+          <div
+            className="px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest uppercase border"
+            style={{
+              color: badgeColor,
+              borderColor: `${badgeColor}40`,
+              backgroundColor: `${badgeColor}10`,
+            }}
+          >
+            {result.classification}
+          </div>
+        </div>
+
+        {/* Hero Score */}
+        <div
+          className="px-6 py-10 flex flex-col items-center justify-center border-b bg-surface-50/30"
+          style={{ borderColor: colors.surface[100] }}
+        >
+          <span
+            className="text-[11px] font-bold uppercase tracking-widest mb-3"
+            style={{ color: colors.text.secondary }}
+          >
+            Confidence Score
+          </span>
+          <div
+            className="text-[64px] font-mono font-bold leading-none tracking-tighter tabular-nums"
+            style={{ color: colors.text.primary }}
+          >
+            {displayScore}
+            <span className="text-[32px] text-surface-400">%</span>
+          </div>
+        </div>
+
+        {/* Unified Metrics Grid */}
+        <div
+          className="grid grid-cols-2 gap-px"
+          style={{ backgroundColor: colors.surface[100] }}
+        >
+          {[
+            { label: "Avg WPM", value: result.stats.wpm },
+            { label: "Flight Time", value: `${result.stats.avgIki}ms` },
+            { label: "Corrections", value: result.stats.deletions },
+            { label: "Pauses (>1s)", value: result.stats.pauses },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="px-6 py-4"
+              style={{ backgroundColor: brand.bgCard }}
+            >
+              <div
+                className="text-[10px] font-bold uppercase tracking-widest mb-1.5"
+                style={{ color: colors.text.secondary }}
+              >
+                {stat.label}
+              </div>
+              <div
+                className="text-[15px] font-mono font-semibold"
+                style={{ color: colors.text.primary }}
+              >
+                {stat.value}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Action Footer */}
+        <div className="p-4" style={{ backgroundColor: brand.bgPage }}>
+          <button
+            onClick={onClose}
+            className="w-full py-3 rounded-lg text-[13px] font-bold transition-all shadow-sm hover:opacity-90 active:scale-[0.98]"
+            style={{
+              backgroundColor: colors.text.primary,
+              color: brand.bgCard,
+            }}
+          >
+            View Dashboard
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SESSION TIMER HOOK ───────────────────────────────────────────────────────
 function useSessionTimer() {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
@@ -246,18 +392,6 @@ function useSessionTimer() {
   }, []);
   const fmt = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   return { seconds, fmt };
-}
-
-function getConfidenceStyle(score: number) {
-  if (score >= 80)
-    return { color: brand.humanAccent, bg: brand.humanBg, label: "HUMAN" };
-  if (score >= 55)
-    return {
-      color: brand.suspiciousAccent,
-      bg: brand.suspiciousBg,
-      label: "SUSPICIOUS",
-    };
-  return { color: brand.aiAccent, bg: brand.aiBg, label: "AI-RISK" };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -270,7 +404,6 @@ export default function EditorPage() {
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
-
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -282,12 +415,16 @@ export default function EditorPage() {
   const [showGoalPicker, setShowGoalPicker] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // --- SPRINT 1: BIOMETRIC ENGINE REFS ---
-  // using refs cos if i put this in state react re-renders on every keystroke and it lags af
+  // Interaction States
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
+    null,
+  );
+
+  // Biometric Engine Refs
   const keystrokeLog = useRef<KeystrokeEvent[]>([]);
-  const activeKeys = useRef<{ [key: string]: number }>({}); // tracking physical keys using e.code now so shift doesnt break it
+  const activeKeys = useRef<{ [key: string]: number }>({});
   const lastKeydownTime = useRef<number | null>(null);
   const ikiValues = useRef<number[]>([]);
 
@@ -305,7 +442,6 @@ export default function EditorPage() {
   const charCount = text.length;
   const readTime = Math.max(1, Math.ceil(wordCount / 200));
 
-  // auto save mock
   useEffect(() => {
     const t = setInterval(() => {
       if (text.length > 0) setLastSaved(new Date());
@@ -313,7 +449,7 @@ export default function EditorPage() {
     return () => clearInterval(t);
   }, [text, title]);
 
-  // UI stats updater (runs every 3 seconds so it doesnt spam re-renders)
+  // UI Stats Updater (Using Unfied International WPM Math)
   useEffect(() => {
     if (seconds > 0 && seconds % 3 === 0) {
       const ikis = ikiValues.current;
@@ -321,7 +457,11 @@ export default function EditorPage() {
         ikis.length > 0
           ? Math.round(ikis.reduce((a, b) => a + b, 0) / ikis.length)
           : 0;
-      const wpm = seconds > 0 ? Math.round((wordCount / seconds) * 60) : 0;
+
+      // FIXED WPM MATH: (Total Characters / 5) / Minutes
+      const grossWords = text.length / 5;
+      const mins = Math.max(seconds, 1) / 60; // Prevent divide by zero
+      const wpm = Math.round(grossWords / mins);
 
       const deletions = keystrokeLog.current.filter(
         (k) => k.key === "Backspace" || k.key === "Delete",
@@ -338,26 +478,19 @@ export default function EditorPage() {
         sessionSeconds: seconds,
       });
     }
-  }, [seconds, wordCount]);
+  }, [seconds, text.length]);
 
-  // --- ENGINE: KEYDOWN ---
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       const now = Date.now();
-
-      // ignore holding down the key auto-repeat otherwise data gets super weird
       if (e.repeat) return;
 
-      // calc flight time from previous key
       let flightTime = null;
       if (lastKeydownTime.current !== null) {
         flightTime = now - lastKeydownTime.current;
-        // capping it at 5s cos if they go for lunch we dont want a 30 min IKI ruining the average math
         if (flightTime < 5000) ikiValues.current.push(flightTime);
       }
       lastKeydownTime.current = now;
-
-      // BUG FIX: using e.code (the physical key) instead of e.key so Shift doesn't break the dwell time calculation lol
       activeKeys.current[e.code] = now;
 
       keystrokeLog.current.push({
@@ -379,12 +512,9 @@ export default function EditorPage() {
     [text.length],
   );
 
-  // --- ENGINE: KEYUP ---
   const handleKeyUp = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       const now = Date.now();
-
-      // BUG FIX: pulling the start time using e.code to match the keydown
       const downTime = activeKeys.current[e.code];
 
       let dwellTime = null;
@@ -411,7 +541,6 @@ export default function EditorPage() {
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) =>
     setText(e.target.value);
 
-  // --- ENGINE: PASTE DETECTION ---
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const pastedText = e.clipboardData.getData("text");
     if (pastedText.length > 20) {
@@ -429,21 +558,17 @@ export default function EditorPage() {
     }
   };
 
-  // --- ENGINE: SEND DATA TO BACKEND ---
   const handleEndSession = async () => {
-    // block double clicks so we dont spam the database
     if (isSubmitting) return;
 
-    // prof said validate before sending to save server costs
-    if (keystrokeLog.current.length < 10 || text.trim().length === 0) {
-      alert("Session too short bro, type some more words first.");
+    if (text.trim().length === 0) {
+      alert("Session is empty. Please type or paste some text first.");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      // calculating final stats here right before sending so react state delays dont mess up my db payload
       const finalIkis = ikiValues.current;
       const finalAvgIki =
         finalIkis.length > 0
@@ -453,7 +578,11 @@ export default function EditorPage() {
         (k) => k.key === "Backspace" || k.key === "Delete",
       ).length;
       const finalPauses = finalIkis.filter((v) => v > 1000).length;
-      const finalWpm = seconds > 0 ? Math.round((wordCount / seconds) * 60) : 0;
+
+      // FIXED WPM MATH FOR SUBMISSION: (Total Characters / 5) / Minutes
+      const finalGrossWords = text.length / 5;
+      const mins = Math.max(seconds, 1) / 60;
+      const finalWpm = Math.round(finalGrossWords / mins);
 
       const finalStats = {
         wpm: finalWpm,
@@ -472,18 +601,18 @@ export default function EditorPage() {
         stats: finalStats,
       };
 
-      console.log("sending this massive blob to fastAPI...", payload);
-
-      // my global axios interceptor automatically attaches the Bearer token here!
       const response = await api.post("/sessions/analyze", payload);
 
-      console.log("Success! DB saved it with ID:", response.data.id);
-      navigate(ROUTES.DASHBOARD);
+      setAnalysisResult({
+        classification: response.data.ml_result.classification,
+        confidence: response.data.ml_result.confidence_score,
+        stats: finalStats,
+      });
     } catch (error: any) {
-      console.error("bruh the api failed:", error);
+      console.error("API failed:", error);
       alert(
         error.response?.data?.detail ||
-          "Failed to analyze session. Is the python server running?",
+          "Failed to analyze session. Is the Python server running?",
       );
     } finally {
       setIsSubmitting(false);
@@ -500,24 +629,25 @@ export default function EditorPage() {
     }
   };
 
-  const liveConfidence = Math.max(
-    20,
-    Math.min(
-      99,
-      100 -
-        (ikiValues.current.length > 5
-          ? Math.max(
-              0,
-              30 -
-                (ikiValues.current.filter((v) => v > 150).length /
-                  ikiValues.current.length) *
-                  30,
-            )
-          : 10) -
-        (stats.deletions < 2 && wordCount > 50 ? 8 : 0),
-    ),
-  );
-  const confStyle = getConfidenceStyle(liveConfidence);
+  const signalCount = keystrokeLog.current.length;
+  let signalStatus = {
+    label: "Insufficient Data",
+    color: colors.surface[400],
+    pct: 15,
+  };
+  if (signalCount > 50) {
+    signalStatus = {
+      label: "High Confidence Ready",
+      color: brand.humanAccent,
+      pct: 100,
+    };
+  } else if (signalCount > 20) {
+    signalStatus = {
+      label: "Calibrating",
+      color: brand.suspiciousAccent,
+      pct: (signalCount / 50) * 100,
+    };
+  }
 
   useEffect(() => {
     return () => {
@@ -526,181 +656,280 @@ export default function EditorPage() {
   }, []);
 
   return (
-    <div
-      className="flex flex-col h-screen overflow-hidden font-sans"
-      style={{ backgroundColor: brand.bgPage }}
-    >
-      {/* ══════════════════════════════════════════════════════
-          TOP BAR (Monochromatic & Sharp)
-      ══════════════════════════════════════════════════════ */}
-      <header
-        className="shrink-0 flex items-center justify-between px-5 gap-4 border-b z-20"
-        style={{
-          height: 50,
-          backgroundColor: brand.bgCard,
-          borderColor: colors.surface[200],
-        }}
+    <>
+      <div
+        className="flex flex-col h-screen overflow-hidden font-sans"
+        style={{ backgroundColor: brand.bgPage }}
       >
-        {/* ── Left: back + title ── */}
-        <div className="flex items-center gap-3 min-w-0 flex-1 max-w-[400px]">
-          <Link
-            to={ROUTES.DASHBOARD}
-            className="flex items-center justify-center h-7 w-7 rounded-md border transition-colors shrink-0"
-            style={{
-              borderColor: colors.surface[200],
-              backgroundColor: colors.surface[50],
-              color: colors.text.secondary,
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.color = colors.text.primary)
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.color = colors.text.secondary)
-            }
-            title="Back to Dashboard"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 15 15"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M9 3L5 7.5 9 12" />
-            </svg>
-          </Link>
-
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="text-[13px] font-semibold bg-transparent outline-none w-full truncate focus:ring-0 px-2.5 py-1 rounded-md border transition-colors"
-            style={{
-              color: colors.text.primary,
-              caretColor: brand.action,
-              borderColor: colors.surface[200],
-            }}
-            placeholder="Untitled Document"
-            onFocus={(e) =>
-              (e.currentTarget.style.borderColor = colors.text.secondary)
-            }
-            onBlur={(e) =>
-              (e.currentTarget.style.borderColor = colors.surface[200])
-            }
-          />
-        </div>
-
-        {/* ── Centre: presentation toolbar + Save Status ── */}
-        <div
-          className="hidden md:flex items-center gap-1 px-1.5 py-1 rounded-md border"
+        {/* ══════════════════════════════════════════════════════
+            TOP BAR 
+        ══════════════════════════════════════════════════════ */}
+        <header
+          className="shrink-0 flex items-center justify-between px-5 gap-4 border-b z-20"
           style={{
-            backgroundColor: colors.surface[50],
+            height: 50,
+            backgroundColor: brand.bgCard,
             borderColor: colors.surface[200],
           }}
         >
-          <div
-            className="flex items-center gap-0.5 pr-1.5 border-r"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            {FONT_OPTIONS.map((f) => (
-              <ToolBtn
-                key={f.value}
-                active={fontClass === f.value}
-                onClick={() => setFontClass(f.value)}
-                title={f.desc}
-              >
-                {f.label}
-              </ToolBtn>
-            ))}
-          </div>
-          <div
-            className="flex items-center gap-0.5 px-1.5 border-r"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            {SIZE_OPTIONS.map((s) => (
-              <ToolBtn
-                key={s.value}
-                active={sizeClass === s.value}
-                onClick={() => setSizeClass(s.value)}
-                title={s.desc}
-              >
-                {s.label}
-              </ToolBtn>
-            ))}
-          </div>
-          <div
-            className="flex items-center gap-0.5 px-1.5 border-r"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            {LINE_OPTIONS.map((l) => (
-              <ToolBtn
-                key={l.value}
-                active={lineClass === l.value}
-                onClick={() => setLineClass(l.value)}
-                title={l.label}
-              >
-                <span className="text-[10px]">{l.label.slice(0, 4)}</span>
-              </ToolBtn>
-            ))}
-          </div>
-          <div
-            className="flex items-center gap-0.5 px-1.5 border-r"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <ToolBtn
-              active={focusMode}
-              onClick={() => setFocusMode((v) => !v)}
-              title="Focus Mode"
+          <div className="flex items-center gap-3 min-w-0 flex-1 max-w-[400px]">
+            <Link
+              to={ROUTES.DASHBOARD}
+              className="flex items-center justify-center h-7 w-7 rounded-md border transition-colors shrink-0"
+              style={{
+                borderColor: colors.surface[200],
+                backgroundColor: colors.surface[50],
+                color: colors.text.secondary,
+              }}
+              title="Back to Dashboard"
             >
               <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                viewBox="0 0 15 15"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2"
+                strokeWidth="1.5"
                 strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                <circle cx="12" cy="12" r="3" />
-                <path d="M3 9V5h4M17 5h4v4M21 15v4h-4M7 19H3v-4" />
+                <path d="M9 3L5 7.5 9 12" />
               </svg>
-            </ToolBtn>
-            <ToolBtn
-              active={fullscreen}
-              onClick={toggleFullscreen}
-              title="Fullscreen"
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              >
-                <path
-                  d={
-                    fullscreen
-                      ? "M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"
-                      : "M3 8V5h3M18 5h3v3M21 16v3h-3M6 19H3v-3"
-                  }
-                />
-              </svg>
-            </ToolBtn>
+            </Link>
+
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="text-[13px] font-semibold bg-transparent outline-none w-full truncate focus:ring-0 px-2.5 py-1 rounded-md border transition-colors"
+              style={{
+                color: colors.text.primary,
+                caretColor: brand.action,
+                borderColor: colors.surface[200],
+              }}
+              placeholder="Untitled Document"
+              onFocus={(e) =>
+                (e.currentTarget.style.borderColor = colors.text.secondary)
+              }
+              onBlur={(e) =>
+                (e.currentTarget.style.borderColor = colors.surface[200])
+              }
+            />
           </div>
 
           <div
-            className="relative px-1.5 border-r"
-            style={{ borderColor: colors.surface[200] }}
+            className="hidden md:flex items-center gap-1 px-1.5 py-1 rounded-md border"
+            style={{
+              backgroundColor: colors.surface[50],
+              borderColor: colors.surface[200],
+            }}
           >
-            <ToolBtn
-              active={showGoalPicker}
-              onClick={() => setShowGoalPicker((v) => !v)}
-              title="Set word goal"
+            <div
+              className="flex items-center gap-0.5 pr-1.5 border-r"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              {FONT_OPTIONS.map((f) => (
+                <ToolBtn
+                  key={f.value}
+                  active={fontClass === f.value}
+                  onClick={() => setFontClass(f.value)}
+                  title={f.desc}
+                >
+                  {f.label}
+                </ToolBtn>
+              ))}
+            </div>
+            <div
+              className="flex items-center gap-0.5 px-1.5 border-r"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              {SIZE_OPTIONS.map((s) => (
+                <ToolBtn
+                  key={s.value}
+                  active={sizeClass === s.value}
+                  onClick={() => setSizeClass(s.value)}
+                  title={s.desc}
+                >
+                  {s.label}
+                </ToolBtn>
+              ))}
+            </div>
+            <div
+              className="flex items-center gap-0.5 px-1.5 border-r"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              {LINE_OPTIONS.map((l) => (
+                <ToolBtn
+                  key={l.value}
+                  active={lineClass === l.value}
+                  onClick={() => setLineClass(l.value)}
+                  title={l.label}
+                >
+                  <span className="text-[10px]">{l.label.slice(0, 4)}</span>
+                </ToolBtn>
+              ))}
+            </div>
+            <div
+              className="flex items-center gap-0.5 px-1.5 border-r"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <ToolBtn
+                active={focusMode}
+                onClick={() => setFocusMode((v) => !v)}
+                title="Focus Mode"
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M3 9V5h4M17 5h4v4M21 15v4h-4M7 19H3v-4" />
+                </svg>
+              </ToolBtn>
+              <ToolBtn
+                active={fullscreen}
+                onClick={toggleFullscreen}
+                title="Fullscreen"
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path
+                    d={
+                      fullscreen
+                        ? "M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"
+                        : "M3 8V5h3M18 5h3v3M21 16v3h-3M6 19H3v-3"
+                    }
+                  />
+                </svg>
+              </ToolBtn>
+            </div>
+            <div
+              className="relative px-1.5 border-r"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <ToolBtn
+                active={showGoalPicker}
+                onClick={() => setShowGoalPicker((v) => !v)}
+                title="Set word goal"
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="M12 2a10 10 0 1 0 10 10" />
+                  <path d="M12 8v4l3 3" />
+                </svg>
+                <span className="ml-1 text-[10px] font-mono">{wordGoal}w</span>
+              </ToolBtn>
+              {showGoalPicker && (
+                <div
+                  className="absolute top-full right-0 mt-2 p-1 border rounded-md shadow-md z-50 flex flex-col min-w-[100px]"
+                  style={{
+                    backgroundColor: brand.bgCard,
+                    borderColor: colors.surface[200],
+                  }}
+                  onMouseLeave={() => setShowGoalPicker(false)}
+                >
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-wider px-2 py-1.5"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    Goal
+                  </span>
+                  {WORD_GOALS.map((g) => (
+                    <button
+                      key={g}
+                      onClick={() => {
+                        setWordGoal(g);
+                        setShowGoalPicker(false);
+                      }}
+                      className="text-left px-2 py-1.5 rounded-md text-[11px] font-mono transition-colors hover:bg-surface-50"
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2.5 px-2.5">
+              <span
+                className="text-[10px] font-mono shrink-0 flex items-center gap-1.5"
+                style={{ color: colors.text.secondary }}
+              >
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{
+                    backgroundColor: lastSaved
+                      ? brand.humanAccent
+                      : colors.surface[200],
+                  }}
+                />
+                {lastSaved
+                  ? `Saved ${lastSaved.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                  : "Unsaved"}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={() => setRightPanelOpen((v) => !v)}
+              className="hidden lg:flex items-center justify-center h-7 w-7 rounded-md border transition-colors"
+              style={{
+                backgroundColor: rightPanelOpen
+                  ? colors.text.primary
+                  : colors.surface[50],
+                borderColor: rightPanelOpen
+                  ? colors.text.primary
+                  : colors.surface[200],
+                color: rightPanelOpen
+                  ? colors.text.light
+                  : colors.text.secondary,
+              }}
+              title="Toggle inspector"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M15 3v18" />
+              </svg>
+            </button>
+
+            <button
+              onClick={handleEndSession}
+              disabled={isSubmitting}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-md text-[11.5px] font-semibold transition-all shadow-sm active:scale-95"
+              style={{
+                backgroundColor: brand.action,
+                color: colors.text.light,
+                opacity: isSubmitting ? 0.7 : 1,
+                cursor: isSubmitting ? "not-allowed" : "pointer",
+              }}
             >
               <svg
                 width="12"
@@ -710,391 +939,263 @@ export default function EditorPage() {
                 stroke="currentColor"
                 strokeWidth="2"
                 strokeLinecap="round"
+                className={isSubmitting ? "animate-spin" : ""}
               >
-                <path d="M12 2a10 10 0 1 0 10 10" />
-                <path d="M12 8v4l3 3" />
+                {isSubmitting ? (
+                  <path d="M21 12a9 9 0 11-6.219-8.56" />
+                ) : (
+                  <path
+                    d="M5 3l14 9-14 9V3z"
+                    fill="currentColor"
+                    stroke="none"
+                  />
+                )}
               </svg>
-              <span className="ml-1 text-[10px] font-mono">{wordGoal}w</span>
-            </ToolBtn>
-            {showGoalPicker && (
+              {isSubmitting ? "Analyzing..." : "End & Analyse"}
+            </button>
+          </div>
+        </header>
+
+        {/* ══════════════════════════════════════════════════════
+            MAIN CONTENT AREA
+        ══════════════════════════════════════════════════════ */}
+        <div className="flex flex-1 overflow-hidden relative">
+          <main
+            className="flex-1 overflow-y-auto flex justify-center transition-colors duration-300"
+            style={{ backgroundColor: focusMode ? brand.bgPage : brand.bgCard }}
+          >
+            <div className="w-full max-w-[1200px] px-8 md:px-16 py-16 flex flex-col gap-0 relative mx-auto">
+              <div className="mb-10 opacity-60">
+                <WordGoalBar current={wordCount} goal={wordGoal} />
+              </div>
+
+              <textarea
+                ref={textareaRef}
+                value={text}
+                onChange={handleTextChange}
+                onKeyDown={handleKeyDown}
+                onKeyUp={handleKeyUp}
+                onPaste={handlePaste}
+                placeholder="Begin typing to generate your cryptographic proof..."
+                spellCheck={false}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                className={`w-full flex-1 min-h-[60vh] bg-transparent border-none outline-none resize-none focus:ring-0 ${fontClass} ${sizeClass} ${lineClass} transition-all duration-200`}
+                style={{
+                  color: colors.text.primary,
+                  caretColor: colors.text.primary,
+                  WebkitTextFillColor: focusMode
+                    ? colors.text.secondary
+                    : undefined,
+                }}
+              />
+
               <div
-                className="absolute top-full right-0 mt-2 p-1 border rounded-md shadow-md z-50 flex flex-col min-w-[100px]"
+                className="flex items-center justify-between pt-6 border-t mt-12"
+                style={{ borderColor: colors.surface[200] }}
+              >
+                <div
+                  className="flex items-center gap-6 text-[11px] font-mono"
+                  style={{ color: colors.text.secondary }}
+                >
+                  <span>{wordCount} w</span>
+                  <span>{charCount} c</span>
+                  <span>~{readTime}m read</span>
+                </div>
+              </div>
+            </div>
+          </main>
+
+          <aside
+            className={`shrink-0 border-l overflow-y-auto transition-all duration-300 ease-in-out ${rightPanelOpen ? "w-[280px] opacity-100" : "w-0 opacity-0 overflow-hidden"}`}
+            style={{
+              backgroundColor: brand.bgPage,
+              borderColor: colors.surface[200],
+            }}
+          >
+            <div className="p-5 flex flex-col gap-5 min-w-[280px]">
+              <div
+                className="rounded-md p-4 border"
                 style={{
                   backgroundColor: brand.bgCard,
                   borderColor: colors.surface[200],
                 }}
-                onMouseLeave={() => setShowGoalPicker(false)}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-widest"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    Biometric Signal
+                  </span>
+                  <span
+                    className="text-[10px] font-mono font-bold"
+                    style={{ color: signalStatus.color }}
+                  >
+                    {signalCount} Points
+                  </span>
+                </div>
+                <div
+                  className="h-1.5 rounded-full overflow-hidden mb-2"
+                  style={{ backgroundColor: colors.surface[100] }}
+                >
+                  <div
+                    className="h-full transition-all duration-500 ease-out"
+                    style={{
+                      width: `${signalStatus.pct}%`,
+                      backgroundColor: signalStatus.color,
+                    }}
+                  />
+                </div>
+                <div
+                  className="text-[10px] font-medium transition-colors"
+                  style={{ color: signalStatus.color }}
+                >
+                  {signalStatus.label}
+                </div>
+              </div>
+
+              <div
+                className="rounded-md border p-4 shadow-sm"
+                style={{
+                  backgroundColor: brand.bgCard,
+                  borderColor: colors.surface[200],
+                }}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-widest"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    IKI Waveform
+                  </span>
+                  <span
+                    className="text-[11px] font-mono font-bold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {stats.avgIki > 0 ? `${stats.avgIki}ms` : "—"}
+                  </span>
+                </div>
+                <div
+                  className="h-10 rounded-md overflow-hidden border"
+                  style={{
+                    backgroundColor: colors.surface[50],
+                    borderColor: colors.surface[200],
+                  }}
+                >
+                  <IkiWaveform active={isTyping} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <StatPill label="WPM" value={stats.wpm} highlight />
+                <StatPill label="Keystrokes" value={stats.keystrokes} />
+                <StatPill label="Deletions" value={stats.deletions} />
+                <StatPill label="Pauses" value={stats.pauses} />
+              </div>
+
+              <div
+                className="rounded-md border p-4 flex flex-col gap-2 shadow-sm"
+                style={{
+                  backgroundColor: brand.bgCard,
+                  borderColor: colors.surface[200],
+                }}
               >
                 <span
-                  className="text-[9px] font-bold uppercase tracking-wider px-2 py-1.5"
+                  className="text-[10px] font-bold uppercase tracking-widest mb-1"
                   style={{ color: colors.text.secondary }}
                 >
-                  Goal
+                  Metadata
                 </span>
-                {WORD_GOALS.map((g) => (
-                  <button
-                    key={g}
-                    onClick={() => {
-                      setWordGoal(g);
-                      setShowGoalPicker(false);
-                    }}
-                    className="text-left px-2 py-1.5 rounded-md text-[11px] font-mono transition-colors"
-                    style={{
-                      backgroundColor:
-                        wordGoal === g ? colors.surface[100] : "transparent",
-                      color: colors.text.primary,
-                    }}
-                    onMouseEnter={(e) =>
-                      wordGoal !== g &&
-                      (e.currentTarget.style.backgroundColor =
-                        colors.surface[50])
-                    }
-                    onMouseLeave={(e) =>
-                      wordGoal !== g &&
-                      (e.currentTarget.style.backgroundColor = "transparent")
-                    }
+                {[
+                  { label: "Duration", value: timerFmt },
+                  { label: "Total Words", value: wordCount },
+                  {
+                    label: "Event Array",
+                    value: `${keystrokeLog.current.length} obj`,
+                  },
+                ].map(({ label, value }) => (
+                  <div
+                    key={label}
+                    className="flex justify-between items-center border-b last:border-b-0 pb-1.5 last:pb-0"
+                    style={{ borderColor: colors.surface[50] }}
                   >
-                    {g}
-                  </button>
+                    <span
+                      className="text-[11px]"
+                      style={{ color: colors.text.secondary }}
+                    >
+                      {label}
+                    </span>
+                    <span
+                      className="text-[11.5px] font-mono font-medium"
+                      style={{ color: colors.text.primary }}
+                    >
+                      {value}
+                    </span>
+                  </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          </aside>
+        </div>
 
-          <div className="flex items-center gap-2.5 px-2.5">
-            <span
-              className="text-[10px] font-mono shrink-0 flex items-center gap-1.5"
-              style={{ color: colors.text.secondary }}
-            >
+        {/* ══════════════════════════════════════════════════════
+            STATUS BAR 
+        ══════════════════════════════════════════════════════ */}
+        <footer
+          className="shrink-0 flex items-center justify-between px-4 border-t z-20"
+          style={{
+            height: 26,
+            backgroundColor: brand.action,
+            borderColor: brand.action,
+          }}
+        >
+          <div
+            className="flex items-center gap-4 text-[10px] font-mono"
+            style={{ color: colors.text.light }}
+          >
+            <span className="font-semibold uppercase tracking-wider">
+              TypeTrace Core
+            </span>
+            <span className="flex items-center gap-1.5">
               <span
                 className="h-1.5 w-1.5 rounded-full"
                 style={{
-                  backgroundColor: lastSaved
+                  backgroundColor: isTyping
                     ? brand.humanAccent
                     : colors.surface[200],
                 }}
               />
-              {lastSaved
-                ? `Saved ${lastSaved.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                : "Unsaved"}
+              {isTyping ? "Capturing" : "Idle"}
             </span>
           </div>
-        </div>
 
-        {/* ── Right: session controls ── */}
-        <div className="flex items-center gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={() => setRightPanelOpen((v) => !v)}
-            className="hidden lg:flex items-center justify-center h-7 w-7 rounded-md border transition-colors"
-            style={{
-              backgroundColor: rightPanelOpen
-                ? colors.text.primary
-                : colors.surface[50],
-              borderColor: rightPanelOpen
-                ? colors.text.primary
-                : colors.surface[200],
-              color: rightPanelOpen ? colors.text.light : colors.text.secondary,
-            }}
-            title="Toggle inspector"
+          <div
+            className="flex items-center gap-4 text-[10px] font-mono"
+            style={{ color: colors.text.light }}
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
+            <span>{fontClass.replace("font-", "")}</span>
+            <span>Ln 1, Col {text.length}</span>
+            <span
+              className="font-bold tracking-wider uppercase"
+              style={{ color: brand.humanAccent }}
             >
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <path d="M15 3v18" />
-            </svg>
-          </button>
-
-          <button
-            onClick={handleEndSession}
-            disabled={isSubmitting}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-md text-[11.5px] font-semibold transition-all shadow-sm"
-            style={{
-              backgroundColor: brand.action,
-              color: colors.text.light,
-              opacity: isSubmitting ? 0.7 : 1,
-              cursor: isSubmitting ? "not-allowed" : "pointer",
-            }}
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              className={isSubmitting ? "animate-pulse" : ""}
-            >
-              <path d="M5 3l14 9-14 9V3z" fill="currentColor" stroke="none" />
-            </svg>
-            {isSubmitting ? "Analyzing..." : "End & Analyse"}
-          </button>
-        </div>
-      </header>
-
-      {/* ══════════════════════════════════════════════════════
-          MAIN CONTENT AREA
-      ══════════════════════════════════════════════════════ */}
-      <div className="flex flex-1 overflow-hidden relative">
-        {/* ── WRITING AREA ── */}
-        <main
-          className="flex-1 overflow-y-auto flex justify-center transition-colors duration-300"
-          style={{ backgroundColor: focusMode ? brand.bgPage : brand.bgCard }}
-        >
-          <div className="w-full max-w-[1200px] px-8 md:px-16 py-16 flex flex-col gap-0 relative mx-auto">
-            <div className="mb-10 opacity-60">
-              <WordGoalBar current={wordCount} goal={wordGoal} />
-            </div>
-
-            <textarea
-              ref={textareaRef}
-              value={text}
-              onChange={handleTextChange}
-              onKeyDown={handleKeyDown}
-              onKeyUp={handleKeyUp}
-              onPaste={handlePaste}
-              placeholder="Begin typing to generate your cryptographic proof..."
-              spellCheck={false}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              className={`w-full flex-1 min-h-[60vh] bg-transparent border-none outline-none resize-none focus:ring-0 ${fontClass} ${sizeClass} ${lineClass} transition-all duration-200`}
-              style={{
-                color: colors.text.primary,
-                caretColor: colors.text.primary,
-                WebkitTextFillColor: focusMode
-                  ? colors.text.secondary
-                  : undefined,
-              }}
-            />
-
-            <div
-              className="flex items-center justify-between pt-6 border-t mt-12"
-              style={{ borderColor: colors.surface[200] }}
-            >
-              <div
-                className="flex items-center gap-6 text-[11px] font-mono"
-                style={{ color: colors.text.secondary }}
-              >
-                <span>{wordCount} w</span>
-                <span>{charCount} c</span>
-                <span>~{readTime}m read</span>
-              </div>
-            </div>
+              SHA-256 Enabled
+            </span>
           </div>
-        </main>
-
-        {/* ── RIGHT ANALYTICS PANEL (Inspector Aesthetic) ── */}
-        <aside
-          className={`shrink-0 border-l overflow-y-auto transition-all duration-300 ease-in-out ${rightPanelOpen ? "w-[280px] opacity-100" : "w-0 opacity-0 overflow-hidden"}`}
-          style={{
-            backgroundColor: brand.bgPage,
-            borderColor: colors.surface[200],
-          }}
-        >
-          <div className="p-5 flex flex-col gap-5 min-w-[280px]">
-            {/* Live Confidence Badge */}
-            <div
-              className="rounded-md p-4 border"
-              style={{
-                backgroundColor: confStyle.bg,
-                borderColor: `${confStyle.color}40`,
-              }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span
-                  className="text-[10px] font-bold uppercase tracking-widest"
-                  style={{ color: confStyle.color }}
-                >
-                  Classification
-                </span>
-                <span
-                  className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-md border"
-                  style={{
-                    backgroundColor: brand.bgCard,
-                    borderColor: `${confStyle.color}30`,
-                  }}
-                >
-                  <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ backgroundColor: confStyle.color }}
-                  />
-                  <span
-                    className="text-[9px] font-bold uppercase tracking-widest"
-                    style={{ color: confStyle.color }}
-                  >
-                    {confStyle.label}
-                  </span>
-                </span>
-              </div>
-              <div
-                className="text-[32px] font-mono font-bold leading-none tracking-tight"
-                style={{ color: confStyle.color }}
-              >
-                {liveConfidence.toFixed(1)}%
-              </div>
-            </div>
-
-            {/* IKI Waveform Inspector */}
-            <div
-              className="rounded-md border p-4 shadow-sm"
-              style={{
-                backgroundColor: brand.bgCard,
-                borderColor: colors.surface[200],
-              }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span
-                  className="text-[10px] font-bold uppercase tracking-widest"
-                  style={{ color: colors.text.secondary }}
-                >
-                  IKI Waveform
-                </span>
-                <span
-                  className="text-[11px] font-mono font-bold"
-                  style={{ color: colors.text.primary }}
-                >
-                  {stats.avgIki > 0 ? `${stats.avgIki}ms` : "—"}
-                </span>
-              </div>
-              <div
-                className="h-10 rounded-md overflow-hidden border"
-                style={{
-                  backgroundColor: colors.surface[50],
-                  borderColor: colors.surface[200],
-                }}
-              >
-                <IkiWaveform active={isTyping} />
-              </div>
-            </div>
-
-            {/* Grid Metrics */}
-            <div className="grid grid-cols-2 gap-2">
-              <StatPill label="WPM" value={stats.wpm} highlight />
-              <StatPill label="Keystrokes" value={stats.keystrokes} />
-              <StatPill label="Corrections" value={stats.deletions} />
-              <StatPill label="Pauses" value={stats.pauses} />
-            </div>
-
-            {/* Session Metadata */}
-            <div
-              className="rounded-md border p-4 flex flex-col gap-2 shadow-sm"
-              style={{
-                backgroundColor: brand.bgCard,
-                borderColor: colors.surface[200],
-              }}
-            >
-              <span
-                className="text-[10px] font-bold uppercase tracking-widest mb-1"
-                style={{ color: colors.text.secondary }}
-              >
-                Metadata
-              </span>
-              {[
-                { label: "Duration", value: timerFmt },
-                { label: "Total Words", value: wordCount },
-                {
-                  label: "Event Array",
-                  value: `${keystrokeLog.current.length} obj`,
-                },
-              ].map(({ label, value }) => (
-                <div
-                  key={label}
-                  className="flex justify-between items-center border-b last:border-b-0 pb-1.5 last:pb-0"
-                  style={{ borderColor: colors.surface[50] }}
-                >
-                  <span
-                    className="text-[11px]"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {label}
-                  </span>
-                  <span
-                    className="text-[11.5px] font-mono font-medium"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {value}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* Security Notice */}
-            <div
-              className="rounded-md p-3 border mt-2"
-              style={{
-                backgroundColor: colors.surface[100],
-                borderColor: colors.surface[200],
-              }}
-            >
-              <p
-                className="text-[10px] leading-relaxed"
-                style={{ color: colors.text.secondary }}
-              >
-                <strong style={{ color: colors.text.primary }}>
-                  Data Sovereignty:
-                </strong>{" "}
-                Keystroke timing metadata is processed locally. Text content
-                never leaves this browser instance.
-              </p>
-            </div>
-          </div>
-        </aside>
+        </footer>
       </div>
 
       {/* ══════════════════════════════════════════════════════
-          STATUS BAR (Bottom, VS Code Style)
+          POST-ANALYSIS MODAL (Rendered at Root Level)
       ══════════════════════════════════════════════════════ */}
-      <footer
-        className="shrink-0 flex items-center justify-between px-4 border-t z-20"
-        style={{
-          height: 26,
-          backgroundColor: brand.action,
-          borderColor: brand.action,
-        }}
-      >
-        <div
-          className="flex items-center gap-4 text-[10px] font-mono"
-          style={{ color: colors.text.light }}
-        >
-          <span className="font-semibold uppercase tracking-wider">
-            TypeTrace Core
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{
-                backgroundColor: isTyping
-                  ? brand.humanAccent
-                  : colors.surface[200],
-              }}
-            />
-            {isTyping ? "Capturing" : "Idle"}
-          </span>
-        </div>
-
-        <div
-          className="flex items-center gap-4 text-[10px] font-mono"
-          style={{ color: colors.text.light }}
-        >
-          <span>{fontClass.replace("font-", "")}</span>
-          <span>Ln 1, Col {text.length}</span>
-          <span
-            className="font-bold tracking-wider uppercase"
-            style={{ color: brand.humanAccent }}
-          >
-            SHA-256 Enabled
-          </span>
-        </div>
-      </footer>
-    </div>
+      {analysisResult && (
+        <PremiumReceiptModal
+          result={analysisResult}
+          onClose={() => navigate(ROUTES.DASHBOARD)}
+        />
+      )}
+    </>
   );
 }
