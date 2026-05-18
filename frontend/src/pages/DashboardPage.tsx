@@ -353,7 +353,8 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const response = await api.get("/sessions/history/student");
+        // ── FIX: Removed "/student" from the URL ──
+        const response = await api.get("/sessions/history");
         if (response.data.status === "success") {
           setSessions(response.data.sessions);
         }

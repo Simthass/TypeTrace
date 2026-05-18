@@ -1,180 +1,135 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
+import { api } from "../lib/api";
 
-// ─── Domain Mock Data ─────────────────────────────────────────────────────────
-const mockSessions = [
-  {
-    id: "ses_1",
-    title: "Cloud Computing Essay",
-    subject: "CS-401",
-    details: "1,240 words • 58 WPM • 1h 12m",
-    date: "1d ago",
-    status: "HUMAN",
-  },
-  {
-    id: "ses_2",
-    title: "Distributed Systems Notes",
-    subject: "CS-405",
-    details: "450 words • 42 WPM • 28m",
-    date: "3d ago",
-    status: "SUSPICIOUS",
-  },
-  {
-    id: "ses_3",
-    title: "Literature Review — AI",
-    subject: "ENG-201",
-    details: "2,100 words • 64 WPM • 2h 47m",
-    date: "Apr 26",
-    status: "HUMAN",
-  },
-  {
-    id: "ses_4",
-    title: "Final Year Project Report",
-    subject: "PRJ-500",
-    details: "8,500 words • 61 WPM • 12h 4m",
-    date: "Apr 21",
-    status: "HUMAN",
-  },
-  {
-    id: "ses_5",
-    title: "CopyPaste_Test.txt",
-    subject: "Sandbox",
-    details: "850 words • 212 WPM • 4m",
-    date: "Feb 14",
-    status: "AI-GENERATED",
-  },
-  {
-    id: "ses_6",
-    title: "Ethics in Tech Essay",
-    subject: "PHIL-302",
-    details: "1,500 words • 55 WPM • 1h 45m",
-    date: "Jan 10",
-    status: "HUMAN",
-  },
-];
+// ─── STRICT ENTERPRISE GRID LAYOUT ────────────────────────────────────────────
+// This mathematically locks the header and the rows to the exact same pixel widths.
+const TABLE_GRID = "minmax(220px, 2fr) 100px 140px 80px 160px 40px";
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
-function SearchIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
+// ─── TYPES ────────────────────────────────────────────────────────────────────
+interface Session {
+  id: number;
+  title: string;
+  wpm: number;
+  duration: number;
+  classification: "HUMAN" | "SUSPICIOUS" | "AI-GENERATED";
+  confidence: number;
+  date: string;
 }
 
-function GridIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    >
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-    </svg>
-  );
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function formatDuration(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  if (m === 0) return `${s}s`;
+  return `${m}m ${s}s`;
 }
 
-function ListIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    >
-      <line x1="8" y1="6" x2="21" y2="6" />
-      <line x1="8" y1="12" x2="21" y2="12" />
-      <line x1="8" y1="18" x2="21" y2="18" />
-      <line x1="3" y1="6" x2="3.01" y2="6" />
-      <line x1="3" y1="12" x2="3.01" y2="12" />
-      <line x1="3" y1="18" x2="3.01" y2="18" />
-    </svg>
-  );
-}
-
-function ClockIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  );
-}
-
-function DownloadIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  );
-}
-
-// ─── Status Style Map ─────────────────────────────────────────────────────────
-function getStatusClasses(status: string) {
+function getStatusStyle(status: "HUMAN" | "SUSPICIOUS" | "AI-GENERATED") {
   if (status === "HUMAN")
     return {
-      border: `border-[${colors.surface[200]}]`,
       dot: brand.humanAccent,
       bg: brand.humanBg,
       text: brand.humanText,
+      border: `${brand.humanAccent}28`,
     };
   if (status === "SUSPICIOUS")
     return {
-      border: `border-[${brand.suspiciousAccent}50]`,
       dot: brand.suspiciousAccent,
       bg: brand.suspiciousBg,
       text: brand.suspiciousText,
+      border: `${brand.suspiciousAccent}28`,
     };
   return {
-    border: `border-[${brand.aiAccent}50]`,
     dot: brand.aiAccent,
     bg: brand.aiBg,
     text: brand.aiText,
+    border: `${brand.aiAccent}28`,
   };
 }
 
-// ─── IKI Sparkline ────────────────────────────────────────────────────────────
+// ─── ICONS ────────────────────────────────────────────────────────────────────
+const SearchIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+  >
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
+const GridIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+  >
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+  </svg>
+);
+const ListIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+  >
+    <line x1="8" y1="6" x2="21" y2="6" />
+    <line x1="8" y1="12" x2="21" y2="12" />
+    <line x1="8" y1="18" x2="21" y2="18" />
+    <line x1="3" y1="6" x2="3.01" y2="6" />
+    <line x1="3" y1="12" x2="3.01" y2="12" />
+    <line x1="3" y1="18" x2="3.01" y2="18" />
+  </svg>
+);
+const ClockIcon = () => (
+  <svg
+    width="11"
+    height="11"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+const DownloadIcon = () => (
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+  >
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+// ─── IKI SPARKLINE ────────────────────────────────────────────────────────────
 function IkiSparkline({ status }: { status: string }) {
   const bars =
     status === "AI-GENERATED"
@@ -183,10 +138,10 @@ function IkiSparkline({ status }: { status: string }) {
         ? [30, 70, 20, 80, 40, 90, 25, 60, 75, 35]
         : [40, 65, 30, 75, 50, 85, 45, 70, 55, 80];
 
-  const st = getStatusClasses(status);
+  const st = getStatusStyle(status as "HUMAN" | "SUSPICIOUS" | "AI-GENERATED");
 
   return (
-    <div className="flex items-end gap-[2px] h-5 w-16">
+    <div className="flex items-end gap-[2px] h-5 w-[72px]">
       {bars.map((h, i) => (
         <div
           key={i}
@@ -201,36 +156,233 @@ function IkiSparkline({ status }: { status: string }) {
   );
 }
 
+// ─── SESSION CARD ─────────────────────────────────────────────────────────────
+function SessionCard({
+  session,
+  view,
+}: {
+  session: Session;
+  view: "grid" | "list";
+}) {
+  const st = getStatusStyle(session.classification);
+  const detailsStr = `${session.wpm} WPM · ${formatDuration(session.duration)}`;
+
+  if (view === "list") {
+    return (
+      <div
+        className="grid items-center gap-4 px-5 py-3.5 border-b last:border-b-0 group transition-colors cursor-pointer hover:bg-surface-50"
+        style={{
+          gridTemplateColumns: TABLE_GRID,
+          borderColor: colors.surface[200],
+        }}
+      >
+        {/* Col 1: Document (Left Aligned) */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className="h-8 w-8 rounded-md flex items-center justify-center text-white font-bold font-mono text-[13px] shrink-0"
+            style={{ background: colors.text.primary }}
+          >
+            {session.title.charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span
+                className="text-[13.5px] font-semibold truncate group-hover:underline"
+                style={{ color: colors.text.primary }}
+              >
+                {session.title}
+              </span>
+            </div>
+            <p
+              className="text-[12px] mt-0.5 font-mono truncate"
+              style={{ color: colors.text.secondary }}
+            >
+              {detailsStr}
+            </p>
+          </div>
+        </div>
+
+        {/* Col 2: Sparkline (Centered perfectly inside its column) */}
+        <div className="flex justify-center w-full">
+          <IkiSparkline status={session.classification} />
+        </div>
+
+        {/* Col 3: Status Badge (Centered perfectly) */}
+        <div className="flex justify-center">
+          <div
+            className="flex items-center gap-1.5 px-2 py-1 rounded-md border"
+            style={{ background: st.bg, borderColor: st.border }}
+          >
+            <span
+              className="h-1.5 w-1.5 rounded-full shrink-0"
+              style={{ background: st.dot }}
+            />
+            <span
+              className="text-[10px] font-bold uppercase tracking-widest"
+              style={{ color: st.text }}
+            >
+              {session.classification === "AI-GENERATED"
+                ? "AI"
+                : session.classification}
+            </span>
+          </div>
+        </div>
+
+        {/* Col 4: Confidence Score (Centered perfectly) */}
+        <div className="flex justify-center">
+          <span
+            className="text-[12.5px] font-bold font-mono"
+            style={{ color: st.dot }}
+          >
+            {session.confidence}%
+          </span>
+        </div>
+
+        {/* Col 5: Date (Centered perfectly) */}
+        <div className="flex justify-center min-w-0">
+          <span
+            className="text-[12px] truncate"
+            style={{ color: colors.text.secondary }}
+          >
+            {session.date}
+          </span>
+        </div>
+
+        {/* Col 6: Action (Right Aligned) */}
+        <div className="flex justify-end">
+          <button
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-200"
+            style={{ color: colors.text.secondary }}
+            title="Download Cryptographic Report"
+          >
+            <DownloadIcon />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="bg-white border rounded-md p-5 flex flex-col justify-between h-[168px] transition-all cursor-pointer group hover:border-black/20 hover:shadow-lg"
+      style={{ borderColor: colors.surface[200] }}
+    >
+      <div className="flex justify-between items-start gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className="h-7 w-7 rounded-md flex items-center justify-center text-white font-bold font-mono text-[12px] shrink-0"
+            style={{ background: colors.text.primary }}
+          >
+            {session.title.charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p
+              className="text-[13.5px] font-semibold truncate group-hover:underline"
+              style={{ color: colors.text.primary }}
+            >
+              {session.title}
+            </p>
+            <p
+              className="text-[12px] font-mono"
+              style={{ color: colors.text.secondary }}
+            >
+              {detailsStr}
+            </p>
+          </div>
+        </div>
+        <div
+          className="flex items-center gap-1.5 px-2 py-1 rounded-md border shrink-0"
+          style={{ background: st.bg, borderColor: st.border }}
+        >
+          <span
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ background: st.dot }}
+          />
+          <span
+            className="text-[10px] font-bold uppercase tracking-widest"
+            style={{ color: st.text }}
+          >
+            {session.classification === "AI-GENERATED"
+              ? "AI"
+              : session.classification}
+          </span>
+        </div>
+      </div>
+      <IkiSparkline status={session.classification} />
+      <div className="flex items-end justify-between">
+        <div
+          className="flex items-center gap-1.5 mt-0.5 text-[11px]"
+          style={{ color: colors.text.secondary }}
+        >
+          <ClockIcon />
+          <span>{session.date}</span>
+        </div>
+        <span className="text-[14px] font-extrabold" style={{ color: st.dot }}>
+          {session.confidence}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FULL LEDGER PAGE
+// ─────────────────────────────────────────────────────────────────────────────
 export default function SessionsPage() {
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"grid" | "list">("list"); // Default to list for sessions page
+  const [view, setView] = useState<"list" | "grid">("list");
   const [statusFilter, setStatusFilter] = useState<
     "ALL" | "HUMAN" | "SUSPICIOUS" | "AI-GENERATED"
   >("ALL");
 
-  const filtered = mockSessions.filter((s) => {
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        // ── FIX: Removed "/student" from the URL ──
+        const response = await api.get("/sessions/history");
+        if (response.data.status === "success") {
+          setSessions(response.data.sessions);
+        }
+      } catch (error) {
+        console.error("Failed to fetch session history:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchHistory();
+  }, []);
+
+  const filtered = sessions.filter((s) => {
     const matchSearch = s.title.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "ALL" || s.status === statusFilter;
+    const matchStatus =
+      statusFilter === "ALL" || s.classification === statusFilter;
     return matchSearch && matchStatus;
   });
 
   return (
-    <div className="p-6 md:p-10 max-w-[1200px] mx-auto w-full flex flex-col gap-6">
-      {/* ── Page Header ── */}
-      <div>
+    <div className="p-6 md:p-8 max-w-[1200px] mx-auto w-full flex flex-col gap-6 font-sans bg-brand-bgPage min-h-screen">
+      {/* ── HEADER ── */}
+      <div
+        className="flex flex-col gap-1 border-b pb-6"
+        style={{ borderColor: colors.surface[200] }}
+      >
         <h1
-          className="text-2xl font-semibold tracking-tight mb-1"
+          className="text-2xl font-bold tracking-tight"
           style={{ color: colors.text.primary }}
         >
-          Sessions
+          Cryptographic Ledger
         </h1>
-        <p className="text-[14px]" style={{ color: colors.text.secondary }}>
-          Manage and review your biometric authentication sessions.
+        <p className="text-[13.5px]" style={{ color: colors.text.secondary }}>
+          A complete, immutable history of all your biometric verifications
+          stored in PostgreSQL.
         </p>
       </div>
 
-      {/* ── Toolbar ── */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* ── TOOLBAR ── */}
+      <div className="flex items-center gap-2.5 flex-wrap">
         <div className="relative flex-1 min-w-[240px]">
           <span
             className="absolute left-3 top-1/2 -translate-y-1/2"
@@ -240,20 +392,25 @@ export default function SessionsPage() {
           </span>
           <input
             type="text"
-            placeholder="Search sessions..."
+            placeholder="Search documents by title..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-9 pl-9 pr-4 rounded-md text-[14px] bg-white border outline-none focus:ring-1 focus:ring-black transition-shadow shadow-sm"
+            className="w-full h-9 pl-9 pr-4 rounded-md text-[13.5px] bg-white border outline-none transition-shadow shadow-sm"
             style={{
               borderColor: colors.surface[200],
               color: colors.text.primary,
             }}
+            onFocus={(e) => {
+              e.currentTarget.style.boxShadow = `0 0 0 2px ${colors.text.primary}20`;
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.04)";
+            }}
           />
         </div>
 
-        {/* Status Filters */}
         <div
-          className="flex border rounded-md shadow-sm overflow-hidden bg-white"
+          className="flex items-center border rounded-md shadow-sm overflow-hidden bg-white"
           style={{ borderColor: colors.surface[200] }}
         >
           {(["ALL", "HUMAN", "SUSPICIOUS", "AI-GENERATED"] as const).map(
@@ -261,13 +418,10 @@ export default function SessionsPage() {
               <button
                 key={f}
                 onClick={() => setStatusFilter(f)}
-                className="h-9 px-3.5 text-[12px] font-semibold transition-colors border-r last:border-r-0"
+                className="h-9 px-4 text-[12px] font-semibold transition-colors border-r last:border-r-0"
                 style={{
-                  background: statusFilter === f ? colors.surface[100] : "#fff",
-                  color:
-                    statusFilter === f
-                      ? colors.text.primary
-                      : colors.text.secondary,
+                  background: statusFilter === f ? colors.text.primary : "#fff",
+                  color: statusFilter === f ? "#fff" : colors.text.secondary,
                   borderColor: colors.surface[200],
                 }}
               >
@@ -277,13 +431,12 @@ export default function SessionsPage() {
           )}
         </div>
 
-        {/* View Toggles */}
         <div
           className="flex border rounded-md shadow-sm overflow-hidden bg-white"
           style={{ borderColor: colors.surface[200] }}
         >
           <button
-            className="h-9 w-10 flex items-center justify-center transition-colors border-r"
+            className="h-9 w-9 flex items-center justify-center transition-colors border-r"
             style={{
               background: view === "list" ? colors.surface[100] : "#fff",
               color:
@@ -291,216 +444,139 @@ export default function SessionsPage() {
               borderColor: colors.surface[200],
             }}
             onClick={() => setView("list")}
+            title="List view"
           >
             <ListIcon />
           </button>
           <button
-            className="h-9 w-10 flex items-center justify-center transition-colors"
+            className="h-9 w-9 flex items-center justify-center transition-colors"
             style={{
               background: view === "grid" ? colors.surface[100] : "#fff",
               color:
                 view === "grid" ? colors.text.primary : colors.text.secondary,
             }}
             onClick={() => setView("grid")}
+            title="Grid view"
           >
             <GridIcon />
           </button>
         </div>
       </div>
 
-      {/* ── Content Area ── */}
-      {filtered.length === 0 ? (
-        <div
-          className="py-20 text-center border rounded-md border-dashed bg-white"
-          style={{ borderColor: colors.surface[200] }}
-        >
-          <p className="text-[14px]" style={{ color: colors.text.secondary }}>
-            No sessions found matching your criteria.
-          </p>
-        </div>
-      ) : view === "grid" ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((s) => {
-            const st = getStatusClasses(s.status);
-            return (
-              <div
-                key={s.id}
-                className="bg-white border rounded-md shadow-sm p-5 flex flex-col justify-between h-[160px] hover:shadow-md transition-all cursor-pointer group"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-md bg-black flex items-center justify-center text-white font-bold text-[14px] shrink-0 font-mono">
-                      {s.title.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span
-                        className="text-[14px] font-semibold truncate group-hover:underline"
-                        style={{ color: colors.text.primary }}
-                      >
-                        {s.title}
-                      </span>
-                      <span
-                        className="text-[13px] truncate"
-                        style={{ color: colors.text.secondary }}
-                      >
-                        {s.subject}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-end mt-auto">
-                  <div className="flex flex-col gap-1.5">
-                    <div
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-md border w-fit"
-                      style={{ borderColor: st.border, backgroundColor: st.bg }}
-                    >
-                      <span
-                        className="w-1.5 h-1.5 rounded-full"
-                        style={{ backgroundColor: st.dot }}
-                      />
-                      <span
-                        className="text-[10px] font-bold tracking-widest uppercase"
-                        style={{ color: st.text }}
-                      >
-                        {s.status === "AI-GENERATED" ? "AI" : s.status}
-                      </span>
-                    </div>
-                    <div
-                      className="flex items-center gap-2 text-[12px]"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      <span>{s.date}</span>
-                    </div>
-                  </div>
-                  <IkiSparkline status={s.status} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div
-          className="bg-white border rounded-md shadow-sm overflow-hidden"
-          style={{ borderColor: colors.surface[200] }}
-        >
-          {/* List Header */}
+      {/* ── SESSIONS DISPLAY ── */}
+      <div className="flex-1 pb-12">
+        {isLoading ? (
           <div
-            className="grid grid-cols-[1fr_120px_100px_100px_60px] gap-4 px-5 py-3 border-b items-center"
-            style={{
-              backgroundColor: colors.surface[50],
-              borderColor: colors.surface[200],
-            }}
-          >
-            <span
-              className="text-[11px] font-semibold uppercase tracking-wider"
-              style={{ color: colors.text.secondary }}
-            >
-              Document
-            </span>
-            <span
-              className="text-[11px] font-semibold uppercase tracking-wider"
-              style={{ color: colors.text.secondary }}
-            >
-              Rhythm
-            </span>
-            <span
-              className="text-[11px] font-semibold uppercase tracking-wider"
-              style={{ color: colors.text.secondary }}
-            >
-              Status
-            </span>
-            <span
-              className="text-[11px] font-semibold uppercase tracking-wider"
-              style={{ color: colors.text.secondary }}
-            >
-              Date
-            </span>
-            <span
-              className="text-[11px] font-semibold uppercase tracking-wider text-right"
-              style={{ color: colors.text.secondary }}
-            >
-              Action
-            </span>
-          </div>
-
-          {/* List Rows */}
-          <div
-            className="flex flex-col divide-y"
+            className="py-24 text-center border rounded-md border-dashed flex flex-col items-center justify-center gap-3 bg-white"
             style={{ borderColor: colors.surface[200] }}
           >
-            {filtered.map((s) => {
-              const st = getStatusClasses(s.status);
-              return (
-                <div
-                  key={s.id}
-                  className="grid grid-cols-[1fr_120px_100px_100px_60px] gap-4 px-5 py-4 items-center hover:bg-gray-50 transition-colors group cursor-pointer"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-md bg-black flex items-center justify-center text-white font-bold text-[14px] shrink-0 font-mono">
-                      {s.title.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span
-                        className="text-[14px] font-medium truncate group-hover:underline"
-                        style={{ color: colors.text.primary }}
-                      >
-                        {s.title}
-                      </span>
-                      <span
-                        className="text-[12px] truncate"
-                        style={{ color: colors.text.secondary }}
-                      >
-                        {s.details}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <IkiSparkline status={s.status} />
-                  </div>
-
-                  <div>
-                    <div
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-md border w-fit"
-                      style={{ borderColor: st.border, backgroundColor: st.bg }}
-                    >
-                      <span
-                        className="w-1.5 h-1.5 rounded-full"
-                        style={{ backgroundColor: st.dot }}
-                      />
-                      <span
-                        className="text-[10px] font-bold tracking-widest uppercase"
-                        style={{ color: st.text }}
-                      >
-                        {s.status === "AI-GENERATED" ? "AI" : s.status}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div
-                    className="flex items-center gap-1.5 text-[13px]"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    <ClockIcon /> {s.date}
-                  </div>
-
-                  <div className="flex justify-end">
-                    <button
-                      className="p-1.5 rounded-md hover:bg-surface-200 transition-colors opacity-0 group-hover:opacity-100"
-                      style={{ color: colors.text.secondary }}
-                      title="Download Certificate"
-                    >
-                      <DownloadIcon />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            <svg
+              className="animate-spin h-6 w-6"
+              style={{ color: colors.text.secondary }}
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+            <p
+              className="text-[13.5px] font-medium"
+              style={{ color: colors.text.secondary }}
+            >
+              Querying PostgreSQL Ledger...
+            </p>
           </div>
-        </div>
-      )}
+        ) : filtered.length === 0 ? (
+          <div
+            className="py-24 text-center border rounded-md border-dashed bg-white"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <p
+              className="text-[13.5px] font-medium"
+              style={{ color: colors.text.secondary }}
+            >
+              {sessions.length === 0
+                ? "Your ledger is currently empty. Complete a verification session to begin."
+                : `No entries match "${search}" with the selected filter.`}
+            </p>
+          </div>
+        ) : view === "grid" ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map((s) => (
+              <SessionCard key={s.id} session={s} view="grid" />
+            ))}
+          </div>
+        ) : (
+          <div
+            className="bg-white border rounded-md shadow-sm overflow-hidden"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            {/* ── ENTERPRISE TABLE HEADER ── */}
+            <div
+              className="grid items-center gap-4 px-5 py-3 border-b"
+              style={{
+                gridTemplateColumns: TABLE_GRID,
+                borderColor: colors.surface[200],
+                background: colors.surface[50],
+              }}
+            >
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest text-left"
+                style={{ color: colors.text.secondary }}
+              >
+                Document
+              </span>
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest text-center"
+                style={{ color: colors.text.secondary }}
+              >
+                Pattern
+              </span>
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest text-center"
+                style={{ color: colors.text.secondary }}
+              >
+                Status
+              </span>
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest text-center"
+                style={{ color: colors.text.secondary }}
+              >
+                Score
+              </span>
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest text-center"
+                style={{ color: colors.text.secondary }}
+              >
+                Date
+              </span>
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest text-right"
+                style={{ color: colors.text.secondary }}
+              ></span>
+            </div>
+
+            {/* Table Body */}
+            <div className="flex flex-col">
+              {filtered.map((s) => (
+                <SessionCard key={s.id} session={s} view="list" />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

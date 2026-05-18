@@ -30,6 +30,9 @@ interface AnalysisResult {
   classification: string;
   confidence: number;
   stats: SessionStats;
+  advanced_stats?: any; // Catches the 28 advanced features from FastAPI V4
+  kill_switch_triggered?: boolean;
+  kill_switch_reason?: string;
 }
 
 // ─── OPTIONS ──────────────────────────────────────────────────────────────────
@@ -241,8 +244,7 @@ function WordGoalBar({ current, goal }: { current: number; goal: number }) {
   );
 }
 
-// ─── PREMIUM RECEIPT MODAL ────────────────────────────────────────────────────
-// Clean, Linear/Vercel inspired. No glassmorphism. Crisp borders and smooth animations.
+// ─── PREMIUM RECEIPT MODAL (SaaS Grade) ───────────────────────────────────────
 function PremiumReceiptModal({
   result,
   onClose,
@@ -256,7 +258,7 @@ function PremiumReceiptModal({
   useEffect(() => {
     let start = 0;
     const end = result.confidence;
-    const duration = 1200; // 1.2 seconds
+    const duration = 1500;
     const startTime = performance.now();
 
     const animate = (time: number) => {
@@ -273,14 +275,16 @@ function PremiumReceiptModal({
   const isHuman = result.classification === "HUMAN";
   const badgeColor = isHuman ? brand.humanAccent : brand.aiAccent;
 
+  // Circle Animation Math
+  const radius = 38;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (displayScore / 100) * circumference;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#050505]/80 transition-opacity">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#050505]/60 backdrop-blur-[2px] transition-opacity duration-300">
       <div
-        className="w-full max-w-[420px] rounded-xl shadow-2xl animate-in slide-in-from-bottom-8 fade-in duration-500 overflow-hidden border"
-        style={{
-          backgroundColor: brand.bgCard,
-          borderColor: colors.surface[200],
-        }}
+        className="w-full max-w-[460px] rounded-xl shadow-2xl overflow-hidden border bg-white transform transition-all duration-500 scale-100 opacity-100"
+        style={{ borderColor: colors.surface[200] }}
       >
         {/* Header */}
         <div
@@ -289,10 +293,10 @@ function PremiumReceiptModal({
         >
           <div>
             <h2
-              className="text-[15px] font-bold"
+              className="text-[15px] font-bold tracking-tight"
               style={{ color: colors.text.primary }}
             >
-              Session Analysis
+              Cryptographic Receipt
             </h2>
             <div
               className="text-[11px] font-mono mt-0.5"
@@ -302,71 +306,155 @@ function PremiumReceiptModal({
             </div>
           </div>
           <div
-            className="px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest uppercase border"
+            className="flex items-center gap-2 px-2.5 py-1 rounded-md border transition-colors duration-500"
             style={{
               color: badgeColor,
               borderColor: `${badgeColor}40`,
               backgroundColor: `${badgeColor}10`,
             }}
           >
-            {result.classification}
+            <span className="h-1.5 w-1.5 rounded-full relative">
+              <span
+                className="absolute inset-0 rounded-full animate-ping opacity-75"
+                style={{ backgroundColor: badgeColor }}
+              ></span>
+              <span
+                className="relative inline-flex rounded-full h-1.5 w-1.5"
+                style={{ backgroundColor: badgeColor }}
+              ></span>
+            </span>
+            <span className="text-[10px] font-bold tracking-widest uppercase">
+              {result.classification}
+            </span>
           </div>
         </div>
 
-        {/* Hero Score */}
+        {/* Hero Score with SVG Ring */}
         <div
-          className="px-6 py-10 flex flex-col items-center justify-center border-b bg-surface-50/30"
+          className="px-6 py-10 flex flex-col items-center justify-center border-b bg-surface-50/50 relative"
           style={{ borderColor: colors.surface[100] }}
         >
+          <div className="relative flex items-center justify-center mb-3">
+            {/* Background Track */}
+            <svg width="120" height="120" className="rotate-[-90deg]">
+              <circle
+                cx="60"
+                cy="60"
+                r={radius}
+                fill="none"
+                stroke={colors.surface[200]}
+                strokeWidth="6"
+              />
+              {/* Animated Progress Ring */}
+              <circle
+                cx="60"
+                cy="60"
+                r={radius}
+                fill="none"
+                stroke={badgeColor}
+                strokeWidth="6"
+                strokeLinecap="round"
+                style={{
+                  strokeDasharray: circumference,
+                  strokeDashoffset: strokeDashoffset,
+                  transition:
+                    "stroke-dashoffset 1.5s cubic-bezier(0.22, 1, 0.36, 1)",
+                }}
+              />
+            </svg>
+            <div className="absolute flex flex-col items-center justify-center">
+              <div
+                className="text-[32px] font-mono font-bold leading-none tabular-nums"
+                style={{ color: colors.text.primary }}
+              >
+                {displayScore}
+                <span className="text-[16px] text-surface-400">%</span>
+              </div>
+            </div>
+          </div>
           <span
-            className="text-[11px] font-bold uppercase tracking-widest mb-3"
+            className="text-[11px] font-bold uppercase tracking-widest"
             style={{ color: colors.text.secondary }}
           >
             Confidence Score
           </span>
-          <div
-            className="text-[64px] font-mono font-bold leading-none tracking-tighter tabular-nums"
-            style={{ color: colors.text.primary }}
+
+          {/* Kill Switch Warning */}
+          {result.kill_switch_triggered && (
+            <div className="mt-4 px-4 py-2 rounded-md bg-red-50 border border-red-100 text-red-600 text-[11.5px] font-medium text-center animate-pulse">
+              ⚠️{" "}
+              {result.kill_switch_reason ||
+                "Deterministic Kill Switch Triggered"}
+            </div>
+          )}
+        </div>
+
+        {/* Advanced ML Features Grid (V4 Dataset Features) */}
+        <div
+          className="bg-surface-50 p-5 border-b"
+          style={{ borderColor: colors.surface[100] }}
+        >
+          <span
+            className="block text-[10px] font-bold uppercase tracking-widest mb-3"
+            style={{ color: colors.text.secondary }}
           >
-            {displayScore}
-            <span className="text-[32px] text-surface-400">%</span>
+            Extracted V4 Features
+          </span>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Net WPM", value: result.stats.wpm },
+              {
+                label: "HT Mean",
+                value: result.advanced_stats?.ht_mean
+                  ? `${result.advanced_stats.ht_mean}ms`
+                  : "—",
+              },
+              {
+                label: "FT Mean",
+                value: result.advanced_stats?.ft_mean
+                  ? `${result.advanced_stats.ft_mean}ms`
+                  : "—",
+              },
+              {
+                label: "FT Entropy",
+                value: result.advanced_stats?.ft_entropy || "—",
+              },
+              {
+                label: "Autocorr",
+                value: result.advanced_stats?.ft_autocorr || "—",
+              },
+              {
+                label: "Burst Ratio",
+                value: result.advanced_stats?.burst_ratio || "—",
+              },
+            ].map((stat, i) => (
+              <div
+                key={i}
+                className="flex flex-col bg-white border rounded-md p-3 shadow-sm transition-all duration-500 ease-out transform"
+                style={{
+                  borderColor: colors.surface[200],
+                  animation: `fadeSlideUp 0.5s ease-out ${i * 0.1}s forwards`, // Staggered CSS animation
+                }}
+              >
+                <span
+                  className="text-[9px] font-bold uppercase"
+                  style={{ color: colors.text.secondary }}
+                >
+                  {stat.label}
+                </span>
+                <span
+                  className="text-[13px] font-mono font-semibold mt-0.5"
+                  style={{ color: colors.text.primary }}
+                >
+                  {stat.value}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Unified Metrics Grid */}
-        <div
-          className="grid grid-cols-2 gap-px"
-          style={{ backgroundColor: colors.surface[100] }}
-        >
-          {[
-            { label: "Avg WPM", value: result.stats.wpm },
-            { label: "Flight Time", value: `${result.stats.avgIki}ms` },
-            { label: "Corrections", value: result.stats.deletions },
-            { label: "Pauses (>1s)", value: result.stats.pauses },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="px-6 py-4"
-              style={{ backgroundColor: brand.bgCard }}
-            >
-              <div
-                className="text-[10px] font-bold uppercase tracking-widest mb-1.5"
-                style={{ color: colors.text.secondary }}
-              >
-                {stat.label}
-              </div>
-              <div
-                className="text-[15px] font-mono font-semibold"
-                style={{ color: colors.text.primary }}
-              >
-                {stat.value}
-              </div>
-            </div>
-          ))}
-        </div>
-
         {/* Action Footer */}
-        <div className="p-4" style={{ backgroundColor: brand.bgPage }}>
+        <div className="p-4 bg-white">
           <button
             onClick={onClose}
             className="w-full py-3 rounded-lg text-[13px] font-bold transition-all shadow-sm hover:opacity-90 active:scale-[0.98]"
@@ -375,10 +463,18 @@ function PremiumReceiptModal({
               color: brand.bgCard,
             }}
           >
-            View Dashboard
+            Acknowledge & Return
           </button>
         </div>
       </div>
+
+      {/* Inline CSS for the staggered animations without needing tailwind-animate plugin */}
+      <style>{`
+        @keyframes fadeSlideUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }
@@ -449,7 +545,7 @@ export default function EditorPage() {
     return () => clearInterval(t);
   }, [text, title]);
 
-  // UI Stats Updater (Using Unfied International WPM Math)
+  // UI Stats Updater
   useEffect(() => {
     if (seconds > 0 && seconds % 3 === 0) {
       const ikis = ikiValues.current;
@@ -458,10 +554,8 @@ export default function EditorPage() {
           ? Math.round(ikis.reduce((a, b) => a + b, 0) / ikis.length)
           : 0;
 
-      // FIXED WPM MATH: (Total Characters / 5) / Minutes
-      const grossWords = text.length / 5;
-      const mins = Math.max(seconds, 1) / 60; // Prevent divide by zero
-      const wpm = Math.round(grossWords / mins);
+      // FIXED Frontend Net WPM Math
+      const wpm = seconds > 0 ? Math.round((wordCount / seconds) * 60) : 0;
 
       const deletions = keystrokeLog.current.filter(
         (k) => k.key === "Backspace" || k.key === "Delete",
@@ -579,10 +673,11 @@ export default function EditorPage() {
       ).length;
       const finalPauses = finalIkis.filter((v) => v > 1000).length;
 
-      // FIXED WPM MATH FOR SUBMISSION: (Total Characters / 5) / Minutes
-      const finalGrossWords = text.length / 5;
-      const mins = Math.max(seconds, 1) / 60;
-      const finalWpm = Math.round(finalGrossWords / mins);
+      // FIXED Submission WPM Math
+      const finalWordCount =
+        text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+      const finalWpm =
+        seconds > 0 ? Math.round((finalWordCount / seconds) * 60) : 0;
 
       const finalStats = {
         wpm: finalWpm,
@@ -601,12 +696,16 @@ export default function EditorPage() {
         stats: finalStats,
       };
 
+      // Ensure API calls pass the JWT Token (handled by Axios interceptor in api.ts)
       const response = await api.post("/sessions/analyze", payload);
 
       setAnalysisResult({
-        classification: response.data.ml_result.classification,
-        confidence: response.data.ml_result.confidence_score,
+        classification: response.data.classification,
+        confidence: response.data.confidence_score,
         stats: finalStats,
+        advanced_stats: response.data.advanced_stats, // V4 HT/FT stats
+        kill_switch_triggered: response.data.kill_switch_triggered,
+        kill_switch_reason: response.data.kill_switch_reason,
       });
     } catch (error: any) {
       console.error("API failed:", error);
@@ -675,7 +774,7 @@ export default function EditorPage() {
           <div className="flex items-center gap-3 min-w-0 flex-1 max-w-[400px]">
             <Link
               to={ROUTES.DASHBOARD}
-              className="flex items-center justify-center h-7 w-7 rounded-md border transition-colors shrink-0"
+              className="flex items-center justify-center h-7 w-7 rounded-md border transition-colors shrink-0 hover:opacity-80"
               style={{
                 borderColor: colors.surface[200],
                 backgroundColor: colors.surface[50],
@@ -718,7 +817,7 @@ export default function EditorPage() {
           </div>
 
           <div
-            className="hidden md:flex items-center gap-1 px-1.5 py-1 rounded-md border"
+            className="hidden md:flex items-center gap-1 px-1.5 py-1 rounded-md border shadow-sm"
             style={{
               backgroundColor: colors.surface[50],
               borderColor: colors.surface[200],
@@ -892,7 +991,7 @@ export default function EditorPage() {
             <button
               type="button"
               onClick={() => setRightPanelOpen((v) => !v)}
-              className="hidden lg:flex items-center justify-center h-7 w-7 rounded-md border transition-colors"
+              className="hidden lg:flex items-center justify-center h-7 w-7 rounded-md border transition-colors hover:opacity-80"
               style={{
                 backgroundColor: rightPanelOpen
                   ? colors.text.primary
@@ -923,7 +1022,7 @@ export default function EditorPage() {
             <button
               onClick={handleEndSession}
               disabled={isSubmitting}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-md text-[11.5px] font-semibold transition-all shadow-sm active:scale-95"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-md text-[11.5px] font-semibold transition-all shadow-sm active:scale-95 hover:opacity-90"
               style={{
                 backgroundColor: brand.action,
                 color: colors.text.light,
@@ -1016,7 +1115,7 @@ export default function EditorPage() {
           >
             <div className="p-5 flex flex-col gap-5 min-w-[280px]">
               <div
-                className="rounded-md p-4 border"
+                className="rounded-md p-4 border shadow-sm"
                 style={{
                   backgroundColor: brand.bgCard,
                   borderColor: colors.surface[200],
