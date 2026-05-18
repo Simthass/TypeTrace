@@ -30,9 +30,11 @@ interface AnalysisResult {
   classification: string;
   confidence: number;
   stats: SessionStats;
-  advanced_stats?: any; // Catches the 28 advanced features from FastAPI V4
+  advanced_stats?: any;
   kill_switch_triggered?: boolean;
   kill_switch_reason?: string;
+  certificate_id?: string; // NEW: Holds the TT26-ID
+  document_hash?: string; // NEW: Holds the SHA-256 Hash
 }
 
 // ─── OPTIONS ──────────────────────────────────────────────────────────────────
@@ -253,6 +255,7 @@ function PremiumReceiptModal({
   onClose: () => void;
 }) {
   const [displayScore, setDisplayScore] = useState(0);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Smooth count-up animation for the confidence score
   useEffect(() => {
@@ -271,6 +274,33 @@ function PremiumReceiptModal({
     };
     requestAnimationFrame(animate);
   }, [result.confidence]);
+
+  const handleDownloadPDF = async () => {
+    if (!result.certificate_id) return;
+    setIsDownloading(true);
+    try {
+      const response = await api.get(
+        `/certificates/${result.certificate_id}/pdf`,
+        {
+          responseType: "blob", // Tell Axios we expect a binary file
+        },
+      );
+
+      // Create a temporary URL to trigger the browser download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `TypeTrace_${result.certificate_id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+    } catch (error) {
+      console.error("Failed to download PDF:", error);
+      alert("Failed to generate PDF. Please try again from the Dashboard.");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const isHuman = result.classification === "HUMAN";
   const badgeColor = isHuman ? brand.humanAccent : brand.aiAccent;
@@ -302,7 +332,7 @@ function PremiumReceiptModal({
               className="text-[11px] font-mono mt-0.5"
               style={{ color: colors.text.secondary }}
             >
-              ID: {Math.random().toString(36).substring(2, 10).toUpperCase()}
+              ID: {result.certificate_id || "Generating..."}
             </div>
           </div>
           <div
@@ -331,7 +361,7 @@ function PremiumReceiptModal({
 
         {/* Hero Score with SVG Ring */}
         <div
-          className="px-6 py-10 flex flex-col items-center justify-center border-b bg-surface-50/50 relative"
+          className="px-6 py-8 flex flex-col items-center justify-center border-b bg-surface-50/50 relative"
           style={{ borderColor: colors.surface[100] }}
         >
           <div className="relative flex items-center justify-center mb-3">
@@ -389,6 +419,27 @@ function PremiumReceiptModal({
           )}
         </div>
 
+        {/* Document Hash Display */}
+        <div
+          className="px-6 py-3 border-b flex justify-between items-center bg-white"
+          style={{ borderColor: colors.surface[100] }}
+        >
+          <span
+            className="text-[10px] font-bold uppercase tracking-widest"
+            style={{ color: colors.text.secondary }}
+          >
+            SHA-256 Hash
+          </span>
+          <span
+            className="text-[10.5px] font-mono"
+            style={{ color: colors.text.primary }}
+          >
+            {result.document_hash
+              ? `${result.document_hash.substring(0, 16)}...${result.document_hash.substring(result.document_hash.length - 8)}`
+              : "—"}
+          </span>
+        </div>
+
         {/* Advanced ML Features Grid (V4 Dataset Features) */}
         <div
           className="bg-surface-50 p-5 border-b"
@@ -433,7 +484,7 @@ function PremiumReceiptModal({
                 className="flex flex-col bg-white border rounded-md p-3 shadow-sm transition-all duration-500 ease-out transform"
                 style={{
                   borderColor: colors.surface[200],
-                  animation: `fadeSlideUp 0.5s ease-out ${i * 0.1}s forwards`, // Staggered CSS animation
+                  animation: `fadeSlideUp 0.5s ease-out ${i * 0.1}s forwards`,
                 }}
               >
                 <span
@@ -454,7 +505,40 @@ function PremiumReceiptModal({
         </div>
 
         {/* Action Footer */}
-        <div className="p-4 bg-white">
+        <div className="p-4 bg-white flex flex-col gap-2">
+          {result.certificate_id && (
+            <button
+              onClick={handleDownloadPDF}
+              disabled={isDownloading}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-[13px] font-bold transition-all shadow-sm hover:opacity-90 active:scale-[0.98] border"
+              style={{
+                backgroundColor: isDownloading ? colors.surface[50] : "#fff",
+                color: colors.text.primary,
+                borderColor: colors.surface[200],
+              }}
+            >
+              {isDownloading ? (
+                <span className="animate-pulse">Generating PDF...</span>
+              ) : (
+                <>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Download Official Certificate
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={onClose}
             className="w-full py-3 rounded-lg text-[13px] font-bold transition-all shadow-sm hover:opacity-90 active:scale-[0.98]"
@@ -463,12 +547,11 @@ function PremiumReceiptModal({
               color: brand.bgCard,
             }}
           >
-            Acknowledge & Return
+            Return to Dashboard
           </button>
         </div>
       </div>
 
-      {/* Inline CSS for the staggered animations without needing tailwind-animate plugin */}
       <style>{`
         @keyframes fadeSlideUp {
           from { opacity: 0; transform: translateY(10px); }
@@ -554,7 +637,6 @@ export default function EditorPage() {
           ? Math.round(ikis.reduce((a, b) => a + b, 0) / ikis.length)
           : 0;
 
-      // FIXED Frontend Net WPM Math
       const wpm = seconds > 0 ? Math.round((wordCount / seconds) * 60) : 0;
 
       const deletions = keystrokeLog.current.filter(
@@ -673,7 +755,6 @@ export default function EditorPage() {
       ).length;
       const finalPauses = finalIkis.filter((v) => v > 1000).length;
 
-      // FIXED Submission WPM Math
       const finalWordCount =
         text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
       const finalWpm =
@@ -696,16 +777,17 @@ export default function EditorPage() {
         stats: finalStats,
       };
 
-      // Ensure API calls pass the JWT Token (handled by Axios interceptor in api.ts)
       const response = await api.post("/sessions/analyze", payload);
 
       setAnalysisResult({
         classification: response.data.classification,
         confidence: response.data.confidence_score,
         stats: finalStats,
-        advanced_stats: response.data.advanced_stats, // V4 HT/FT stats
+        advanced_stats: response.data.advanced_stats,
         kill_switch_triggered: response.data.kill_switch_triggered,
         kill_switch_reason: response.data.kill_switch_reason,
+        certificate_id: response.data.certificate_id, // Catches the new Cert ID
+        document_hash: response.data.document_hash, // Catches the SHA-256
       });
     } catch (error: any) {
       console.error("API failed:", error);
