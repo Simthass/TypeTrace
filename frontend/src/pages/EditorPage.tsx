@@ -12,6 +12,7 @@ interface KeystrokeEvent {
   timestamp: number;
   down_time: number;
   up_time: number | null;
+  // FIX: dwell_time is patched in by handleKeyUp, so it starts null on keydown
   dwell_time: number | null;
   flight_time: number | null;
   documentLength: number;
@@ -30,11 +31,19 @@ interface AnalysisResult {
   classification: string;
   confidence: number;
   stats: SessionStats;
-  advanced_stats?: any;
+  advanced_stats?: {
+    ht_mean?: number;
+    ft_mean?: number;
+    ft_entropy?: number;
+    ft_autocorr?: number;
+    burst_ratio?: number;
+    pause_ratio?: number;
+    net_wpm?: number;
+  };
   kill_switch_triggered?: boolean;
   kill_switch_reason?: string;
-  certificate_id?: string; // NEW: Holds the TT26-ID
-  document_hash?: string; // NEW: Holds the SHA-256 Hash
+  certificate_id?: string;
+  document_hash?: string;
 }
 
 // ─── OPTIONS ──────────────────────────────────────────────────────────────────
@@ -58,7 +67,7 @@ const LINE_OPTIONS = [
 
 const WORD_GOALS = [250, 500, 750, 1000, 1500, 2000];
 
-// ─── ANIMATED IKI WAVEFORM ────────────────────────────────────────────────────
+// ─── IKI WAVEFORM ─────────────────────────────────────────────────────────────
 function IkiWaveform({ active }: { active: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>(0);
@@ -156,13 +165,16 @@ function StatPill({
 }) {
   return (
     <div
-      className="flex flex-col items-start gap-1 px-3 py-2.5 rounded-md border shadow-sm transition-colors"
+      className="flex flex-col items-start gap-1 px-3 py-2.5 rounded-md border shadow-sm"
       style={{
         backgroundColor: brand.bgCard,
         borderColor: colors.surface[200],
       }}
     >
-      <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-widest">
+      <span
+        className="text-[10px] font-semibold uppercase tracking-widest"
+        style={{ color: colors.text.secondary }}
+      >
         {label}
       </span>
       <span
@@ -213,7 +225,6 @@ function ToolBtn({
 function WordGoalBar({ current, goal }: { current: number; goal: number }) {
   const pct = Math.min((current / goal) * 100, 100);
   const done = pct >= 100;
-
   return (
     <div className="flex flex-col gap-1.5 w-full">
       <div className="flex justify-between items-center">
@@ -231,11 +242,11 @@ function WordGoalBar({ current, goal }: { current: number; goal: number }) {
         </span>
       </div>
       <div
-        className="h-1 rounded-none overflow-hidden"
+        className="h-1 overflow-hidden"
         style={{ backgroundColor: colors.surface[200] }}
       >
         <div
-          className="h-full rounded-none transition-all duration-500"
+          className="h-full transition-all duration-500"
           style={{
             width: `${pct}%`,
             backgroundColor: done ? brand.humanAccent : colors.text.primary,
@@ -246,34 +257,26 @@ function WordGoalBar({ current, goal }: { current: number; goal: number }) {
   );
 }
 
-// ─── PREMIUM RECEIPT MODAL (SaaS Grade) ───────────────────────────────────────
-function PremiumReceiptModal({
+// ─── ANALYSIS RESULTS MODAL — Professional SaaS standard ─────────────────────
+// Design: clean data-dense layout, monospaced metrics, newspaper-style hierarchy.
+// No gradients, no glassmorphism, no glow effects.
+function AnalysisModal({
   result,
   onClose,
 }: {
   result: AnalysisResult;
   onClose: () => void;
 }) {
-  const [displayScore, setDisplayScore] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  // Smooth count-up animation for the confidence score
-  useEffect(() => {
-    let start = 0;
-    const end = result.confidence;
-    const duration = 1500;
-    const startTime = performance.now();
+  const isHuman = result.classification === "HUMAN";
+  const conf = result.confidence;
 
-    const animate = (time: number) => {
-      const progress = Math.min((time - startTime) / duration, 1);
-      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-      setDisplayScore(
-        Number((start + (end - start) * easeOutQuart).toFixed(1)),
-      );
-      if (progress < 1) requestAnimationFrame(animate);
-    };
-    requestAnimationFrame(animate);
-  }, [result.confidence]);
+  // Confidence display colour: green ≥ 90, amber 70–89, red < 70
+  const confColor = conf >= 90 ? "#16a34a" : conf >= 70 ? "#d97706" : "#dc2626";
+
+  const advStats = result.advanced_stats ?? {};
 
   const handleDownloadPDF = async () => {
     if (!result.certificate_id) return;
@@ -282,11 +285,9 @@ function PremiumReceiptModal({
       const response = await api.get(
         `/certificates/${result.certificate_id}/pdf`,
         {
-          responseType: "blob", // Tell Axios we expect a binary file
+          responseType: "blob",
         },
       );
-
-      // Create a temporary URL to trigger the browser download
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
@@ -294,275 +295,336 @@ function PremiumReceiptModal({
       document.body.appendChild(link);
       link.click();
       link.parentNode?.removeChild(link);
-    } catch (error) {
-      console.error("Failed to download PDF:", error);
-      alert("Failed to generate PDF. Please try again from the Dashboard.");
+    } catch {
+      alert("PDF generation failed. Try again from the Dashboard.");
     } finally {
       setIsDownloading(false);
     }
   };
 
-  const isHuman = result.classification === "HUMAN";
-  const badgeColor = isHuman ? brand.humanAccent : brand.aiAccent;
-
-  // Circle Animation Math
-  const radius = 38;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (displayScore / 100) * circumference;
+  const handleCopyHash = () => {
+    if (result.document_hash) {
+      navigator.clipboard.writeText(result.document_hash);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#050505]/60 backdrop-blur-[2px] transition-opacity duration-300">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: "rgba(5,5,5,0.55)" }}
+    >
+      {/* Modal container — fixed width, white, bordered, no shadow blur */}
       <div
-        className="w-full max-w-[460px] rounded-xl shadow-2xl overflow-hidden border bg-white transform transition-all duration-500 scale-100 opacity-100"
-        style={{ borderColor: colors.surface[200] }}
+        className="w-full max-w-[520px] border overflow-hidden rounded-md"
+        style={{
+          backgroundColor: "#ffffff",
+          borderColor: colors.surface[300] ?? "#d1d5db",
+          boxShadow: "0 4px 24px 0 rgba(0,0,0,0.10)",
+        }}
       >
-        {/* Header */}
+        {/* ── Top status bar ── */}
         <div
-          className="px-6 py-5 border-b flex justify-between items-center"
-          style={{ borderColor: colors.surface[100] }}
+          className="flex items-center justify-between px-5 py-3 border-b"
+          style={{
+            backgroundColor: isHuman ? "#f0fdf4" : "#fef2f2",
+            borderColor: isHuman ? "#bbf7d0" : "#fecaca",
+          }}
         >
-          <div>
-            <h2
-              className="text-[15px] font-bold tracking-tight"
-              style={{ color: colors.text.primary }}
-            >
-              Cryptographic Receipt
-            </h2>
+          <div className="flex items-center gap-2.5">
             <div
-              className="text-[11px] font-mono mt-0.5"
-              style={{ color: colors.text.secondary }}
+              className="h-2 w-2 rounded-full"
+              style={{ backgroundColor: isHuman ? "#16a34a" : "#dc2626" }}
+            />
+            <span
+              className="text-[11px] font-bold tracking-[0.12em] uppercase"
+              style={{ color: isHuman ? "#15803d" : "#b91c1c" }}
             >
-              ID: {result.certificate_id || "Generating..."}
-            </div>
+              {isHuman ? "Human Authored" : "Synthetic / AI-Assisted"}
+            </span>
           </div>
-          <div
-            className="flex items-center gap-2 px-2.5 py-1 rounded-md border transition-colors duration-500"
-            style={{
-              color: badgeColor,
-              borderColor: `${badgeColor}40`,
-              backgroundColor: `${badgeColor}10`,
-            }}
+          <span
+            className="text-[10px] font-mono"
+            style={{ color: colors.text.secondary }}
           >
-            <span className="h-1.5 w-1.5 rounded-full relative">
-              <span
-                className="absolute inset-0 rounded-full animate-ping opacity-75"
-                style={{ backgroundColor: badgeColor }}
-              ></span>
-              <span
-                className="relative inline-flex rounded-full h-1.5 w-1.5"
-                style={{ backgroundColor: badgeColor }}
-              ></span>
-            </span>
-            <span className="text-[10px] font-bold tracking-widest uppercase">
-              {result.classification}
-            </span>
-          </div>
+            {result.certificate_id ?? "—"}
+          </span>
         </div>
 
-        {/* Hero Score with SVG Ring */}
-        <div
-          className="px-6 py-8 flex flex-col items-center justify-center border-b bg-surface-50/50 relative"
-          style={{ borderColor: colors.surface[100] }}
-        >
-          <div className="relative flex items-center justify-center mb-3">
-            {/* Background Track */}
-            <svg width="120" height="120" className="rotate-[-90deg]">
-              <circle
-                cx="60"
-                cy="60"
-                r={radius}
-                fill="none"
-                stroke={colors.surface[200]}
-                strokeWidth="6"
-              />
-              {/* Animated Progress Ring */}
-              <circle
-                cx="60"
-                cy="60"
-                r={radius}
-                fill="none"
-                stroke={badgeColor}
-                strokeWidth="6"
-                strokeLinecap="round"
-                style={{
-                  strokeDasharray: circumference,
-                  strokeDashoffset: strokeDashoffset,
-                  transition:
-                    "stroke-dashoffset 1.5s cubic-bezier(0.22, 1, 0.36, 1)",
-                }}
-              />
-            </svg>
-            <div className="absolute flex flex-col items-center justify-center">
+        {/* ── Main content ── */}
+        <div className="px-5 pt-5 pb-4 flex flex-col gap-0">
+          {/* Confidence + kill-switch row */}
+          <div
+            className="flex items-start justify-between pb-4 border-b mb-4"
+            style={{ borderColor: colors.surface[100] ?? "#f3f4f6" }}
+          >
+            <div>
               <div
-                className="text-[32px] font-mono font-bold leading-none tabular-nums"
+                className="text-[11px] font-semibold uppercase tracking-widest mb-1"
+                style={{ color: colors.text.secondary }}
+              >
+                Confidence
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span
+                  className="text-[44px] font-mono font-bold leading-none tabular-nums"
+                  style={{ color: confColor }}
+                >
+                  {conf.toFixed(1)}
+                </span>
+                <span
+                  className="text-[18px] font-mono"
+                  style={{ color: colors.text.secondary }}
+                >
+                  %
+                </span>
+              </div>
+              {result.kill_switch_triggered && (
+                <div
+                  className="mt-2 flex items-start gap-1.5 text-[11px] font-medium"
+                  style={{ color: "#b45309" }}
+                >
+                  <span>⚠</span>
+                  <span>
+                    {result.kill_switch_reason ??
+                      "Deterministic rule triggered"}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Typing speed summary */}
+            <div className="text-right">
+              <div
+                className="text-[11px] font-semibold uppercase tracking-widest mb-1"
+                style={{ color: colors.text.secondary }}
+              >
+                Typing Speed
+              </div>
+              <div
+                className="text-[28px] font-mono font-bold leading-none"
                 style={{ color: colors.text.primary }}
               >
-                {displayScore}
-                <span className="text-[16px] text-surface-400">%</span>
+                {result.stats.wpm}
+                <span
+                  className="text-[13px] font-normal ml-1"
+                  style={{ color: colors.text.secondary }}
+                >
+                  wpm
+                </span>
+              </div>
+              <div
+                className="text-[11px] font-mono mt-1"
+                style={{ color: colors.text.secondary }}
+              >
+                {result.stats.keystrokes} keystrokes · {result.stats.deletions}{" "}
+                del
               </div>
             </div>
           </div>
-          <span
-            className="text-[11px] font-bold uppercase tracking-widest"
-            style={{ color: colors.text.secondary }}
-          >
-            Confidence Score
-          </span>
 
-          {/* Kill Switch Warning */}
-          {result.kill_switch_triggered && (
-            <div className="mt-4 px-4 py-2 rounded-md bg-red-50 border border-red-100 text-red-600 text-[11.5px] font-medium text-center animate-pulse">
-              ⚠️{" "}
-              {result.kill_switch_reason ||
-                "Deterministic Kill Switch Triggered"}
+          {/* Biometric feature grid — 6 cells, 3 cols */}
+          <div className="mb-4">
+            <div
+              className="text-[10px] font-bold uppercase tracking-widest mb-2.5"
+              style={{ color: colors.text.secondary }}
+            >
+              Extracted Biometric Features
             </div>
-          )}
-        </div>
+            <div
+              className="grid grid-cols-3 gap-px"
+              style={{ backgroundColor: colors.surface[200] }}
+            >
+              {[
+                {
+                  label: "HT Mean",
+                  value:
+                    advStats.ht_mean != null ? `${advStats.ht_mean}ms` : "—",
+                },
+                {
+                  label: "FT Mean",
+                  value:
+                    advStats.ft_mean != null ? `${advStats.ft_mean}ms` : "—",
+                },
+                {
+                  label: "FT Entropy",
+                  value:
+                    advStats.ft_entropy != null
+                      ? advStats.ft_entropy.toFixed(3)
+                      : "—",
+                },
+                {
+                  label: "FT Autocorr",
+                  value:
+                    advStats.ft_autocorr != null
+                      ? advStats.ft_autocorr.toFixed(3)
+                      : "—",
+                },
+                {
+                  label: "Burst Ratio",
+                  value:
+                    advStats.burst_ratio != null
+                      ? advStats.burst_ratio.toFixed(3)
+                      : "—",
+                },
+                {
+                  label: "Pause Ratio",
+                  value:
+                    advStats.pause_ratio != null
+                      ? advStats.pause_ratio.toFixed(3)
+                      : "—",
+                },
+              ].map(({ label, value }) => (
+                <div
+                  key={label}
+                  className="flex flex-col px-3 py-2.5"
+                  style={{ backgroundColor: "#ffffff" }}
+                >
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-wider mb-1"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    {label}
+                  </span>
+                  <span
+                    className="text-[14px] font-mono font-semibold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
 
-        {/* Document Hash Display */}
-        <div
-          className="px-6 py-3 border-b flex justify-between items-center bg-white"
-          style={{ borderColor: colors.surface[100] }}
-        >
-          <span
-            className="text-[10px] font-bold uppercase tracking-widest"
-            style={{ color: colors.text.secondary }}
-          >
-            SHA-256 Hash
-          </span>
-          <span
-            className="text-[10.5px] font-mono"
-            style={{ color: colors.text.primary }}
-          >
-            {result.document_hash
-              ? `${result.document_hash.substring(0, 16)}...${result.document_hash.substring(result.document_hash.length - 8)}`
-              : "—"}
-          </span>
-        </div>
-
-        {/* Advanced ML Features Grid (V4 Dataset Features) */}
-        <div
-          className="bg-surface-50 p-5 border-b"
-          style={{ borderColor: colors.surface[100] }}
-        >
-          <span
-            className="block text-[10px] font-bold uppercase tracking-widest mb-3"
-            style={{ color: colors.text.secondary }}
-          >
-            Extracted V4 Features
-          </span>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "Net WPM", value: result.stats.wpm },
-              {
-                label: "HT Mean",
-                value: result.advanced_stats?.ht_mean
-                  ? `${result.advanced_stats.ht_mean}ms`
-                  : "—",
-              },
-              {
-                label: "FT Mean",
-                value: result.advanced_stats?.ft_mean
-                  ? `${result.advanced_stats.ft_mean}ms`
-                  : "—",
-              },
-              {
-                label: "FT Entropy",
-                value: result.advanced_stats?.ft_entropy || "—",
-              },
-              {
-                label: "Autocorr",
-                value: result.advanced_stats?.ft_autocorr || "—",
-              },
-              {
-                label: "Burst Ratio",
-                value: result.advanced_stats?.burst_ratio || "—",
-              },
-            ].map((stat, i) => (
-              <div
-                key={i}
-                className="flex flex-col bg-white border rounded-md p-3 shadow-sm transition-all duration-500 ease-out transform"
-                style={{
-                  borderColor: colors.surface[200],
-                  animation: `fadeSlideUp 0.5s ease-out ${i * 0.1}s forwards`,
-                }}
-              >
+          {/* SHA-256 hash row */}
+          {result.document_hash && (
+            <div
+              className="flex items-center justify-between px-3 py-2.5 border mb-4"
+              style={{
+                backgroundColor: colors.surface[50] ?? "#f9fafb",
+                borderColor: colors.surface[200],
+              }}
+            >
+              <div className="flex flex-col gap-0.5 min-w-0 mr-3">
                 <span
-                  className="text-[9px] font-bold uppercase"
+                  className="text-[9px] font-bold uppercase tracking-wider"
                   style={{ color: colors.text.secondary }}
                 >
-                  {stat.label}
+                  SHA-256 Document Hash
                 </span>
                 <span
-                  className="text-[13px] font-mono font-semibold mt-0.5"
+                  className="text-[10.5px] font-mono truncate"
+                  style={{ color: colors.text.primary }}
+                  title={result.document_hash}
+                >
+                  {result.document_hash.substring(0, 20)}…
+                  {result.document_hash.substring(56)}
+                </span>
+              </div>
+              <button
+                onClick={handleCopyHash}
+                className="shrink-0 text-[10px] font-semibold px-2.5 py-1.5 border transition-colors"
+                style={{
+                  backgroundColor: copied ? colors.surface[100] : "#fff",
+                  borderColor: colors.surface[200],
+                  color: copied ? "#16a34a" : colors.text.secondary,
+                }}
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          )}
+
+          {/* Session metadata row */}
+          <div
+            className="grid grid-cols-3 gap-px mb-5"
+            style={{ backgroundColor: colors.surface[200] }}
+          >
+            {[
+              {
+                label: "Duration",
+                value: `${Math.round(result.stats.sessionSeconds)}s`,
+              },
+              { label: "Pauses", value: result.stats.pauses },
+              { label: "Avg IKI", value: `${result.stats.avgIki}ms` },
+            ].map(({ label, value }) => (
+              <div
+                key={label}
+                className="px-3 py-2"
+                style={{ backgroundColor: "#ffffff" }}
+              >
+                <span
+                  className="block text-[9px] font-bold uppercase tracking-wider mb-0.5"
+                  style={{ color: colors.text.secondary }}
+                >
+                  {label}
+                </span>
+                <span
+                  className="text-[13px] font-mono font-medium"
                   style={{ color: colors.text.primary }}
                 >
-                  {stat.value}
+                  {value}
                 </span>
               </div>
             ))}
           </div>
-        </div>
 
-        {/* Action Footer */}
-        <div className="p-4 bg-white flex flex-col gap-2">
-          {result.certificate_id && (
+          {/* Action buttons */}
+          <div className="flex flex-col gap-2">
+            {result.certificate_id && (
+              <button
+                onClick={handleDownloadPDF}
+                disabled={isDownloading}
+                className="flex items-center justify-center gap-2 w-full py-2.5 border text-[12px] font-semibold transition-colors"
+                style={{
+                  backgroundColor: isDownloading ? colors.surface[50] : "#fff",
+                  borderColor: colors.surface[300] ?? "#d1d5db",
+                  color: colors.text.primary,
+                  cursor: isDownloading ? "not-allowed" : "pointer",
+                }}
+              >
+                {isDownloading ? (
+                  "Generating certificate…"
+                ) : (
+                  <>
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Download Certificate PDF
+                  </>
+                )}
+              </button>
+            )}
             <button
-              onClick={handleDownloadPDF}
-              disabled={isDownloading}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-[13px] font-bold transition-all shadow-sm hover:opacity-90 active:scale-[0.98] border"
+              onClick={onClose}
+              className="w-full py-2.5 text-[12px] font-semibold transition-colors"
               style={{
-                backgroundColor: isDownloading ? colors.surface[50] : "#fff",
-                color: colors.text.primary,
-                borderColor: colors.surface[200],
+                backgroundColor: colors.text.primary,
+                color: "#ffffff",
               }}
             >
-              {isDownloading ? (
-                <span className="animate-pulse">Generating PDF...</span>
-              ) : (
-                <>
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  Download Official Certificate
-                </>
-              )}
+              Return to Dashboard
             </button>
-          )}
-          <button
-            onClick={onClose}
-            className="w-full py-3 rounded-lg text-[13px] font-bold transition-all shadow-sm hover:opacity-90 active:scale-[0.98]"
-            style={{
-              backgroundColor: colors.text.primary,
-              color: brand.bgCard,
-            }}
-          >
-            Return to Dashboard
-          </button>
+          </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
     </div>
   );
 }
 
-// ─── SESSION TIMER HOOK ───────────────────────────────────────────────────────
+// ─── SESSION TIMER ─────────────────────────────────────────────────────────────
 function useSessionTimer() {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
@@ -574,7 +636,7 @@ function useSessionTimer() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN EDITOR PAGE
+// EDITOR PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 export default function EditorPage() {
   const navigate = useNavigate();
@@ -595,15 +657,14 @@ export default function EditorPage() {
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
 
-  // Interaction States
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
     null,
   );
 
-  // Biometric Engine Refs
+  // Biometric capture
   const keystrokeLog = useRef<KeystrokeEvent[]>([]);
-  const activeKeys = useRef<{ [key: string]: number }>({});
+  const activeKeys = useRef<{ [code: string]: number }>({});
   const lastKeydownTime = useRef<number | null>(null);
   const ikiValues = useRef<number[]>([]);
 
@@ -621,6 +682,7 @@ export default function EditorPage() {
   const charCount = text.length;
   const readTime = Math.max(1, Math.ceil(wordCount / 200));
 
+  // Auto-save indicator
   useEffect(() => {
     const t = setInterval(() => {
       if (text.length > 0) setLastSaved(new Date());
@@ -628,7 +690,7 @@ export default function EditorPage() {
     return () => clearInterval(t);
   }, [text, title]);
 
-  // UI Stats Updater
+  // Stats update every 3 seconds
   useEffect(() => {
     if (seconds > 0 && seconds % 3 === 0) {
       const ikis = ikiValues.current;
@@ -636,14 +698,11 @@ export default function EditorPage() {
         ikis.length > 0
           ? Math.round(ikis.reduce((a, b) => a + b, 0) / ikis.length)
           : 0;
-
       const wpm = seconds > 0 ? Math.round((wordCount / seconds) * 60) : 0;
-
       const deletions = keystrokeLog.current.filter(
         (k) => k.key === "Backspace" || k.key === "Delete",
       ).length;
       const pauses = ikis.filter((v) => v > 1000).length;
-
       setStats({
         wpm,
         keystrokes: keystrokeLog.current.filter((k) => k.type === "keydown")
@@ -656,18 +715,19 @@ export default function EditorPage() {
     }
   }, [seconds, text.length]);
 
+  // ── KEY DOWN: records flight_time, stores down_time in activeKeys ──────────
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       const now = Date.now();
       if (e.repeat) return;
 
-      let flightTime = null;
+      let flightTime: number | null = null;
       if (lastKeydownTime.current !== null) {
         flightTime = now - lastKeydownTime.current;
         if (flightTime < 5000) ikiValues.current.push(flightTime);
       }
       lastKeydownTime.current = now;
-      activeKeys.current[e.code] = now;
+      activeKeys.current[e.code] = now; // store timestamp for dwell calculation
 
       keystrokeLog.current.push({
         key: e.key,
@@ -676,7 +736,7 @@ export default function EditorPage() {
         timestamp: now,
         down_time: now,
         up_time: null,
-        dwell_time: null,
+        dwell_time: null, // FIX: patched by handleKeyUp when the key is released
         flight_time: flightTime,
         documentLength: text.length,
       });
@@ -688,30 +748,35 @@ export default function EditorPage() {
     [text.length],
   );
 
+  // ── KEY UP: computes dwell_time and patches the matching keydown event ─────
+  // FIX: dwell_time is now correctly written back to the keydown event so the
+  //      Python extractor (which reads type=="keydown") can find it.
   const handleKeyUp = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       const now = Date.now();
       const downTime = activeKeys.current[e.code];
 
-      let dwellTime = null;
       if (downTime) {
-        dwellTime = now - downTime;
+        const dwellTime = now - downTime;
         delete activeKeys.current[e.code];
-      }
 
-      keystrokeLog.current.push({
-        key: e.key,
-        keyCode: e.keyCode,
-        type: "keyup",
-        timestamp: now,
-        down_time: downTime || now,
-        up_time: now,
-        dwell_time: dwellTime,
-        flight_time: null,
-        documentLength: text.length,
-      });
+        // Patch dwell_time back onto the most-recent matching keydown event.
+        // Iterate backwards — the matching event is almost always the last entry.
+        for (let i = keystrokeLog.current.length - 1; i >= 0; i--) {
+          const ev = keystrokeLog.current[i];
+          if (
+            ev.type === "keydown" &&
+            ev.key === e.key &&
+            ev.dwell_time === null
+          ) {
+            ev.dwell_time = dwellTime; // patch in-place
+            ev.up_time = now;
+            break;
+          }
+        }
+      }
     },
-    [text.length],
+    [],
   );
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) =>
@@ -736,14 +801,12 @@ export default function EditorPage() {
 
   const handleEndSession = async () => {
     if (isSubmitting) return;
-
     if (text.trim().length === 0) {
-      alert("Session is empty. Please type or paste some text first.");
+      alert("Session is empty. Please type some text first.");
       return;
     }
 
     setIsSubmitting(true);
-
     try {
       const finalIkis = ikiValues.current;
       const finalAvgIki =
@@ -754,13 +817,9 @@ export default function EditorPage() {
         (k) => k.key === "Backspace" || k.key === "Delete",
       ).length;
       const finalPauses = finalIkis.filter((v) => v > 1000).length;
+      const finalWpm = seconds > 0 ? Math.round((wordCount / seconds) * 60) : 0;
 
-      const finalWordCount =
-        text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
-      const finalWpm =
-        seconds > 0 ? Math.round((finalWordCount / seconds) * 60) : 0;
-
-      const finalStats = {
+      const finalStats: SessionStats = {
         wpm: finalWpm,
         keystrokes: keystrokeLog.current.filter((k) => k.type === "keydown")
           .length,
@@ -770,14 +829,12 @@ export default function EditorPage() {
         sessionSeconds: seconds,
       };
 
-      const payload = {
+      const response = await api.post("/sessions/analyze", {
         title: title || "Untitled Document",
         text_content: text,
         keystroke_array: keystrokeLog.current,
         stats: finalStats,
-      };
-
-      const response = await api.post("/sessions/analyze", payload);
+      });
 
       setAnalysisResult({
         classification: response.data.classification,
@@ -786,14 +843,14 @@ export default function EditorPage() {
         advanced_stats: response.data.advanced_stats,
         kill_switch_triggered: response.data.kill_switch_triggered,
         kill_switch_reason: response.data.kill_switch_reason,
-        certificate_id: response.data.certificate_id, // Catches the new Cert ID
-        document_hash: response.data.document_hash, // Catches the SHA-256
+        certificate_id: response.data.certificate_id,
+        document_hash: response.data.document_hash,
       });
     } catch (error: any) {
-      console.error("API failed:", error);
+      console.error("Analysis failed:", error);
       alert(
-        error.response?.data?.detail ||
-          "Failed to analyze session. Is the Python server running?",
+        error.response?.data?.detail ??
+          "Analysis failed. Is the server running?",
       );
     } finally {
       setIsSubmitting(false);
@@ -811,24 +868,16 @@ export default function EditorPage() {
   };
 
   const signalCount = keystrokeLog.current.length;
-  let signalStatus = {
-    label: "Insufficient Data",
-    color: colors.surface[400],
-    pct: 15,
-  };
-  if (signalCount > 50) {
-    signalStatus = {
-      label: "High Confidence Ready",
-      color: brand.humanAccent,
-      pct: 100,
-    };
-  } else if (signalCount > 20) {
-    signalStatus = {
-      label: "Calibrating",
-      color: brand.suspiciousAccent,
-      pct: (signalCount / 50) * 100,
-    };
-  }
+  const signalStatus =
+    signalCount > 50
+      ? { label: "High Confidence Ready", color: brand.humanAccent, pct: 100 }
+      : signalCount > 20
+        ? {
+            label: "Calibrating",
+            color: brand.suspiciousAccent,
+            pct: (signalCount / 50) * 100,
+          }
+        : { label: "Insufficient Data", color: colors.surface[400], pct: 15 };
 
   useEffect(() => {
     return () => {
@@ -842,9 +891,7 @@ export default function EditorPage() {
         className="flex flex-col h-screen overflow-hidden font-sans"
         style={{ backgroundColor: brand.bgPage }}
       >
-        {/* ══════════════════════════════════════════════════════
-            TOP BAR 
-        ══════════════════════════════════════════════════════ */}
+        {/* ── TOP BAR ─────────────────────────────────────────────────────── */}
         <header
           className="shrink-0 flex items-center justify-between px-5 gap-4 border-b z-20"
           style={{
@@ -877,7 +924,6 @@ export default function EditorPage() {
                 <path d="M9 3L5 7.5 9 12" />
               </svg>
             </Link>
-
             <input
               type="text"
               value={title}
@@ -898,6 +944,7 @@ export default function EditorPage() {
             />
           </div>
 
+          {/* Toolbar */}
           <div
             className="hidden md:flex items-center gap-1 px-1.5 py-1 rounded-md border shadow-sm"
             style={{
@@ -1003,7 +1050,7 @@ export default function EditorPage() {
               <ToolBtn
                 active={showGoalPicker}
                 onClick={() => setShowGoalPicker((v) => !v)}
-                title="Set word goal"
+                title="Word goal"
               >
                 <svg
                   width="12"
@@ -1069,6 +1116,7 @@ export default function EditorPage() {
             </div>
           </div>
 
+          {/* Right controls */}
           <div className="flex items-center gap-3 shrink-0">
             <button
               type="button"
@@ -1081,9 +1129,7 @@ export default function EditorPage() {
                 borderColor: rightPanelOpen
                   ? colors.text.primary
                   : colors.surface[200],
-                color: rightPanelOpen
-                  ? colors.text.light
-                  : colors.text.secondary,
+                color: rightPanelOpen ? "#ffffff" : colors.text.secondary,
               }}
               title="Toggle inspector"
             >
@@ -1100,14 +1146,13 @@ export default function EditorPage() {
                 <path d="M15 3v18" />
               </svg>
             </button>
-
             <button
               onClick={handleEndSession}
               disabled={isSubmitting}
               className="flex items-center gap-2 px-3 py-1.5 rounded-md text-[11.5px] font-semibold transition-all shadow-sm active:scale-95 hover:opacity-90"
               style={{
                 backgroundColor: brand.action,
-                color: colors.text.light,
+                color: "#ffffff",
                 opacity: isSubmitting ? 0.7 : 1,
                 cursor: isSubmitting ? "not-allowed" : "pointer",
               }}
@@ -1132,24 +1177,21 @@ export default function EditorPage() {
                   />
                 )}
               </svg>
-              {isSubmitting ? "Analyzing..." : "End & Analyse"}
+              {isSubmitting ? "Analysing…" : "End & Analyse"}
             </button>
           </div>
         </header>
 
-        {/* ══════════════════════════════════════════════════════
-            MAIN CONTENT AREA
-        ══════════════════════════════════════════════════════ */}
-        <div className="flex flex-1 overflow-hidden relative">
+        {/* ── MAIN CONTENT ─────────────────────────────────────────────────── */}
+        <div className="flex flex-1 overflow-hidden">
           <main
             className="flex-1 overflow-y-auto flex justify-center transition-colors duration-300"
             style={{ backgroundColor: focusMode ? brand.bgPage : brand.bgCard }}
           >
-            <div className="w-full max-w-[1200px] px-8 md:px-16 py-16 flex flex-col gap-0 relative mx-auto">
+            <div className="w-full max-w-[760px] px-8 md:px-16 py-16 flex flex-col gap-0 mx-auto">
               <div className="mb-10 opacity-60">
                 <WordGoalBar current={wordCount} goal={wordGoal} />
               </div>
-
               <textarea
                 ref={textareaRef}
                 value={text}
@@ -1157,7 +1199,7 @@ export default function EditorPage() {
                 onKeyDown={handleKeyDown}
                 onKeyUp={handleKeyUp}
                 onPaste={handlePaste}
-                placeholder="Begin typing to generate your cryptographic proof..."
+                placeholder="Begin typing to generate your cryptographic proof…"
                 spellCheck={false}
                 autoComplete="off"
                 autoCorrect="off"
@@ -1171,7 +1213,6 @@ export default function EditorPage() {
                     : undefined,
                 }}
               />
-
               <div
                 className="flex items-center justify-between pt-6 border-t mt-12"
                 style={{ borderColor: colors.surface[200] }}
@@ -1188,6 +1229,7 @@ export default function EditorPage() {
             </div>
           </main>
 
+          {/* ── RIGHT PANEL ───────────────────────────────────────────────── */}
           <aside
             className={`shrink-0 border-l overflow-y-auto transition-all duration-300 ease-in-out ${rightPanelOpen ? "w-[280px] opacity-100" : "w-0 opacity-0 overflow-hidden"}`}
             style={{
@@ -1196,6 +1238,7 @@ export default function EditorPage() {
             }}
           >
             <div className="p-5 flex flex-col gap-5 min-w-[280px]">
+              {/* Signal strength */}
               <div
                 className="rounded-md p-4 border shadow-sm"
                 style={{
@@ -1214,7 +1257,7 @@ export default function EditorPage() {
                     className="text-[10px] font-mono font-bold"
                     style={{ color: signalStatus.color }}
                   >
-                    {signalCount} Points
+                    {signalCount} pts
                   </span>
                 </div>
                 <div
@@ -1222,7 +1265,7 @@ export default function EditorPage() {
                   style={{ backgroundColor: colors.surface[100] }}
                 >
                   <div
-                    className="h-full transition-all duration-500 ease-out"
+                    className="h-full transition-all duration-500"
                     style={{
                       width: `${signalStatus.pct}%`,
                       backgroundColor: signalStatus.color,
@@ -1230,13 +1273,14 @@ export default function EditorPage() {
                   />
                 </div>
                 <div
-                  className="text-[10px] font-medium transition-colors"
+                  className="text-[10px] font-medium"
                   style={{ color: signalStatus.color }}
                 >
                   {signalStatus.label}
                 </div>
               </div>
 
+              {/* IKI Waveform */}
               <div
                 className="rounded-md border p-4 shadow-sm"
                 style={{
@@ -1269,6 +1313,7 @@ export default function EditorPage() {
                 </div>
               </div>
 
+              {/* Stats grid */}
               <div className="grid grid-cols-2 gap-2">
                 <StatPill label="WPM" value={stats.wpm} highlight />
                 <StatPill label="Keystrokes" value={stats.keystrokes} />
@@ -1276,6 +1321,7 @@ export default function EditorPage() {
                 <StatPill label="Pauses" value={stats.pauses} />
               </div>
 
+              {/* Metadata */}
               <div
                 className="rounded-md border p-4 flex flex-col gap-2 shadow-sm"
                 style={{
@@ -1321,9 +1367,7 @@ export default function EditorPage() {
           </aside>
         </div>
 
-        {/* ══════════════════════════════════════════════════════
-            STATUS BAR 
-        ══════════════════════════════════════════════════════ */}
+        {/* ── STATUS BAR ────────────────────────────────────────────────────── */}
         <footer
           className="shrink-0 flex items-center justify-between px-4 border-t z-20"
           style={{
@@ -1334,7 +1378,7 @@ export default function EditorPage() {
         >
           <div
             className="flex items-center gap-4 text-[10px] font-mono"
-            style={{ color: colors.text.light }}
+            style={{ color: "#ffffff" }}
           >
             <span className="font-semibold uppercase tracking-wider">
               TypeTrace Core
@@ -1345,16 +1389,15 @@ export default function EditorPage() {
                 style={{
                   backgroundColor: isTyping
                     ? brand.humanAccent
-                    : colors.surface[200],
+                    : "rgba(255,255,255,0.3)",
                 }}
               />
               {isTyping ? "Capturing" : "Idle"}
             </span>
           </div>
-
           <div
             className="flex items-center gap-4 text-[10px] font-mono"
-            style={{ color: colors.text.light }}
+            style={{ color: "#ffffff" }}
           >
             <span>{fontClass.replace("font-", "")}</span>
             <span>Ln 1, Col {text.length}</span>
@@ -1368,11 +1411,9 @@ export default function EditorPage() {
         </footer>
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          POST-ANALYSIS MODAL (Rendered at Root Level)
-      ══════════════════════════════════════════════════════ */}
+      {/* Analysis modal rendered at root level */}
       {analysisResult && (
-        <PremiumReceiptModal
+        <AnalysisModal
           result={analysisResult}
           onClose={() => navigate(ROUTES.DASHBOARD)}
         />

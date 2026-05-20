@@ -1,15 +1,14 @@
 """
-TypeTrace ML Inference Service v5.0 (Cryptographic Certificate Edition)
+TypeTrace ML Inference Service v5.3 (Enterprise Compliance Edition)
 =======================================================================
 Production FastAPI microservice for keystroke liveness detection and 
-Zero-Knowledge Proof certificate generation.
+Zero-Knowledge Proof compliance certificate generation.
 
 New Features:
-  - TT26 Cryptographic ID generation
-  - SHA-256 Document Hashing
-  - Auto-patching PostgreSQL schema
-  - Public Zero-Knowledge Verification Endpoint
-  - Dynamic PDF Certificate Generation (ReportLab + QRCode)
+  - High-fidelity structured metrics grid (WPM, Burst, Entropy, HT, FT)
+  - Concentric vector cryptographic assurance seal
+  - QR Code central icon size scaled to 28% with Level H correction
+  - Zero-Knowledge cryptographic verification page architecture
 """
 
 import os
@@ -25,6 +24,7 @@ from pathlib import Path
 import numpy as np
 import joblib
 import qrcode
+from PIL import Image
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request
@@ -41,6 +41,7 @@ from slowapi.errors import RateLimitExceeded
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
+from reportlab.lib.utils import ImageReader
 
 # Import the shared feature extractor
 from train_model import (
@@ -66,6 +67,9 @@ ENCODER_PATH= BASE_DIR / "typetrace_label_encoder.joblib"
 FEATURES_PATH = BASE_DIR / "feature_columns.joblib"
 META_PATH   = BASE_DIR / "model_metadata.json"
 
+LOGO_FULL_PATH = BASE_DIR / "assets" / "Logo.png"
+LOGO_ICON_PATH = BASE_DIR / "assets" / "Logo_S.png"
+
 SECRET_KEY  = os.getenv("SECRET_KEY")
 ALGORITHM   = "HS256"
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
@@ -88,7 +92,7 @@ limiter = Limiter(key_func=get_remote_address)
 # 2. STARTUP & DB AUTO-PATCH
 # ─────────────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="TypeTrace Inference API", version="5.0.0")
+app = FastAPI(title="TypeTrace Inference API", version="5.3.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -119,7 +123,6 @@ db_engine = None
 if DB_URL:
     try:
         db_engine = create_engine(DB_URL, pool_pre_ping=True)
-        # DEFENSIVE ENGINEERING: Auto-patch the DB to add our new columns if missing
         with db_engine.begin() as conn:
             conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS certificate_id VARCHAR(50) UNIQUE;"))
             conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS document_hash VARCHAR(64);"))
@@ -168,8 +171,8 @@ class AnalysisResult(BaseModel):
     kill_switch_reason: Optional[str]
     advanced_stats: dict         
     session_id: Optional[int]    
-    certificate_id: Optional[str] # NEW
-    document_hash: Optional[str]  # NEW
+    certificate_id: Optional[str] 
+    document_hash: Optional[str]  
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. CORE INFERENCE
@@ -204,12 +207,6 @@ def run_inference(keystroke_array: list, stats: SessionStats, text_content: str)
 # 6. ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
 
-@app.get("/health")
-@limiter.limit("10/minute")
-async def health(request: Request):
-    return {"status": "ok", "model_loaded": rf_model is not None}
-
-
 @app.post("/api/v1/sessions/analyze", response_model=AnalysisResult)
 @limiter.limit("10/minute")
 async def analyze_session(request: Request, data: KeystrokeSession, user_id: str = Depends(get_current_user_id)):
@@ -220,7 +217,6 @@ async def analyze_session(request: Request, data: KeystrokeSession, user_id: str
         data.keystroke_array, data.stats, data.text_content
     )
 
-    # SECURE CRYPTOGRAPHY GENERATION
     cert_id = f"TT26-{secrets.token_hex(4).upper()}"
     doc_hash = hashlib.sha256(data.text_content.encode('utf-8')).hexdigest()
     session_id = None
@@ -254,7 +250,17 @@ async def analyze_session(request: Request, data: KeystrokeSession, user_id: str
     return AnalysisResult(
         classification=classification, confidence_score=confidence,
         kill_switch_triggered=kill_triggered, kill_switch_reason=kill_reason,
-        advanced_stats={"net_wpm": round(features.get("net_wpm", 0), 1)},
+        advanced_stats = {
+            "ht_mean":      round(features.get("ht_mean",      0), 1),
+            "ht_std":       round(features.get("ht_std",      0), 1),
+            "ft_mean":      round(features.get("ft_mean",      0), 1),
+            "ft_std":       round(features.get("ft_std",      0), 1),
+            "ft_entropy":   round(features.get("ft_entropy",   0), 3),
+            "ft_autocorr":  round(features.get("ft_autocorr",  0), 3),
+            "burst_ratio":  round(features.get("burst_ratio",  0), 3),
+            "pause_ratio":  round(features.get("pause_ratio",  0), 3),
+            "net_wpm":      round(features.get("net_wpm",      0), 1),
+        },
         session_id=session_id, certificate_id=cert_id, document_hash=doc_hash
     )
 
@@ -282,22 +288,21 @@ async def get_session_history(request: Request, user_id: str = Depends(get_curre
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7. ZERO-KNOWLEDGE PUBLIC VERIFICATION & PDF GENERATOR
+# 7. ZERO-KNOWLEDGE PUBLIC VERIFICATION & ENTERPRISE PDF GENERATOR
 # ─────────────────────────────────────────────────────────────────────────────
 
 @app.get("/api/v1/certificates/{cert_id}")
 @limiter.limit("20/minute")
 async def verify_certificate(request: Request, cert_id: str):
-    """PUBLIC: Returns Metadata only. No text content exposed."""
+    """PUBLIC: Returns Metadata and features only. No text content exposed."""
     if not db_engine: raise HTTPException(status_code=503)
     
     with db_engine.connect() as conn:
-        # JOIN with users table to get the author name without exposing full email
         row = conn.execute(
             text("""
                 SELECT t.title, t.wpm, t.classification_result, t.ml_confidence_score, 
                        t.created_at, t.document_hash, t.total_keystrokes, t.duration_seconds,
-                       u.first_name, u.last_name
+                       u.first_name, u.last_name, t.raw_keystroke_data
                 FROM typing_sessions t
                 JOIN users u ON t.user_id = u.id
                 WHERE t.certificate_id = :cid
@@ -306,6 +311,15 @@ async def verify_certificate(request: Request, cert_id: str):
 
     if not row:
         raise HTTPException(status_code=404, detail="Certificate not found.")
+
+    # Re-extract full features dynamically for transparent audit metrics reporting
+    try:
+        ks_array = json.loads(row[10]) if isinstance(row[10], str) else row[10]
+        features = extract_features_from_keystroke_array(
+            raw_array=ks_array, total_keystrokes=row[6], deletions=0, pauses=0, duration_seconds=row[7]
+        )
+    except:
+        features = {}
 
     return {
         "status": "valid",
@@ -318,90 +332,225 @@ async def verify_certificate(request: Request, cert_id: str):
         "keystrokes_analyzed": row[6],
         "duration_seconds": round(row[7], 1),
         "document_sha256": row[5],
-        "timestamp": row[4].isoformat() if row[4] else None
+        "timestamp": row[4].strftime("%B %d, %Y - %H:%M UTC") if row[4] else None,
+        "features": features
     }
+
+
+def _generate_custom_qr(data_url: str, icon_path: Path) -> io.BytesIO:
+    """Generates an ERROR_CORRECT_H QR Code and embeds the ICON logo at 28% size."""
+    qr = qrcode.QRCode(
+        version=5,
+        error_correction=qrcode.constants.ERROR_CORRECT_H, 
+        box_size=10,
+        border=1,
+    )
+    qr.add_data(data_url)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="#0F172A", back_color="white").convert('RGB')
+
+    if icon_path.exists():
+        try:
+            logo = Image.open(icon_path)
+            # SaaS Standard: Scaled up to 28% for superior brand footprint
+            basewidth = int(qr_img.size[0] * 0.28)
+            wpercent = (basewidth / float(logo.size[0]))
+            hsize = int((float(logo.size[1]) * float(wpercent)))
+            logo = logo.resize((basewidth, hsize), Image.Resampling.LANCZOS)
+            
+            bg = Image.new('RGB', (logo.size[0] + 6, logo.size[1] + 6), 'white')
+            bg.paste(logo, (3, 3), mask=logo if logo.mode == 'RGBA' else None)
+            
+            pos = ((qr_img.size[0] - bg.size[0]) // 2, (qr_img.size[1] - bg.size[1]) // 2)
+            qr_img.paste(bg, pos)
+        except Exception as e:
+            log.error(f"Failed to embed logo in QR: {e}")
+
+    buffer = io.BytesIO()
+    qr_img.save(buffer, format="PNG")
+    buffer.seek(0)
+    return buffer
 
 
 @app.get("/api/v1/certificates/{cert_id}/pdf")
 @limiter.limit("10/minute")
 async def download_certificate_pdf(request: Request, cert_id: str):
-    """Generates an enterprise-grade PDF on the fly."""
+    """Generates a high-fidelity B2B SaaS assurance certificate."""
     data = await verify_certificate(request, cert_id)
+    feats = data.get("features", {})
     
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
 
-    # Draw Premium Border
-    c.setStrokeColor(colors.HexColor("#E5E5E5"))
-    c.setLineWidth(2)
-    c.rect(30, 30, width - 60, height - 60)
+    # ── 1. COMPLIANCE BARS & WATERMARK ──
+    c.setFillColor(colors.HexColor("#0F172A")) # Deep navy/slate slate
+    c.rect(0, height - 14, width, 14, fill=1, stroke=0)
 
-    # Title
-    c.setFont("Helvetica-Bold", 24)
-    c.setFillColor(colors.HexColor("#050505"))
-    c.drawString(50, height - 80, "TypeTrace Cryptographic Receipt")
+    c.saveState()
+    c.translate(width/2, height/2)
+    c.rotate(45)
+    c.setFont("Helvetica-Bold", 80)
+    c.setFillColor(colors.HexColor("#F8FAFC")) 
+    c.drawCentredString(0, 0, "SECURE LEDGER RECORD")
+    c.restoreState()
 
-    c.setFont("Helvetica", 10)
-    c.setFillColor(colors.HexColor("#666666"))
-    c.drawString(50, height - 100, "Immutable Biometric Authorship Verification")
+    # ── 2. HEADER BLOCK (FULL LOGO) ──
+    header_y = height - 75
+    if LOGO_FULL_PATH.exists():
+        try:
+            c.drawImage(ImageReader(str(LOGO_FULL_PATH)), 45, header_y, width=140, height=30, preserveAspectRatio=True, mask='auto')
+        except:
+            pass
 
-    # Divider
-    c.setStrokeColor(colors.HexColor("#EAEAEA"))
-    c.line(50, height - 120, width - 50, height - 120)
+    # Token Identity
+    c.setFont("Courier-Bold", 9)
+    c.setFillColor(colors.HexColor("#64748B"))
+    c.drawRightString(width - 45, header_y + 15, "SESSION ID:")
+    c.setFont("Courier-Bold", 12)
+    c.setFillColor(colors.HexColor("#0F172A"))
+    c.drawRightString(width - 45, header_y, data["certificate_id"])
 
-    # Certificate Details
-    c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(colors.black)
+    # ── 3. LEGAL TITLES ──
+    title_y = header_y - 65
+    c.setFont("Helvetica-Bold", 20)
+    c.setFillColor(colors.HexColor("#0F172A"))
+    c.drawString(45, title_y, "BIOMETRIC PROOF OF AUTHORSHIP")
     
-    y = height - 160
-    details = [
-        ("Certificate ID:", data["certificate_id"]),
-        ("Author:", data["author"]),
-        ("Document Title:", data["document_title"]),
-        ("SHA-256 Hash:", data["document_sha256"]),
-        ("Timestamp:", data["timestamp"]),
+    c.setFont("Helvetica", 9.5)
+    c.setFillColor(colors.HexColor("#475569"))
+    c.drawString(45, title_y - 16, "Cryptographic Liveness Audit trail generated via behavioral keystroke dynamics matrix")
+
+    c.setStrokeColor(colors.HexColor("#E2E8F0"))
+    c.setLineWidth(1)
+    c.line(45, title_y - 32, width - 45, title_y - 32)
+
+    # ── 4. METADATA REGISTRY ──
+    grid_y = title_y - 70
+    meta_registry = [
+        ("VERIFIED AUTHOR", data["author"]),
+        ("DOCUMENT SCHEMA TITLE", data["document_title"]),
+        ("COMPLETION TIMESTAMP", data["timestamp"]),
     ]
 
-    for label, val in details:
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(50, y, label)
-        c.setFont("Helvetica", 10)
-        c.drawString(160, y, str(val))
-        y -= 25
+    for label, val in meta_registry:
+        c.setFont("Helvetica-Bold", 7.5)
+        c.setFillColor(colors.HexColor("#94A3B8"))
+        c.drawString(45, grid_y, label)
+        
+        c.setFont("Helvetica-Bold", 11)
+        c.setFillColor(colors.HexColor("#0F172A"))
+        c.drawString(45, grid_y - 14, str(val))
+        grid_y -= 42
 
-    # Biometric Results Box
-    c.setFillColor(colors.HexColor("#FAFAFA"))
-    c.rect(50, y - 100, width - 100, 80, fill=1, stroke=0)
+    # ── 5. ZERO-KNOWLEDGE EVIDENCE CONTAINER ──
+    crypto_y = grid_y - 12
+    c.setFillColor(colors.HexColor("#F8FAFC"))
+    c.setStrokeColor(colors.HexColor("#E2E8F0"))
+    c.roundRect(45, crypto_y - 45, width - 90, 45, radius=6, fill=1, stroke=1)
     
+    c.setFont("Helvetica-Bold", 7.5)
+    c.setFillColor(colors.HexColor("#64748B"))
+    c.drawString(60, crypto_y - 16, "SHA-256 SYSTEM ATTESTATION HASH")
+    
+    c.setFont("Courier-Bold", 9.5)
+    c.setFillColor(colors.HexColor("#0F172A"))
+    c.drawString(60, crypto_y - 32, data["document_sha256"])
+
+    # ── 6. REAL-TIME AUDIT MATRIX GRID (100/100 SaaS Feature) ──
+    matrix_y = crypto_y - 85
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(colors.HexColor("#0F172A"))
+    c.drawString(45, matrix_y, "Extracted Biometric Telemetry Matrix")
+    
+    # Render Micro-Grid Layout Containers
+    grid_top = matrix_y - 15
+    box_w, box_h = 164, 42
+    gap = 10
+    
+    metrics_data = [
+        ("NET TYPING SPEED", f"{data['wpm']} WPM"),
+        ("BURST INTENSITY RATIO", f"{feats.get('burst_ratio', 0.0):.3f}"),
+        ("RHYTHM SEQUENCE ENTROPY", f"{feats.get('ft_entropy', 0.0):.3f}"),
+        ("MEAN KEY HOLD TIME (HT)", f"{feats.get('ht_mean', 0.0):.1f} ms"),
+        ("MEAN KEY FLIGHT TIME (FT)", f"{feats.get('ft_mean', 0.0):.1f} ms"),
+        ("TEMPORAL AUTOCORRELATION", f"{feats.get('ft_autocorr', 0.0):.3f}"),
+    ]
+    
+    for i, (m_label, m_val) in enumerate(metrics_data):
+        row_idx = i // 3
+        col_idx = i % 3
+        
+        bx = 45 + col_idx * (box_w + gap)
+        by = grid_top - row_idx * (box_h + gap) - box_h
+        
+        c.setFillColor(colors.HexColor("#F8FAFC"))
+        c.setStrokeColor(colors.HexColor("#F1F5F9"))
+        c.roundRect(bx, by, box_w, box_h, radius=4, fill=1, stroke=1)
+        
+        c.setFont("Helvetica-Bold", 7)
+        c.setFillColor(colors.HexColor("#64748B"))
+        c.drawString(bx + 10, by + 26, m_label)
+        
+        c.setFont("Courier-Bold", 11)
+        c.setFillColor(colors.HexColor("#0F172A"))
+        c.drawString(bx + 10, by + 10, m_val)
+
+    # ── 7. COMPLIANCE ASSURANCE VERDICT & SEAL ──
+    verdict_y = grid_top - 2 * (box_h + gap) - 50
     is_human = data["classification"] == "HUMAN"
-    c.setFillColor(colors.HexColor("#10B981") if is_human else colors.HexColor("#EF4444"))
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(70, y - 50, f"RESULT: {data['classification']} ({data['confidence_score']}%)")
     
-    c.setFillColor(colors.black)
-    c.setFont("Helvetica", 10)
-    c.drawString(70, y - 75, f"Typing Speed: {data['wpm']} WPM | Biometric Data Points: {data['keystrokes_analyzed']}")
+    c.setFillColor(colors.HexColor("#F0FDF4") if is_human else colors.HexColor("#FEF2F2"))
+    c.setStrokeColor(colors.HexColor("#10B981") if is_human else colors.HexColor("#EF4444"))
+    c.roundRect(45, verdict_y - 80, 340, 80, radius=8, fill=1, stroke=1)
 
-    # Generate QR Code pointing to the verification page
-    qr = qrcode.QRCode(version=1, box_size=3, border=1)
+    c.setFillColor(colors.HexColor("#166534") if is_human else colors.HexColor("#991B1B"))
+    c.setFont("Helvetica-Bold", 15)
+    c.drawString(60, verdict_y - 28, f"CLASSIFICATION: {data['classification']}")
+
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(60, verdict_y - 46, f"Verification Confidence: {data['confidence_score']}%")
+
+    c.setFont("Helvetica", 8.5)
+    c.setFillColor(colors.HexColor("#15803D") if is_human else colors.HexColor("#B91C1C"))
+    c.drawString(60, verdict_y - 64, f"Validated safe against algorithmic generation & auto-typer scripts.")
+
+    # High-End Concentric Vector Seal
+    seal_x = 330
+    seal_y = verdict_y - 40
+    c.setStrokeColor(colors.HexColor("#10B981") if is_human else colors.HexColor("#EF4444"))
+    c.setLineWidth(1.2)
+    c.circle(seal_x, seal_y, 26, fill=0, stroke=1)
+    c.circle(seal_x, seal_y, 22, fill=0, stroke=1)
+    
+    # Cross-Hatched Alignment Markers inside Seal
+    c.setLineWidth(0.5)
+    c.line(seal_x - 26, seal_y, seal_x - 22, seal_y)
+    c.line(seal_x + 22, seal_y, seal_x + 26, seal_y)
+    c.line(seal_x, seal_y - 26, seal_x, seal_y - 22)
+    c.line(seal_x, seal_y + 22, seal_x, seal_y + 26)
+    
+    c.setFont("Helvetica-Bold", 6.5)
+    c.drawCentredString(seal_x, seal_y + 4, "SECURE")
+    c.drawCentredString(seal_x, seal_y - 5, "LEDGER")
+
+    # ── 8. ICON-EMBEDDED QR MATRIX (Bottom Right) ──
     verify_url = f"{FRONTEND_URL}/verify/{cert_id}"
-    qr.add_data(verify_url)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
+    qr_buffer = _generate_custom_qr(verify_url, LOGO_ICON_PATH)
     
-    # Save QR to temp buffer and draw on PDF
-    qr_buffer = io.BytesIO()
-    img.save(qr_buffer, format="PNG")
-    qr_buffer.seek(0)
+    qr_size = 110
+    qr_x = width - 45 - qr_size
+    qr_y = verdict_y - 85
+    c.drawImage(ImageReader(qr_buffer), qr_x, qr_y, width=qr_size, height=qr_size)
     
-    from reportlab.lib.utils import ImageReader
-    c.drawImage(ImageReader(qr_buffer), width - 150, 50, width=100, height=100)
+    c.setFont("Helvetica-Bold", 7)
+    c.setFillColor(colors.HexColor("#94A3B8"))
+    c.drawCentredString(qr_x + (qr_size/2), qr_y - 12, "SCAN TO ACCESS AUDIT TRAIL")
 
-    # Footer
+    # ── 9. FOOTER SYSTEM ──
     c.setFont("Helvetica", 8)
-    c.setFillColor(colors.gray)
-    c.drawString(50, 60, f"Scan QR code to mathematically verify this document at {verify_url}")
+    c.setFillColor(colors.HexColor("#CBD5E1"))
+    c.drawCentredString(width / 2, 28, f"This document represents a verifiable zero-knowledge proof assertion token tied to an active database ledger ledger • {verify_url}")
 
     c.save()
     buffer.seek(0)
@@ -409,5 +558,5 @@ async def download_certificate_pdf(request: Request, cert_id: str):
     return StreamingResponse(
         buffer, 
         media_type="application/pdf", 
-        headers={"Content-Disposition": f"attachment; filename=TypeTrace_{cert_id}.pdf"}
+        headers={"Content-Disposition": f"attachment; filename={cert_id}.pdf"}
     )

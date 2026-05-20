@@ -1,6 +1,10 @@
 {
-  "version": "4.2",
-  "accuracy": 0.99872,
+  "version": "5.0",
+  "accuracy": 0.996778,
+  "accuracy_std": 0.000291,
+  "accuracy_method": "5-fold stratified cross-validation",
+  "test_set_accuracy": 0.997008,
+  "roc_auc": 0.999885,
   "feature_columns": [
     "ht_mean",
     "ht_std",
@@ -35,10 +39,13 @@
     "HUMAN",
     "SYNTHETIC"
   ],
-  "training_samples": 40616,
-  "test_samples": 10155,
-  "human_samples": 1971,
-  "synthetic_samples": 48800,
+  "training_samples": 31600,
+  "test_samples": 4345,
+  "human_samples": 1975,
+  "synthetic_samples": 19750,
+  "class_ratio_after_cap": 10.0,
   "gonzalez_used": true,
-  "dataset_citation": "Gonz\u00e1lez et al. (2022). Towards liveness detection in keystroke dynamics. Systems and Soft Computing, 4, 200037. https://doi.org/10.1016/j.sasc.2022.200037"
+  "db_sessions_used": 23,
+  "dataset_citation": "Gonz\u00e1lez et al. (2022). Towards liveness detection in keystroke dynamics: Revealing synthetic forgeries. Systems and Soft Computing, 4, 200037. https://doi.org/10.1016/j.sasc.2022.200037",
+  "limitations": "This model detects statistical deviations in keystroke timing consistent with synthetic forgery methods described in Gonz\u00e1lez et al. (2022). It does not directly detect AI-generated text content. Performance may degrade for: (a) users with atypical typing patterns (neurodivergent users, non-native keyboard users, accessibility tool users); (b) adversarial actors who deliberately introduce typing variance to mimic human behaviour; (c) highly skilled typists whose timing variance naturally resembles some forgery profiles. The system should be treated as probabilistic behavioural evidence, not as definitive proof of authorship."
 }
