@@ -16,6 +16,7 @@ interface KeystrokeEvent {
   dwell_time: number | null;
   flight_time: number | null;
   documentLength: number;
+  pastedText?: string;
 }
 
 interface SessionStats {
@@ -782,19 +783,24 @@ export default function EditorPage() {
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) =>
     setText(e.target.value);
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>): void => {
     const pastedText = e.clipboardData.getData("text");
+
+    // Only flag pastes longer than 20 chars (short pastes like passwords
+    // or email addresses are normal and shouldn't be flagged).
     if (pastedText.length > 20) {
+      const now = Date.now();
       keystrokeLog.current.push({
         key: "__PASTE_EVENT__",
         keyCode: -1,
         type: "keydown",
-        timestamp: Date.now(),
-        down_time: Date.now(),
-        up_time: Date.now(),
+        timestamp: now,
+        down_time: now,
+        up_time: now,
         dwell_time: 0,
         flight_time: 0,
         documentLength: text.length,
+        pastedText: pastedText,
       });
     }
   };
@@ -846,10 +852,11 @@ export default function EditorPage() {
         certificate_id: response.data.certificate_id,
         document_hash: response.data.document_hash,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Analysis failed:", error);
+      const axiosError = error as { response?: { data?: { detail?: string } } };
       alert(
-        error.response?.data?.detail ??
+        axiosError.response?.data?.detail ??
           "Analysis failed. Is the server running?",
       );
     } finally {

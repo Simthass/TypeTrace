@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
 import { api } from "../lib/api";
 
 // ─── STRICT ENTERPRISE GRID LAYOUT ────────────────────────────────────────────
-// This mathematically locks the header and the rows to the exact same pixel widths.
-const TABLE_GRID = "minmax(220px, 2fr) 100px 140px 80px 160px 40px";
+// The last column is increased to 80px to accommodate both Replay and Download buttons.
+const TABLE_GRID = "minmax(220px, 2fr) 100px 140px 80px 160px 80px";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 interface Session {
@@ -128,6 +127,20 @@ const DownloadIcon = () => (
     <line x1="12" y1="15" x2="12" y2="3" />
   </svg>
 );
+const PlayIcon = () => (
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+  </svg>
+);
 
 // ─── IKI SPARKLINE ────────────────────────────────────────────────────────────
 function IkiSparkline({ status }: { status: string }) {
@@ -170,13 +183,13 @@ function SessionCard({
   if (view === "list") {
     return (
       <div
-        className="grid items-center gap-4 px-5 py-3.5 border-b last:border-b-0 group transition-colors cursor-pointer hover:bg-surface-50"
+        className="grid items-center gap-4 px-5 py-3.5 border-b last:border-b-0 group transition-colors hover:bg-surface-50"
         style={{
           gridTemplateColumns: TABLE_GRID,
           borderColor: colors.surface[200],
         }}
       >
-        {/* Col 1: Document (Left Aligned) */}
+        {/* Col 1: Document */}
         <div className="flex items-center gap-3 min-w-0">
           <div
             className="h-8 w-8 rounded-md flex items-center justify-center text-white font-bold font-mono text-[13px] shrink-0"
@@ -187,7 +200,7 @@ function SessionCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span
-                className="text-[13.5px] font-semibold truncate group-hover:underline"
+                className="text-[13.5px] font-semibold truncate group-hover:underline cursor-pointer"
                 style={{ color: colors.text.primary }}
               >
                 {session.title}
@@ -202,12 +215,12 @@ function SessionCard({
           </div>
         </div>
 
-        {/* Col 2: Sparkline (Centered perfectly inside its column) */}
+        {/* Col 2: Sparkline */}
         <div className="flex justify-center w-full">
           <IkiSparkline status={session.classification} />
         </div>
 
-        {/* Col 3: Status Badge (Centered perfectly) */}
+        {/* Col 3: Status Badge */}
         <div className="flex justify-center">
           <div
             className="flex items-center gap-1.5 px-2 py-1 rounded-md border"
@@ -228,7 +241,7 @@ function SessionCard({
           </div>
         </div>
 
-        {/* Col 4: Confidence Score (Centered perfectly) */}
+        {/* Col 4: Confidence Score */}
         <div className="flex justify-center">
           <span
             className="text-[12.5px] font-bold font-mono"
@@ -238,7 +251,7 @@ function SessionCard({
           </span>
         </div>
 
-        {/* Col 5: Date (Centered perfectly) */}
+        {/* Col 5: Date */}
         <div className="flex justify-center min-w-0">
           <span
             className="text-[12px] truncate"
@@ -248,8 +261,16 @@ function SessionCard({
           </span>
         </div>
 
-        {/* Col 6: Action (Right Aligned) */}
-        <div className="flex justify-end">
+        {/* Col 6: Actions */}
+        <div className="flex justify-end gap-1">
+          <Link
+            to={`/session/${session.id}/replay`}
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-200"
+            style={{ color: colors.text.secondary }}
+            title="Replay Session Timeline"
+          >
+            <PlayIcon />
+          </Link>
           <button
             className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-200"
             style={{ color: colors.text.secondary }}
@@ -264,7 +285,7 @@ function SessionCard({
 
   return (
     <div
-      className="bg-white border rounded-md p-5 flex flex-col justify-between h-[168px] transition-all cursor-pointer group hover:border-black/20 hover:shadow-lg"
+      className="bg-white border rounded-md p-5 flex flex-col justify-between h-[180px] transition-all group hover:border-black/20 hover:shadow-lg relative"
       style={{ borderColor: colors.surface[200] }}
     >
       <div className="flex justify-between items-start gap-2">
@@ -277,7 +298,7 @@ function SessionCard({
           </div>
           <div className="min-w-0">
             <p
-              className="text-[13.5px] font-semibold truncate group-hover:underline"
+              className="text-[13.5px] font-semibold truncate group-hover:underline cursor-pointer"
               style={{ color: colors.text.primary }}
             >
               {session.title}
@@ -309,13 +330,23 @@ function SessionCard({
         </div>
       </div>
       <IkiSparkline status={session.classification} />
-      <div className="flex items-end justify-between">
-        <div
-          className="flex items-center gap-1.5 mt-0.5 text-[11px]"
-          style={{ color: colors.text.secondary }}
-        >
-          <ClockIcon />
-          <span>{session.date}</span>
+
+      <div className="flex items-end justify-between mt-2">
+        <div className="flex flex-col gap-2.5">
+          <div
+            className="flex items-center gap-1.5 text-[11px]"
+            style={{ color: colors.text.secondary }}
+          >
+            <ClockIcon />
+            <span>{session.date}</span>
+          </div>
+          <Link
+            to={`/session/${session.id}/replay`}
+            className="flex items-center gap-1.5 text-[11px] font-semibold transition-colors hover:opacity-80"
+            style={{ color: colors.text.primary }}
+          >
+            <PlayIcon /> Replay Timeline
+          </Link>
         </div>
         <span className="text-[14px] font-extrabold" style={{ color: st.dot }}>
           {session.confidence}%
@@ -341,7 +372,6 @@ export default function SessionsPage() {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        // ── FIX: Removed "/student" from the URL ──
         const response = await api.get("/sessions/history");
         if (response.data.status === "success") {
           setSessions(response.data.sessions);
@@ -565,7 +595,9 @@ export default function SessionsPage() {
               <span
                 className="text-[10px] font-bold uppercase tracking-widest text-right"
                 style={{ color: colors.text.secondary }}
-              ></span>
+              >
+                Actions
+              </span>
             </div>
 
             {/* Table Body */}

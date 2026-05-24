@@ -1,6 +1,7 @@
 # backend/app/schemas/session.py
 from pydantic import BaseModel
 from typing import List, Optional
+from typing import Dict, Any
 
 # this gotta match EXACTLY what my React frontend sends or pydantic throws a 422 unprocessable entity error 
 
@@ -10,11 +11,12 @@ class KeystrokeEventSchema(BaseModel):
     type: str
     timestamp: int
     down_time: int
-    # using Optional cos up_time might be null if they just hold the key down forever lol
     up_time: Optional[int] = None
     dwell_time: Optional[int] = None
     flight_time: Optional[int] = None
     documentLength: int
+    pastedText: Optional[str] = None   # ← THE ONLY NEW FIELD
+
 
 class SessionStatsSchema(BaseModel):
     wpm: int
@@ -39,3 +41,27 @@ class SessionResponse(BaseModel):
     
     class Config:
         from_attributes = True
+        
+
+class ReplaySessionMetadata(BaseModel):
+    title: str
+    classification: str
+    confidence: float
+    duration_ms: int
+    word_count: int
+    student_id: str
+
+class ReplayMetrics(BaseModel):
+    avg_iki: int
+    dwell_time: int
+    deletion_ratio: float
+    paste_count: int
+    longest_pause_ms: int
+    burst_count: int
+    wpm: int
+    active_time_pct: int
+
+class SessionReplayResponse(BaseModel):
+    session: ReplaySessionMetadata
+    metrics: ReplayMetrics
+    events: List[Dict[str, Any]] # Sending the raw JSONB array back

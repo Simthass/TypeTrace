@@ -1,7 +1,5 @@
 /**
  * TypeTrace — Route Constants
- * All application route paths defined here.
- * Import ROUTES in components instead of hardcoding strings.
  */
 
 export const ROUTES = {
@@ -23,14 +21,13 @@ export const ROUTES = {
   SETTINGS: "/settings",
   HELP_DOCS: "/help",
   NOT_FOUND: "*",
+
+  // FIX: Updated to match the nested structure used in SessionsPage
+  REPLAY: "/session/:sessionId/replay",
 } as const;
 
 export type RouteKey = keyof typeof ROUTES;
 
-/**
- * Navigation items shown in the header.
- * Public nav links (shown to all users).
- */
 export const PUBLIC_NAV = [
   { label: "Home", path: ROUTES.HOME },
   { label: "How It Works", path: ROUTES.HOW_IT_WORKS },
@@ -38,9 +35,6 @@ export const PUBLIC_NAV = [
   { label: "About", path: ROUTES.ABOUT },
 ] as const;
 
-/**
- * Navigation items shown when user is authenticated.
- */
 export const AUTH_NAV = [
   { label: "Dashboard", path: ROUTES.DASHBOARD },
   { label: "Sessions", path: ROUTES.EDITOR },

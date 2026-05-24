@@ -1,4 +1,3 @@
-// src/App.tsx
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import RootLayout from "./components/layout/RootLayout";
 import HomePage from "./pages/HomePage";
@@ -20,12 +19,13 @@ import CertificatesPage from "./pages/CertificatesPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import SettingsPage from "./pages/SettingsPage";
 import HelpDocsPage from "./pages/HelpDocsPage";
+import ReplayPage from "./pages/ReplayPage";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* PUBLIC ROUTES (With Header/Footer) */}
+        {/* PUBLIC ROUTES */}
         <Route element={<RootLayout />}>
           <Route index element={<HomePage />} />
           <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
@@ -33,7 +33,6 @@ export default function App() {
           <Route path={ROUTES.ABOUT} element={<AboutPage />} />
           <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
           <Route path={ROUTES.HELP_DOCS} element={<HelpDocsPage />} />
-
           <Route
             path={ROUTES.PRICING}
             element={<PlaceholderPage title="Pricing" />}
@@ -53,10 +52,7 @@ export default function App() {
         <Route element={<DashboardLayout />}>
           <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
           <Route path={ROUTES.EDITOR} element={<SessionsPage />} />
-
-          {/* REPLACE THE PLACEHOLDER WITH OUR NEW PAGE */}
           <Route path="/certificates" element={<CertificatesPage />} />
-
           <Route path="/analytics" element={<AnalyticsPage />} />
         </Route>
 
@@ -71,8 +67,11 @@ export default function App() {
           />
         </Route>
 
-        {/* ZEN MODE EDITOR (Full Screen, No Navigation) */}
+        {/* ZEN MODE / FULL SCREEN ROUTES (No standard navigation) */}
         <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
+
+        {/* REPLAY PAGE MOUNTED HERE */}
+        <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
       </Routes>
     </BrowserRouter>
   );
