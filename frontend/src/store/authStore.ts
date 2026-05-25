@@ -1,36 +1,66 @@
 // src/store/authStore.ts
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { persist } from "zustand/middleware";
 
-interface AuthState {
-  user: any | null;
-  token: string | null;
-  pendingEmail: string | null;
-  setPendingEmail: (email: string) => void;
-  login: (user: any, token: string) => void;
-  logout: () => void;
+// =============================================================================
+// TYPES
+// =============================================================================
+
+export type UserRole = "STUDENT" | "TEACHER";
+
+export interface AuthUser {
+  id: string;
+  first_name: string;
+  email: string;
+  role: UserRole;
 }
 
-// Wrapping the store in the persist middleware for enterprise-grade session retention
+interface AuthState {
+  user: AuthUser | null;
+  token: string | null;
+  isAuthenticated: boolean;
+
+  // Actions
+  login: (user: AuthUser, token: string) => void;
+  logout: () => void;
+
+  // Helpers — use these instead of reading user.role directly everywhere
+  isStudent: () => boolean;
+  isTeacher: () => boolean;
+}
+
+// =============================================================================
+// STORE
+// Persisted to localStorage so the user stays logged in on page refresh.
+// =============================================================================
+
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
-      pendingEmail: null,
+      isAuthenticated: false,
 
-      setPendingEmail: (email) => set({ pendingEmail: email }),
+      login: (user: AuthUser, token: string) => {
+        set({ user, token, isAuthenticated: true });
+      },
 
-      login: (user, token) => set({ user, token }),
+      logout: () => {
+        set({ user: null, token: null, isAuthenticated: false });
+      },
 
-      logout: () => set({ user: null, token: null, pendingEmail: null }),
+      // Convenience helpers — prevents scattered `user?.role === "TEACHER"` checks
+      isStudent: () => get().user?.role === "STUDENT",
+      isTeacher: () => get().user?.role === "TEACHER",
     }),
     {
-      name: "typetrace-auth-storage", // The key used in localStorage
-      storage: createJSONStorage(() => localStorage),
-      // We only want to persist the user and token.
-      // We DONT want to persist pendingEmail across reloads.
-      partialize: (state) => ({ user: state.user, token: state.token }),
+      name: "typetrace-auth",
+      // Only persist what we actually need. Never persist sensitive data beyond the token.
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        isAuthenticated: state.isAuthenticated,
+      }),
     },
   ),
 );

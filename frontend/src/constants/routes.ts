@@ -1,17 +1,20 @@
-/**
- * TypeTrace — Route Constants
- */
+// src/constants/routes.ts
 
 export const ROUTES = {
+  // ── Public ──────────────────────────────────────────────────────────────────
   HOME: "/",
   HOW_IT_WORKS: "/how-it-works",
   FEATURES: "/features",
   ABOUT: "/about",
   PRICING: "/pricing",
+
+  // ── Auth ────────────────────────────────────────────────────────────────────
   LOGIN: "/login",
   REGISTER: "/register",
   VERIFY_OTP: "/verify-otp",
   FORGOT_PASSWORD: "/forgot-password",
+
+  // ── Student App ─────────────────────────────────────────────────────────────
   DASHBOARD: "/dashboard",
   EDITOR: "/editor",
   EDITOR_NEW: "/editor/new",
@@ -20,10 +23,18 @@ export const ROUTES = {
   REPORTS: "/reports",
   SETTINGS: "/settings",
   HELP_DOCS: "/help",
-  NOT_FOUND: "*",
-
-  // FIX: Updated to match the nested structure used in SessionsPage
   REPLAY: "/session/:sessionId/replay",
+
+  // ── Teacher App ─────────────────────────────────────────────────────────────
+  // These are Part 2 pages. They are declared here now so Part 2 has a
+  // consistent routing foundation to build on.
+  TEACHER_DASHBOARD: "/teacher/dashboard",
+  TEACHER_COURSES: "/teacher/courses",
+  TEACHER_COURSE: "/teacher/courses/:courseId",
+  TEACHER_REVIEW: "/teacher/review/:sessionId",
+
+  // ── Misc ────────────────────────────────────────────────────────────────────
+  NOT_FOUND: "*",
 } as const;
 
 export type RouteKey = keyof typeof ROUTES;

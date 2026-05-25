@@ -1,3 +1,4 @@
+// src/pages/LoginPage.tsx
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -7,14 +8,22 @@ import { motion } from "framer-motion";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
 import { api } from "../lib/api";
-import { useAuthStore } from "../store/authStore";
+import { useAuthStore, type AuthUser } from "../store/authStore";
+
+// =============================================================================
+// SCHEMA
+// =============================================================================
 
 const loginSchema = z.object({
-  email: z.string().min(1, "Email is required").email("Invalid email format"),
+  email: z.string().email("Please enter a valid email address"),
   password: z.string().min(1, "Password is required"),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
+
+// =============================================================================
+// ICONS
+// =============================================================================
 
 function GoogleIcon() {
   return (
@@ -63,9 +72,14 @@ function LockIcon() {
   );
 }
 
+// =============================================================================
+// PAGE
+// =============================================================================
+
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -82,16 +96,33 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
+    setApiError(null);
     try {
       const response = await api.post("/auth/login", {
         email: data.email,
         password: data.password,
       });
-      const { user, access_token } = response.data;
+
+      const { user, access_token } = response.data as {
+        user: AuthUser;
+        access_token: string;
+      };
+
       useAuthStore.getState().login(user, access_token);
-      navigate(ROUTES.DASHBOARD);
-    } catch (error: any) {
-      alert(error.response?.data?.detail || "Invalid credentials.");
+
+      // ── RBAC-aware redirect ─────────────────────────────────────────────
+      // Teachers go to their oversight dashboard; students go to the normal app.
+      if (user.role === "TEACHER") {
+        navigate(ROUTES.TEACHER_DASHBOARD);
+      } else {
+        navigate(ROUTES.DASHBOARD);
+      }
+    } catch (error: unknown) {
+      const axiosErr = error as { response?: { data?: { detail?: string } } };
+      setApiError(
+        axiosErr.response?.data?.detail ??
+          "Invalid credentials. Please try again.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -113,16 +144,12 @@ export default function LoginPage() {
       style={authStyles}
       className="min-h-screen flex flex-col bg-[var(--bg-main)] font-sans"
     >
-      {/* ── top bar: logo left, sign up right — same layout as vercel login ── */}
+      {/* ── Header ── */}
       <header
-        className="w-full flex items-center justify-between px-12 shrink-0 "
+        className="w-full flex items-center justify-between px-12 shrink-0"
         style={{ height: 64, borderColor: colors.surface[200] }}
       >
-        <Link
-          to={ROUTES.HOME}
-          className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)] rounded-md"
-          aria-label="Back to Home"
-        >
+        <Link to={ROUTES.HOME} aria-label="Back to Home">
           <img
             src="/Logo.png"
             alt="TypeTrace"
@@ -132,23 +159,19 @@ export default function LoginPage() {
             }}
           />
         </Link>
-
-        {/* sign in link — users who already have an account can bail out quickly */}
-        <div className="flex items-center gap-3">
-          <Link
-            to={ROUTES.REGISTER}
-            className="px-6 py-2 rounded-md text-[13px] font-semibold border transition-colors hover:bg-[var(--surface-50)]"
-            style={{
-              color: colors.text.primary,
-              borderColor: colors.surface[200],
-            }}
-          >
-            Sign Up
-          </Link>
-        </div>
+        <Link
+          to={ROUTES.REGISTER}
+          className="px-6 py-2 rounded-md text-[13px] font-semibold border transition-colors hover:bg-[var(--surface-50)]"
+          style={{
+            color: colors.text.primary,
+            borderColor: colors.surface[200],
+          }}
+        >
+          Sign Up
+        </Link>
       </header>
 
-      {/* ── main content: centred form, no logo here anymore ── */}
+      {/* ── Main Form ── */}
       <div className="flex-1 flex items-start justify-center pt-[8vh] px-6 pb-6">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -156,7 +179,6 @@ export default function LoginPage() {
           transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
           className="w-full max-w-[380px]"
         >
-          {/* page heading — logo removed from here, now in the header */}
           <div className="flex flex-col items-center mb-10">
             <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight mb-2 text-center">
               Sign in to TypeTrace
@@ -166,9 +188,10 @@ export default function LoginPage() {
             </p>
           </div>
 
+          {/* Google SSO (placeholder) */}
           <button
             type="button"
-            className="w-full flex items-center justify-center gap-2.5 p-3 bg-[var(--bg-main)] border border-[var(--surface-200)] rounded-lg text-sm font-medium text-[var(--text-primary)] cursor-pointer transition-colors hover:bg-[var(--surface-50)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)]"
+            className="w-full flex items-center justify-center gap-2.5 p-3 bg-[var(--bg-main)] border border-[var(--surface-200)] rounded-lg text-sm font-medium text-[var(--text-primary)] cursor-pointer transition-colors hover:bg-[var(--surface-50)]"
           >
             <GoogleIcon />
             Continue with Google
@@ -182,17 +205,32 @@ export default function LoginPage() {
             <div className="flex-1 h-[1px] bg-[var(--surface-200)] opacity-60" />
           </div>
 
+          {/* API error banner */}
+          {apiError && (
+            <div
+              className="mb-4 px-4 py-3 rounded-lg text-[13px] font-medium"
+              style={{
+                backgroundColor: "#fef2f2",
+                border: "1px solid #fecaca",
+                color: "#b91c1c",
+              }}
+            >
+              {apiError}
+            </div>
+          )}
+
           <form
             onSubmit={handleSubmit(onSubmit)}
             className="flex flex-col gap-4"
           >
+            {/* Email */}
             <div className="flex flex-col gap-2">
               <label className="text-[13px] font-medium text-[var(--text-primary)]">
                 Email Address
               </label>
               <input
                 type="email"
-                placeholder="student@uni.ac.uk"
+                placeholder="you@university.ac.uk"
                 {...register("email")}
                 onFocus={() => setFocusedField("email")}
                 onBlur={() => setFocusedField(null)}
@@ -212,6 +250,7 @@ export default function LoginPage() {
               )}
             </div>
 
+            {/* Password */}
             <div className="flex flex-col gap-2">
               <div className="flex justify-between items-center">
                 <label className="text-[13px] font-medium text-[var(--text-primary)]">
@@ -219,7 +258,7 @@ export default function LoginPage() {
                 </label>
                 <Link
                   to={ROUTES.FORGOT_PASSWORD}
-                  className="text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors outline-none focus-visible:underline"
+                  className="text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
                 >
                   Forgot password?
                 </Link>
@@ -249,20 +288,12 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full mt-2 p-3 text-white rounded-lg text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--brand-action)]"
+              className="w-full mt-2 p-3 text-white rounded-lg text-sm font-medium transition-all"
               style={{
                 backgroundColor: "var(--brand-action)",
                 opacity: isLoading ? 0.8 : 1,
                 cursor: isLoading ? "not-allowed" : "pointer",
               }}
-              onMouseEnter={(e) =>
-                !isLoading &&
-                (e.currentTarget.style.backgroundColor = "var(--brand-hover)")
-              }
-              onMouseLeave={(e) =>
-                !isLoading &&
-                (e.currentTarget.style.backgroundColor = "var(--brand-action)")
-              }
             >
               {isLoading ? "Authenticating..." : "Sign In"}
             </button>
@@ -272,7 +303,7 @@ export default function LoginPage() {
             Don't have an account?{" "}
             <Link
               to={ROUTES.REGISTER}
-              className="text-[var(--text-primary)] font-medium hover:underline transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-action)] rounded-sm"
+              className="text-[var(--text-primary)] font-medium hover:underline"
             >
               Sign up
             </Link>
