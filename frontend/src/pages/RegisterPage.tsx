@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
 import { api } from "../lib/api";
-import type { UserRole } from "../store/authStore";
+import { useAuthStore, type UserRole } from "../store/authStore";
 
 // =============================================================================
 // SCHEMAS
@@ -113,6 +113,23 @@ function BackIcon() {
   );
 }
 
+function ChevronRight() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      className="shrink-0"
+    >
+      <path d="M9 18l6-6-6-6" />
+    </svg>
+  );
+}
+
 // =============================================================================
 // SHARED FIELD COMPONENT
 // =============================================================================
@@ -128,12 +145,15 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[13px] font-medium text-[var(--text-primary)]">
+      <label
+        className="text-[13px] font-medium"
+        style={{ color: colors.text.primary }}
+      >
         {label}
       </label>
       {children}
       {error && (
-        <span className="text-xs font-medium text-[var(--error-color)]">
+        <span className="text-xs font-medium" style={{ color: brand.aiAccent }}>
           {error}
         </span>
       )}
@@ -155,10 +175,16 @@ function RoleSelector({ onSelect }: { onSelect: (role: UserRole) => void }) {
       className="w-full max-w-[420px]"
     >
       <div className="flex flex-col items-center mb-10">
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight mb-2 text-center">
+        <h1
+          className="text-2xl font-semibold tracking-tight mb-2 text-center"
+          style={{ color: colors.text.primary }}
+        >
           Create your account
         </h1>
-        <p className="text-[15px] text-[var(--text-secondary)] text-center">
+        <p
+          className="text-[15px] text-center"
+          style={{ color: colors.text.secondary }}
+        >
           How will you be using TypeTrace?
         </p>
       </div>
@@ -191,26 +217,21 @@ function RoleSelector({ onSelect }: { onSelect: (role: UserRole) => void }) {
             <StudentIcon />
           </div>
           <div className="flex-1">
-            <div className="text-[15px] font-semibold text-[var(--text-primary)] mb-0.5">
+            <div
+              className="text-[15px] font-semibold mb-0.5"
+              style={{ color: colors.text.primary }}
+            >
               I'm a Student
             </div>
-            <div className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+            <div
+              className="text-[13px] leading-relaxed"
+              style={{ color: colors.text.secondary }}
+            >
               Write essays, generate behavioral certificates, replay your
               sessions.
             </div>
           </div>
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            className="shrink-0 text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors"
-          >
-            <path d="M9 18l6-6-6-6" />
-          </svg>
+          <ChevronRight />
         </button>
 
         {/* Teacher card */}
@@ -237,33 +258,32 @@ function RoleSelector({ onSelect }: { onSelect: (role: UserRole) => void }) {
             <TeacherIcon />
           </div>
           <div className="flex-1">
-            <div className="text-[15px] font-semibold text-[var(--text-primary)] mb-0.5">
+            <div
+              className="text-[15px] font-semibold mb-0.5"
+              style={{ color: colors.text.primary }}
+            >
               I'm a Teacher / Instructor
             </div>
-            <div className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+            <div
+              className="text-[13px] leading-relaxed"
+              style={{ color: colors.text.secondary }}
+            >
               Create courses, review student submissions, run behavioral audits.
             </div>
           </div>
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            className="shrink-0 text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors"
-          >
-            <path d="M9 18l6-6-6-6" />
-          </svg>
+          <ChevronRight />
         </button>
       </div>
 
-      <p className="text-sm text-[var(--text-secondary)] text-center mt-8">
+      <p
+        className="text-sm text-center mt-8"
+        style={{ color: colors.text.secondary }}
+      >
         Already have an account?{" "}
         <Link
           to={ROUTES.LOGIN}
-          className="text-[var(--text-primary)] font-medium hover:underline"
+          className="font-medium hover:underline"
+          style={{ color: colors.text.primary }}
         >
           Sign in
         </Link>
@@ -281,12 +301,38 @@ function StudentForm({ onBack }: { onBack: () => void }) {
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const setPendingEmail = useAuthStore((state) => state.setPendingEmail);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<StudentFormValues>({ resolver: zodResolver(studentSchema) });
+
+  const getInputStyle = (
+    field: string,
+    hasError: boolean,
+  ): React.CSSProperties => ({
+    width: "100%",
+    padding: "12px 14px",
+    backgroundColor: colors.surface[50],
+    borderRadius: "8px",
+    fontSize: "14px",
+    color: colors.text.primary,
+    outline: "none",
+    transition: "all 0.15s ease",
+    border: `1px solid ${
+      hasError
+        ? brand.aiAccent
+        : focusedField === field
+          ? brand.action
+          : colors.surface[200]
+    }`,
+    boxShadow:
+      focusedField === field && !hasError
+        ? `0 0 0 1px ${brand.action}`
+        : "none",
+  });
 
   const onSubmit = async (data: StudentFormValues) => {
     setIsLoading(true);
@@ -302,8 +348,8 @@ function StudentForm({ onBack }: { onBack: () => void }) {
         password: data.password,
         consent: data.consent,
       });
-      // Pass email to the OTP page via location state so it auto-fills
-      navigate(ROUTES.VERIFY_OTP, { state: { email: data.email } });
+      setPendingEmail(data.email);
+      navigate(ROUTES.VERIFY_OTP);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } };
       setApiError(
@@ -315,17 +361,6 @@ function StudentForm({ onBack }: { onBack: () => void }) {
     }
   };
 
-  const inputStyle = (
-    field: string,
-    hasError: boolean,
-  ): React.CSSProperties => ({
-    border: `1px solid ${hasError ? "var(--error-color)" : focusedField === field ? "var(--brand-action)" : "var(--surface-200)"}`,
-    boxShadow:
-      focusedField === field && !hasError
-        ? "0 0 0 1px var(--brand-action)"
-        : "none",
-  });
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -336,7 +371,14 @@ function StudentForm({ onBack }: { onBack: () => void }) {
     >
       <button
         onClick={onBack}
-        className="flex items-center gap-2 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors mb-8"
+        className="flex items-center gap-2 text-[13px] transition-colors mb-8"
+        style={{ color: colors.text.secondary }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.color = colors.text.primary)
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.color = colors.text.secondary)
+        }
       >
         <BackIcon />
         Back
@@ -350,10 +392,13 @@ function StudentForm({ onBack }: { onBack: () => void }) {
           <StudentIcon />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)] tracking-tight">
+          <h1
+            className="text-xl font-semibold tracking-tight"
+            style={{ color: colors.text.primary }}
+          >
             Student Registration
           </h1>
-          <p className="text-[13px] text-[var(--text-secondary)]">
+          <p className="text-[13px]" style={{ color: colors.text.secondary }}>
             Create your academic authorship account
           </p>
         </div>
@@ -381,8 +426,7 @@ function StudentForm({ onBack }: { onBack: () => void }) {
               {...register("firstName")}
               onFocus={() => setFocusedField("firstName")}
               onBlur={() => setFocusedField(null)}
-              className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-              style={inputStyle("firstName", !!errors.firstName)}
+              style={getInputStyle("firstName", !!errors.firstName)}
             />
           </Field>
           <Field label="Last Name" error={errors.lastName?.message}>
@@ -392,8 +436,7 @@ function StudentForm({ onBack }: { onBack: () => void }) {
               {...register("lastName")}
               onFocus={() => setFocusedField("lastName")}
               onBlur={() => setFocusedField(null)}
-              className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-              style={inputStyle("lastName", !!errors.lastName)}
+              style={getInputStyle("lastName", !!errors.lastName)}
             />
           </Field>
         </div>
@@ -405,8 +448,7 @@ function StudentForm({ onBack }: { onBack: () => void }) {
             {...register("studentId")}
             onFocus={() => setFocusedField("studentId")}
             onBlur={() => setFocusedField(null)}
-            className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-            style={inputStyle("studentId", !!errors.studentId)}
+            style={getInputStyle("studentId", !!errors.studentId)}
           />
         </Field>
 
@@ -417,20 +459,18 @@ function StudentForm({ onBack }: { onBack: () => void }) {
             {...register("email")}
             onFocus={() => setFocusedField("email")}
             onBlur={() => setFocusedField(null)}
-            className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-            style={inputStyle("email", !!errors.email)}
+            style={getInputStyle("email", !!errors.email)}
           />
         </Field>
 
-        <Field label="University Name (optional)" error={undefined}>
+        <Field label="University Name (optional)">
           <input
             type="text"
-            placeholder="e.g. University of Edinburgh"
+            placeholder="e.g. University of Bedfordshire"
             {...register("universityName")}
             onFocus={() => setFocusedField("universityName")}
             onBlur={() => setFocusedField(null)}
-            className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-            style={inputStyle("universityName", false)}
+            style={getInputStyle("universityName", false)}
           />
         </Field>
 
@@ -441,16 +481,16 @@ function StudentForm({ onBack }: { onBack: () => void }) {
             {...register("password")}
             onFocus={() => setFocusedField("password")}
             onBlur={() => setFocusedField(null)}
-            className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-            style={inputStyle("password", !!errors.password)}
+            style={getInputStyle("password", !!errors.password)}
           />
         </Field>
 
         {/* Biometric consent */}
         <div
-          className="flex items-start gap-3 p-4 bg-[var(--surface-50)] rounded-lg"
+          className="flex items-start gap-3 p-4 rounded-lg"
           style={{
-            border: `1px solid ${errors.consent ? "var(--error-color)" : "var(--surface-200)"}`,
+            backgroundColor: colors.surface[50],
+            border: `1px solid ${errors.consent ? brand.aiAccent : colors.surface[200]}`,
           }}
         >
           <input
@@ -458,13 +498,17 @@ function StudentForm({ onBack }: { onBack: () => void }) {
             id="student-consent"
             {...register("consent")}
             className="mt-0.5 w-4 h-4 cursor-pointer"
-            style={{ accentColor: "var(--brand-action)" }}
+            style={{ accentColor: brand.action }}
           />
           <label
             htmlFor="student-consent"
-            className="text-[13px] leading-[1.5] text-[var(--text-secondary)] cursor-pointer"
+            className="text-[13px] leading-[1.5] cursor-pointer"
+            style={{ color: colors.text.secondary }}
           >
-            <strong className="block text-[var(--text-primary)] mb-1">
+            <strong
+              className="block mb-1"
+              style={{ color: colors.text.primary }}
+            >
               Biometric Data Consent
             </strong>
             I agree to allow TypeTrace to securely record my keystroke timings
@@ -472,7 +516,10 @@ function StudentForm({ onBack }: { onBack: () => void }) {
           </label>
         </div>
         {errors.consent && (
-          <span className="text-xs font-medium text-[var(--error-color)]">
+          <span
+            className="text-xs font-medium"
+            style={{ color: brand.aiAccent }}
+          >
             {errors.consent.message}
           </span>
         )}
@@ -482,7 +529,7 @@ function StudentForm({ onBack }: { onBack: () => void }) {
           disabled={isLoading}
           className="w-full mt-2 p-3 text-white rounded-lg text-sm font-medium transition-all"
           style={{
-            backgroundColor: "var(--brand-action)",
+            backgroundColor: brand.action,
             opacity: isLoading ? 0.8 : 1,
             cursor: isLoading ? "not-allowed" : "pointer",
           }}
@@ -503,12 +550,38 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const setPendingEmail = useAuthStore((state) => state.setPendingEmail);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<TeacherFormValues>({ resolver: zodResolver(teacherSchema) });
+
+  const getInputStyle = (
+    field: string,
+    hasError: boolean,
+  ): React.CSSProperties => ({
+    width: "100%",
+    padding: "12px 14px",
+    backgroundColor: colors.surface[50],
+    borderRadius: "8px",
+    fontSize: "14px",
+    color: colors.text.primary,
+    outline: "none",
+    transition: "all 0.15s ease",
+    border: `1px solid ${
+      hasError
+        ? brand.aiAccent
+        : focusedField === field
+          ? brand.action
+          : colors.surface[200]
+    }`,
+    boxShadow:
+      focusedField === field && !hasError
+        ? `0 0 0 1px ${brand.action}`
+        : "none",
+  });
 
   const onSubmit = async (data: TeacherFormValues) => {
     setIsLoading(true);
@@ -524,7 +597,8 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
         password: data.password,
         consent: data.consent,
       });
-      navigate(ROUTES.VERIFY_OTP, { state: { email: data.email } });
+      setPendingEmail(data.email);
+      navigate(ROUTES.VERIFY_OTP);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } };
       setApiError(
@@ -536,17 +610,6 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
     }
   };
 
-  const inputStyle = (
-    field: string,
-    hasError: boolean,
-  ): React.CSSProperties => ({
-    border: `1px solid ${hasError ? "var(--error-color)" : focusedField === field ? "var(--brand-action)" : "var(--surface-200)"}`,
-    boxShadow:
-      focusedField === field && !hasError
-        ? "0 0 0 1px var(--brand-action)"
-        : "none",
-  });
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -557,7 +620,14 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
     >
       <button
         onClick={onBack}
-        className="flex items-center gap-2 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors mb-8"
+        className="flex items-center gap-2 text-[13px] transition-colors mb-8"
+        style={{ color: colors.text.secondary }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.color = colors.text.primary)
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.color = colors.text.secondary)
+        }
       >
         <BackIcon />
         Back
@@ -571,10 +641,13 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
           <TeacherIcon />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)] tracking-tight">
+          <h1
+            className="text-xl font-semibold tracking-tight"
+            style={{ color: colors.text.primary }}
+          >
             Instructor Registration
           </h1>
-          <p className="text-[13px] text-[var(--text-secondary)]">
+          <p className="text-[13px]" style={{ color: colors.text.secondary }}>
             Create your academic oversight account
           </p>
         </div>
@@ -602,8 +675,7 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
               {...register("firstName")}
               onFocus={() => setFocusedField("firstName")}
               onBlur={() => setFocusedField(null)}
-              className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-              style={inputStyle("firstName", !!errors.firstName)}
+              style={getInputStyle("firstName", !!errors.firstName)}
             />
           </Field>
           <Field label="Last Name" error={errors.lastName?.message}>
@@ -613,8 +685,7 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
               {...register("lastName")}
               onFocus={() => setFocusedField("lastName")}
               onBlur={() => setFocusedField(null)}
-              className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-              style={inputStyle("lastName", !!errors.lastName)}
+              style={getInputStyle("lastName", !!errors.lastName)}
             />
           </Field>
         </div>
@@ -626,8 +697,7 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
             {...register("email")}
             onFocus={() => setFocusedField("email")}
             onBlur={() => setFocusedField(null)}
-            className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-            style={inputStyle("email", !!errors.email)}
+            style={getInputStyle("email", !!errors.email)}
           />
         </Field>
 
@@ -637,12 +707,11 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
         >
           <input
             type="text"
-            placeholder="e.g. University of Edinburgh"
+            placeholder="e.g. University of Bedfordshire"
             {...register("universityName")}
             onFocus={() => setFocusedField("universityName")}
             onBlur={() => setFocusedField(null)}
-            className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-            style={inputStyle("universityName", !!errors.universityName)}
+            style={getInputStyle("universityName", !!errors.universityName)}
           />
         </Field>
 
@@ -653,8 +722,7 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
             {...register("department")}
             onFocus={() => setFocusedField("department")}
             onBlur={() => setFocusedField(null)}
-            className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-            style={inputStyle("department", !!errors.department)}
+            style={getInputStyle("department", !!errors.department)}
           />
         </Field>
 
@@ -665,16 +733,16 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
             {...register("password")}
             onFocus={() => setFocusedField("password")}
             onBlur={() => setFocusedField(null)}
-            className="w-full px-3.5 py-3 bg-[var(--surface-50)] rounded-lg text-sm text-[var(--text-primary)] outline-none transition-all"
-            style={inputStyle("password", !!errors.password)}
+            style={getInputStyle("password", !!errors.password)}
           />
         </Field>
 
-        {/* Data processing agreement for teachers */}
+        {/* Data processing agreement */}
         <div
-          className="flex items-start gap-3 p-4 bg-[var(--surface-50)] rounded-lg"
+          className="flex items-start gap-3 p-4 rounded-lg"
           style={{
-            border: `1px solid ${errors.consent ? "var(--error-color)" : "var(--surface-200)"}`,
+            backgroundColor: colors.surface[50],
+            border: `1px solid ${errors.consent ? brand.aiAccent : colors.surface[200]}`,
           }}
         >
           <input
@@ -682,13 +750,17 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
             id="teacher-consent"
             {...register("consent")}
             className="mt-0.5 w-4 h-4 cursor-pointer"
-            style={{ accentColor: "var(--brand-action)" }}
+            style={{ accentColor: "#0369a1" }}
           />
           <label
             htmlFor="teacher-consent"
-            className="text-[13px] leading-[1.5] text-[var(--text-secondary)] cursor-pointer"
+            className="text-[13px] leading-[1.5] cursor-pointer"
+            style={{ color: colors.text.secondary }}
           >
-            <strong className="block text-[var(--text-primary)] mb-1">
+            <strong
+              className="block mb-1"
+              style={{ color: colors.text.primary }}
+            >
               Data Processing Agreement
             </strong>
             I confirm I have the authority to review student behavioral data at
@@ -697,7 +769,10 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
           </label>
         </div>
         {errors.consent && (
-          <span className="text-xs font-medium text-[var(--error-color)]">
+          <span
+            className="text-xs font-medium"
+            style={{ color: brand.aiAccent }}
+          >
             {errors.consent.message}
           </span>
         )}
@@ -732,27 +807,16 @@ export default function RegisterPage() {
     window.scrollTo(0, 0);
   }, []);
 
-  const authStyles = {
-    "--bg-main": colors.text.light,
-    "--surface-50": colors.surface[50],
-    "--surface-200": colors.surface[200],
-    "--text-primary": colors.text.primary,
-    "--text-secondary": colors.text.secondary,
-    "--brand-action": brand.action,
-    "--brand-hover": brand.actionHover,
-    "--error-color": brand.aiAccent,
-  } as React.CSSProperties;
-
   const handleRoleSelect = (role: UserRole) => {
     setStep(role === "TEACHER" ? "teacher" : "student");
   };
 
   return (
     <div
-      style={authStyles}
-      className="min-h-screen flex flex-col bg-[var(--bg-main)] font-sans"
+      className="min-h-screen flex flex-col font-sans"
+      style={{ backgroundColor: colors.text.light }}
     >
-      {/* ── Header ── */}
+      {/* Header */}
       <header
         className="w-full flex items-center justify-between px-12 shrink-0"
         style={{ height: 64, borderColor: colors.surface[200] }}
@@ -769,17 +833,23 @@ export default function RegisterPage() {
         </Link>
         <Link
           to={ROUTES.LOGIN}
-          className="px-6 py-2 rounded-md text-[13px] font-semibold border transition-colors hover:bg-[var(--surface-50)]"
+          className="px-6 py-2 rounded-md text-[13px] font-semibold border transition-colors"
           style={{
             color: colors.text.primary,
             borderColor: colors.surface[200],
           }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.backgroundColor = colors.surface[50])
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.backgroundColor = "transparent")
+          }
         >
           Sign In
         </Link>
       </header>
 
-      {/* ── Animated form area ── */}
+      {/* Form area */}
       <div className="flex-1 flex items-start justify-center pt-[8vh] px-6 pb-10">
         <AnimatePresence mode="wait">
           {step === "select" && (

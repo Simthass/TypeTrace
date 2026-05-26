@@ -24,6 +24,23 @@ function OverviewIcon() {
     </svg>
   );
 }
+function JoinCourseIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+      <path d="M6 12v5c3 3 9 3 12 0v-5" />
+    </svg>
+  );
+}
 
 function SessionsIcon() {
   return (
@@ -254,6 +271,7 @@ export default function DashboardLayout() {
       badge: "4",
     },
     { name: "Analytics", path: "/analytics", icon: <AnalyticsIcon /> },
+    { name: "Join Course", path: ROUTES.JOIN_COURSE, icon: <JoinCourseIcon /> },
   ];
 
   // linking out of the dashboard layout
@@ -488,7 +506,7 @@ export default function DashboardLayout() {
                 className="text-[12.5px] font-semibold truncate leading-tight"
                 style={{ color: colors.text.primary }}
               >
-                {user.first_name} {user.last_name}
+                {user.first_name}
               </span>
               <span
                 className="text-[11px] truncate"

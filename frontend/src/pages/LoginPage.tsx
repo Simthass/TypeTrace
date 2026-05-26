@@ -108,11 +108,15 @@ export default function LoginPage() {
         access_token: string;
       };
 
-      useAuthStore.getState().login(user, access_token);
+      // Guarantee role is always a valid value before storing
+      const safeUser: AuthUser = {
+        ...user,
+        role: (user.role as string) === "TEACHER" ? "TEACHER" : "STUDENT",
+      };
 
-      // ── RBAC-aware redirect ─────────────────────────────────────────────
-      // Teachers go to their oversight dashboard; students go to the normal app.
-      if (user.role === "TEACHER") {
+      useAuthStore.getState().login(safeUser, access_token);
+
+      if (safeUser.role === "TEACHER") {
         navigate(ROUTES.TEACHER_DASHBOARD);
       } else {
         navigate(ROUTES.DASHBOARD);

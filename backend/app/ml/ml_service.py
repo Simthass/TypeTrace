@@ -9,13 +9,15 @@ New Features:
   - Concentric vector cryptographic assurance seal
   - QR Code central icon size scaled to 28% with Level H correction
   - Zero-Knowledge cryptographic verification page architecture
+  - Teacher/Student course management system
+  - Teacher dashboard with review workflow
 """
 
 import os
 import json
 import logging
 import warnings
-import secrets
+import secrets as _secrets
 import hashlib
 import io
 from typing import Any, Optional
@@ -100,7 +102,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PATCH"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -124,9 +126,38 @@ if DB_URL:
     try:
         db_engine = create_engine(DB_URL, pool_pre_ping=True)
         with db_engine.begin() as conn:
+            # existing lines (keep them):
             conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS certificate_id VARCHAR(50) UNIQUE;"))
             conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS document_hash VARCHAR(64);"))
-        log.info("✅ Database engine initialized & schema patched for Certificates.")
+
+            # ── NEW: Part 2 schema ──────────────────────────────────────────────────
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS courses (
+                    id          SERIAL PRIMARY KEY,
+                    teacher_id  VARCHAR(50) NOT NULL,
+                    course_name VARCHAR(200) NOT NULL,
+                    course_code VARCHAR(100) NOT NULL,
+                    invite_code VARCHAR(20) UNIQUE NOT NULL,
+                    created_at  TIMESTAMP DEFAULT NOW()
+                );
+            """))
+
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS course_students (
+                    id         SERIAL PRIMARY KEY,
+                    course_id  INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+                    student_id VARCHAR(50) NOT NULL,
+                    joined_at  TIMESTAMP DEFAULT NOW(),
+                    UNIQUE(course_id, student_id)
+                );
+            """))
+
+            conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS course_id INTEGER REFERENCES courses(id);"))
+            conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS review_status VARCHAR(30) DEFAULT 'PENDING';"))
+            conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS reviewed_by VARCHAR(50);"))
+            conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS review_notes TEXT;"))
+            conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS risk_level VARCHAR(20) DEFAULT 'LOW';"))
+        log.info("✅ Database engine initialized & schema patched for Certificates + Courses.")
     except Exception as e:
         log.warning(f"⚠️  Database connection/patch failed: {e}")
 
@@ -146,6 +177,52 @@ def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(secu
         return user_id
     except JWTError:
         raise HTTPException(status_code=401, detail="Token invalid or expired.")
+
+def get_current_user_role(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """Extracts the role claim from the JWT. Returns 'STUDENT' or 'TEACHER'."""
+    if not SECRET_KEY:
+        raise HTTPException(status_code=503, detail="SECRET_KEY not set.")
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        role: str = payload.get("role", "STUDENT")
+        return role
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token invalid or expired.")
+
+
+def get_full_token_payload(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    """Returns the full JWT payload dict: {id, sub, role}."""
+    if not SECRET_KEY:
+        raise HTTPException(status_code=503, detail="SECRET_KEY not set.")
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        if not payload.get("id"):
+            raise HTTPException(status_code=401, detail="Invalid token payload.")
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token invalid or expired.")
+
+
+def _require_teacher(payload: dict) -> str:
+    """
+    Validates the caller is a TEACHER. Returns their user_id.
+    Call this at the top of every teacher endpoint.
+    """
+    if payload.get("role") != "TEACHER":
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Teacher account required.",
+        )
+    return str(payload["id"])
+
+
+def _compute_risk_level(classification: str, confidence: float) -> str:
+    """Derives a risk label from ML output for the teacher dashboard."""
+    if classification in ("SYNTHETIC", "AI-GENERATED"):
+        return "HIGH"
+    if classification == "SUSPICIOUS":
+        return "MEDIUM" if confidence < 80 else "HIGH"
+    return "LOW"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. SCHEMAS
@@ -173,6 +250,17 @@ class AnalysisResult(BaseModel):
     session_id: Optional[int]    
     certificate_id: Optional[str] 
     document_hash: Optional[str]  
+
+class CourseCreateSchema(BaseModel):
+    course_name: str
+    course_code: str
+
+class JoinCourseSchema(BaseModel):
+    invite_code: str
+
+class ReviewDecisionSchema(BaseModel):
+    status: str        # "APPROVED" | "FLAGGED" | "UNDER_REVIEW"
+    notes: Optional[str] = None
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. CORE INFERENCE
@@ -217,7 +305,7 @@ async def analyze_session(request: Request, data: KeystrokeSession, user_id: str
         data.keystroke_array, data.stats, data.text_content
     )
 
-    cert_id = f"TT26-{secrets.token_hex(4).upper()}"
+    cert_id = f"TT26-{_secrets.token_hex(4).upper()}"
     doc_hash = hashlib.sha256(data.text_content.encode('utf-8')).hexdigest()
     session_id = None
 
@@ -384,7 +472,493 @@ async def get_session_replay(
     }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7. ZERO-KNOWLEDGE PUBLIC VERIFICATION & ENTERPRISE PDF GENERATOR
+# 7. COURSE MANAGEMENT ENDPOINTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/api/v1/courses")
+@limiter.limit("10/minute")
+async def create_course(
+    request: Request,
+    data: CourseCreateSchema,
+    payload: dict = Depends(get_full_token_payload),
+):
+    """Teacher creates a new course. Returns the generated invite code."""
+    teacher_id = _require_teacher(payload)
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+
+    # 6-char alphanumeric invite code, prefixed with TT- for recognisability
+    invite_code = f"TT-{data.course_code.upper()[:6]}-{_secrets.token_hex(2).upper()}"
+
+    with db_engine.begin() as conn:
+        row = conn.execute(
+            text("""
+                INSERT INTO courses (teacher_id, course_name, course_code, invite_code)
+                VALUES (:tid, :name, :code, :invite)
+                RETURNING id, course_name, course_code, invite_code, created_at
+            """),
+            {
+                "tid": teacher_id,
+                "name": data.course_name.strip(),
+                "code": data.course_code.strip().upper(),
+                "invite": invite_code,
+            },
+        ).fetchone()
+
+    return {
+        "id": row[0],
+        "course_name": row[1],
+        "course_code": row[2],
+        "invite_code": row[3],
+        "created_at": row[4].isoformat() if row[4] else None,
+    }
+
+
+@app.get("/api/v1/courses")
+@limiter.limit("30/minute")
+async def get_my_courses(
+    request: Request,
+    payload: dict = Depends(get_full_token_payload),
+):
+    """Teacher fetches all courses they own, with student + submission counts."""
+    teacher_id = _require_teacher(payload)
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+
+    with db_engine.connect() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT
+                    c.id,
+                    c.course_name,
+                    c.course_code,
+                    c.invite_code,
+                    c.created_at,
+                    COUNT(DISTINCT cs.student_id)              AS student_count,
+                    COUNT(DISTINCT ts.id)                       AS submission_count,
+                    ROUND(AVG(ts.ml_confidence_score)::numeric, 1) AS avg_confidence
+                FROM courses c
+                LEFT JOIN course_students cs ON cs.course_id = c.id
+                LEFT JOIN typing_sessions ts ON ts.course_id = c.id
+                WHERE c.teacher_id = :tid
+                GROUP BY c.id
+                ORDER BY c.created_at DESC
+            """),
+            {"tid": teacher_id},
+        ).fetchall()
+
+    return {
+        "courses": [
+            {
+                "id": r[0],
+                "course_name": r[1],
+                "course_code": r[2],
+                "invite_code": r[3],
+                "created_at": r[4].isoformat() if r[4] else None,
+                "student_count": int(r[5] or 0),
+                "submission_count": int(r[6] or 0),
+                "avg_confidence": float(r[7] or 0),
+            }
+            for r in rows
+        ]
+    }
+
+
+@app.post("/api/v1/courses/join")
+@limiter.limit("10/minute")
+async def join_course(
+    request: Request,
+    data: JoinCourseSchema,
+    payload: dict = Depends(get_full_token_payload),
+):
+    """Student joins a course by invite code. Teachers cannot call this."""
+    if payload.get("role") != "STUDENT":
+        raise HTTPException(status_code=403, detail="Only students can join courses.")
+
+    student_id = str(payload["id"])
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+
+    with db_engine.begin() as conn:
+        # Resolve the invite code to a course
+        course_row = conn.execute(
+            text("SELECT id, course_name, course_code FROM courses WHERE invite_code = :code"),
+            {"code": data.invite_code.strip().upper()},
+        ).fetchone()
+
+        if not course_row:
+            raise HTTPException(status_code=404, detail="Invalid invite code.")
+
+        # Idempotent enroll — ignore duplicate
+        conn.execute(
+            text("""
+                INSERT INTO course_students (course_id, student_id)
+                VALUES (:cid, :sid)
+                ON CONFLICT (course_id, student_id) DO NOTHING
+            """),
+            {"cid": course_row[0], "sid": student_id},
+        )
+
+    return {
+        "message": f"Successfully joined {course_row[1]}.",
+        "course_id": course_row[0],
+        "course_name": course_row[1],
+        "course_code": course_row[2],
+    }
+
+
+@app.get("/api/v1/courses/enrolled")
+@limiter.limit("30/minute")
+async def get_enrolled_courses(
+    request: Request,
+    payload: dict = Depends(get_full_token_payload),
+):
+    """Returns all courses the authenticated student is enrolled in."""
+    if payload.get("role") != "STUDENT":
+        raise HTTPException(status_code=403, detail="Students only.")
+
+    student_id = str(payload["id"])
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+
+    with db_engine.connect() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT c.id, c.course_name, c.course_code, c.invite_code, cs.joined_at
+                FROM courses c
+                JOIN course_students cs ON cs.course_id = c.id
+                WHERE cs.student_id = :sid
+                ORDER BY cs.joined_at DESC
+            """),
+            {"sid": student_id},
+        ).fetchall()
+
+    return {
+        "courses": [
+            {
+                "id": r[0],
+                "course_name": r[1],
+                "course_code": r[2],
+                "invite_code": r[3],
+                "joined_at": r[4].isoformat() if r[4] else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. TEACHER DASHBOARD ENDPOINTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/v1/teacher/students")
+@limiter.limit("30/minute")
+async def get_teacher_students(
+    request: Request,
+    payload: dict = Depends(get_full_token_payload),
+):
+    """All distinct students enrolled in any of the teacher's courses."""
+    teacher_id = _require_teacher(payload)
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+
+    with db_engine.connect() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT DISTINCT
+                    u.id,
+                    u.first_name,
+                    u.last_name,
+                    u.email,
+                    u.student_id,
+                    c.course_name,
+                    c.id AS course_id,
+                    COUNT(ts.id) AS session_count,
+                    ROUND(AVG(ts.ml_confidence_score)::numeric, 1) AS avg_confidence,
+                    MAX(ts.created_at) AS last_active
+                FROM courses c
+                JOIN course_students cs ON cs.course_id = c.id
+                JOIN users u ON u.id = cs.student_id
+                LEFT JOIN typing_sessions ts ON ts.user_id = u.id AND ts.course_id = c.id
+                WHERE c.teacher_id = :tid
+                GROUP BY u.id, u.first_name, u.last_name, u.email, u.student_id, c.id, c.course_name
+                ORDER BY last_active DESC NULLS LAST
+            """),
+            {"tid": teacher_id},
+        ).fetchall()
+
+    return {
+        "students": [
+            {
+                "user_id": r[0],
+                "first_name": r[1],
+                "last_name": r[2],
+                "email": r[3],
+                "student_id": r[4],
+                "course_name": r[5],
+                "course_id": r[6],
+                "session_count": int(r[7] or 0),
+                "avg_confidence": float(r[8] or 0),
+                "last_active": r[9].strftime("%b %d, %Y") if r[9] else "Never",
+            }
+            for r in rows
+        ]
+    }
+
+
+@app.get("/api/v1/teacher/sessions")
+@limiter.limit("30/minute")
+async def get_teacher_sessions(
+    request: Request,
+    course_id: Optional[int] = None,
+    payload: dict = Depends(get_full_token_payload),
+):
+    """
+    All typing sessions from students enrolled in the teacher's courses.
+    Optionally filter by course_id query param: /api/v1/teacher/sessions?course_id=3
+    """
+    teacher_id = _require_teacher(payload)
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+
+    with db_engine.connect() as conn:
+        query_filter = "AND ts.course_id = :cid" if course_id else ""
+        rows = conn.execute(
+            text(f"""
+                SELECT
+                    ts.id,
+                    ts.title,
+                    ts.wpm,
+                    ts.duration_seconds,
+                    ts.classification_result,
+                    ts.ml_confidence_score,
+                    ts.created_at,
+                    ts.review_status,
+                    ts.risk_level,
+                    u.first_name,
+                    u.last_name,
+                    u.student_id,
+                    c.course_name,
+                    ts.course_id
+                FROM typing_sessions ts
+                JOIN users u ON u.id = ts.user_id
+                JOIN course_students cs ON cs.student_id = u.id
+                JOIN courses c ON c.id = cs.course_id
+                WHERE c.teacher_id = :tid
+                  {query_filter}
+                ORDER BY ts.created_at DESC
+                LIMIT 500
+            """),
+            {"tid": teacher_id, "cid": course_id},
+        ).fetchall()
+
+    return {
+        "sessions": [
+            {
+                "id": r[0],
+                "title": r[1],
+                "wpm": round(float(r[2] or 0), 1),
+                "duration": round(float(r[3] or 0), 1),
+                "classification": r[4],
+                "confidence": round(float(r[5] or 0), 1),
+                "date": r[6].strftime("%b %d, %Y") if r[6] else "Unknown",
+                "review_status": r[7] or "PENDING",
+                "risk_level": r[8] or "LOW",
+                "student_name": f"{r[9]} {r[10]}",
+                "student_id": r[11],
+                "course_name": r[12],
+                "course_id": r[13],
+            }
+            for r in rows
+        ]
+    }
+
+
+@app.get("/api/v1/teacher/sessions/{session_id}")
+@limiter.limit("20/minute")
+async def get_teacher_session_detail(
+    request: Request,
+    session_id: int,
+    payload: dict = Depends(get_full_token_payload),
+):
+    """
+    Full session detail for the teacher review page.
+    Includes all ML metrics + student info. No raw keystroke data exposed.
+    """
+    teacher_id = _require_teacher(payload)
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+
+    with db_engine.connect() as conn:
+        row = conn.execute(
+            text("""
+                SELECT
+                    ts.id, ts.title, ts.wpm, ts.duration_seconds,
+                    ts.classification_result, ts.ml_confidence_score,
+                    ts.total_keystrokes, ts.deletions, ts.pauses, ts.avg_iki,
+                    ts.created_at, ts.review_status, ts.review_notes,
+                    ts.risk_level, ts.certificate_id, ts.document_hash,
+                    ts.text_content,
+                    u.first_name, u.last_name, u.email, u.student_id,
+                    c.course_name, c.id AS course_id, c.teacher_id
+                FROM typing_sessions ts
+                JOIN users u ON u.id = ts.user_id
+                JOIN course_students cs ON cs.student_id = u.id
+                JOIN courses c ON c.id = cs.course_id
+                WHERE ts.id = :sid AND c.teacher_id = :tid
+                LIMIT 1
+            """),
+            {"sid": session_id, "tid": teacher_id},
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail="Session not found or not in your courses.",
+        )
+
+    return {
+        "id": row[0],
+        "title": row[1],
+        "wpm": round(float(row[2] or 0), 1),
+        "duration": round(float(row[3] or 0), 1),
+        "classification": row[4],
+        "confidence": round(float(row[5] or 0), 1),
+        "total_keystrokes": int(row[6] or 0),
+        "deletions": int(row[7] or 0),
+        "pauses": int(row[8] or 0),
+        "avg_iki": int(row[9] or 0),
+        "date": row[10].strftime("%b %d, %Y %H:%M") if row[10] else "Unknown",
+        "review_status": row[11] or "PENDING",
+        "review_notes": row[12] or "",
+        "risk_level": row[13] or "LOW",
+        "certificate_id": row[14],
+        "document_hash": row[15],
+        "text_preview": (row[16] or "")[:500],  # First 500 chars only
+        "student": {
+            "first_name": row[17],
+            "last_name": row[18],
+            "email": row[19],
+            "student_id": row[20],
+        },
+        "course_name": row[21],
+        "course_id": row[22],
+    }
+
+
+@app.patch("/api/v1/teacher/sessions/{session_id}/review")
+@limiter.limit("20/minute")
+async def submit_review_decision(
+    request: Request,
+    session_id: int,
+    data: ReviewDecisionSchema,
+    payload: dict = Depends(get_full_token_payload),
+):
+    """
+    Teacher sets the review_status and optional notes on a session.
+    Also updates risk_level based on the final classification + decision.
+    """
+    teacher_id = _require_teacher(payload)
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+
+    valid_statuses = {"APPROVED", "FLAGGED", "UNDER_REVIEW", "PENDING"}
+    if data.status.upper() not in valid_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"status must be one of: {', '.join(valid_statuses)}",
+        )
+
+    with db_engine.begin() as conn:
+        # Ownership check first
+        ownership = conn.execute(
+            text("""
+                SELECT ts.id FROM typing_sessions ts
+                JOIN course_students cs ON cs.student_id = ts.user_id
+                JOIN courses c ON c.id = cs.course_id
+                WHERE ts.id = :sid AND c.teacher_id = :tid
+                LIMIT 1
+            """),
+            {"sid": session_id, "tid": teacher_id},
+        ).fetchone()
+
+        if not ownership:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permission to review this session.",
+            )
+
+        conn.execute(
+            text("""
+                UPDATE typing_sessions
+                SET review_status = :status,
+                    review_notes  = :notes,
+                    reviewed_by   = :teacher
+                WHERE id = :sid
+            """),
+            {
+                "status": data.status.upper(),
+                "notes": (data.notes or "").strip(),
+                "teacher": teacher_id,
+                "sid": session_id,
+            },
+        )
+
+    return {
+        "message": "Review decision saved.",
+        "session_id": session_id,
+        "review_status": data.status.upper(),
+    }
+
+
+@app.get("/api/v1/teacher/stats")
+@limiter.limit("30/minute")
+async def get_teacher_stats(
+    request: Request,
+    payload: dict = Depends(get_full_token_payload),
+):
+    """
+    Aggregate statistics for the teacher dashboard header cards:
+    total students, total submissions, suspicious %, avg confidence, pending reviews.
+    """
+    teacher_id = _require_teacher(payload)
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+
+    with db_engine.connect() as conn:
+        stats = conn.execute(
+            text("""
+                SELECT
+                    COUNT(DISTINCT cs.student_id)                               AS total_students,
+                    COUNT(DISTINCT ts.id)                                        AS total_submissions,
+                    ROUND(AVG(ts.ml_confidence_score)::numeric, 1)               AS avg_confidence,
+                    COUNT(DISTINCT CASE WHEN ts.classification_result IN ('SUSPICIOUS','SYNTHETIC','AI-GENERATED')
+                                        THEN ts.id END)                          AS suspicious_count,
+                    COUNT(DISTINCT CASE WHEN ts.review_status = 'PENDING'
+                                        THEN ts.id END)                          AS pending_reviews,
+                    COUNT(DISTINCT c.id)                                         AS total_courses
+                FROM courses c
+                LEFT JOIN course_students cs ON cs.course_id = c.id
+                LEFT JOIN typing_sessions ts ON ts.course_id = c.id
+                WHERE c.teacher_id = :tid
+            """),
+            {"tid": teacher_id},
+        ).fetchone()
+
+    total_subs = int(stats[1] or 0)
+    suspicious = int(stats[3] or 0)
+
+    return {
+        "total_students": int(stats[0] or 0),
+        "total_submissions": total_subs,
+        "avg_confidence": float(stats[2] or 0),
+        "suspicious_pct": round((suspicious / total_subs * 100) if total_subs > 0 else 0, 1),
+        "pending_reviews": int(stats[4] or 0),
+        "total_courses": int(stats[5] or 0),
+    }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. ZERO-KNOWLEDGE PUBLIC VERIFICATION & ENTERPRISE PDF GENERATOR
 # ─────────────────────────────────────────────────────────────────────────────
 
 @app.get("/api/v1/certificates/{cert_id}")

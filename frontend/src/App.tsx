@@ -1,8 +1,10 @@
-// src/App.tsx
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+
+// Layouts
 import RootLayout from "./components/layout/RootLayout";
 import AuthLayout from "./components/layout/AuthLayout";
 import DashboardLayout from "./components/layout/DashboardLayout";
+import TeacherLayout from "./components/layout/TeacherLayout";
 
 // Guards
 import RoleGuard from "./components/guards/RoleGuard";
@@ -29,9 +31,13 @@ import SessionsPage from "./pages/SessionsPage";
 import CertificatesPage from "./pages/CertificatesPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import ReplayPage from "./pages/ReplayPage";
+import JoinCoursePage from "./pages/student/JoinCoursePage";
 
-// Teacher app pages (Part 2 — placeholder until implemented)
-// import TeacherDashboard from "./pages/teacher/TeacherDashboard";
+// Teacher app pages
+import TeacherDashboard from "./pages/teacher/TeacherDashboard";
+import TeacherCoursesPage from "./pages/teacher/TeacherCoursesPage";
+import TeacherSubmissionsPage from "./pages/teacher/TeacherSubmissionsPage";
+import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
 
 import { ROUTES } from "./constants/routes";
 
@@ -39,7 +45,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* ── PUBLIC ROUTES ───────────────────────────────────────────────── */}
+        {/* ── PUBLIC ─────────────────────────────────────────────────────── */}
         <Route element={<RootLayout />}>
           <Route index element={<HomePage />} />
           <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
@@ -62,7 +68,7 @@ export default function App() {
           />
         </Route>
 
-        {/* ── AUTH FLOW ROUTES ─────────────────────────────────────────────── */}
+        {/* ── AUTH ───────────────────────────────────────────────────────── */}
         <Route element={<AuthLayout />}>
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
           <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
@@ -73,40 +79,60 @@ export default function App() {
           />
         </Route>
 
-        {/* ── STUDENT ROUTES (role-gated) ──────────────────────────────────── */}
-        {/*
-         * RoleGuard checks:
-         *   1. isAuthenticated — redirects to /login if not
-         *   2. user.role === "STUDENT" — redirects teachers to /teacher/dashboard
-         */}
+        {/* ── STUDENT ROUTES ─────────────────────────────────────────────── */}
         <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
+          {/* Pages with the resizable sidebar */}
           <Route element={<DashboardLayout />}>
             <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
             <Route path={ROUTES.EDITOR} element={<SessionsPage />} />
             <Route path="/certificates" element={<CertificatesPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/join-course" element={<JoinCoursePage />} />
           </Route>
 
-          {/* Full-screen routes (no sidebar) */}
+          {/* Full-screen pages (no sidebar) */}
           <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
           <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
         </Route>
 
-        {/* ── TEACHER ROUTES (role-gated) ──────────────────────────────────── */}
-        {/*
-         * Part 2 will add real teacher pages here.
-         * For now, a placeholder keeps the route from 404-ing if a teacher logs in.
-         */}
+        {/* ── TEACHER ROUTES ─────────────────────────────────────────────── */}
         <Route element={<RoleGuard allowedRoles={["TEACHER"]} />}>
-          <Route
-            path={ROUTES.TEACHER_DASHBOARD}
-            element={
-              <PlaceholderPage
-                title="Teacher Dashboard"
-                description="The instructor oversight dashboard is coming in Part 2."
-              />
-            }
-          />
+          <Route element={<TeacherLayout />}>
+            <Route
+              path={ROUTES.TEACHER_DASHBOARD}
+              element={<TeacherDashboard />}
+            />
+            <Route
+              path={ROUTES.TEACHER_COURSES}
+              element={<TeacherCoursesPage />}
+            />
+            <Route
+              path="/teacher/submissions"
+              element={<TeacherSubmissionsPage />}
+            />
+            <Route
+              path="/teacher/students"
+              element={
+                <PlaceholderPage
+                  title="Students"
+                  description="Students roster view coming soon."
+                />
+              }
+            />
+            {/* Dynamic course detail */}
+            <Route
+              path="/teacher/courses/:courseId"
+              element={
+                <PlaceholderPage
+                  title="Course Detail"
+                  description="Detailed per-course view coming soon."
+                />
+              }
+            />
+          </Route>
+
+          {/* Full-screen review page (no sidebar — needs full width for metrics) */}
+          <Route path={ROUTES.TEACHER_REVIEW} element={<TeacherReviewPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

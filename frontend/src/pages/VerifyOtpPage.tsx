@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ROUTES } from "../constants/routes";
@@ -39,12 +39,11 @@ function MailIcon() {
 export default function VerifyOtpPage() {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [isLoading, setIsLoading] = useState(false);
-
-  // NEW: Dynamic loading text for the Labor Illusion UX
   const [loadingText, setLoadingText] = useState("Verify Account");
   const [errorMsg, setErrorMsg] = useState("");
 
   const pendingEmail = useAuthStore((state) => state.pendingEmail);
+  const setPendingEmail = useAuthStore((state) => state.setPendingEmail);
   const navigate = useNavigate();
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -60,7 +59,6 @@ export default function VerifyOtpPage() {
     const newOtp = [...otp];
     newOtp[index] = value.substring(value.length - 1);
     setOtp(newOtp);
-
     if (value !== "" && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -79,8 +77,7 @@ export default function VerifyOtpPage() {
     e.preventDefault();
     const pastedData = e.clipboardData.getData("text/plain").trim();
     if (/^\d{6}$/.test(pastedData)) {
-      const pastedArray = pastedData.split("");
-      setOtp(pastedArray);
+      setOtp(pastedData.split(""));
       inputRefs.current[5]?.focus();
     }
   };
@@ -88,7 +85,6 @@ export default function VerifyOtpPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const fullOtp = otp.join("");
-
     if (fullOtp.length < 6) {
       setErrorMsg("Please enter all 6 digits.");
       return;
@@ -96,34 +92,28 @@ export default function VerifyOtpPage() {
 
     setIsLoading(true);
     setErrorMsg("");
-    // Start the loading sequence visually
     setLoadingText("Validating token...");
 
     try {
-      // 1. The API call happens instantly in the background
-      const response = await api.post("/verify-otp", {
+      await api.post("/auth/verify-otp", {
         email: pendingEmail,
         otp: fullOtp,
       });
 
-      const { user, access_token } = response.data;
-
-      // 2. The API succeeded! Now we trigger the "Labor Illusion"
+      // Labor illusion sequence — then go to login
       setLoadingText("Verifying cryptographic seal...");
-
       setTimeout(() => {
-        setLoadingText("Provisioning secure session...");
-
+        setLoadingText("Account created successfully...");
         setTimeout(() => {
-          // 3. Actually log them in and redirect after the visual sequence finishes
-          useAuthStore.getState().login(user, access_token);
-          navigate(ROUTES.DASHBOARD);
-        }, 1000); // Wait another 1000ms
-      }, 1000); // Wait 1000ms
-    } catch (error: any) {
-      // If it actually fails, we drop the illusion instantly and show the error
+          setPendingEmail(null);
+          navigate(ROUTES.LOGIN);
+        }, 1000);
+      }, 1000);
+    } catch (error: unknown) {
+      const axiosErr = error as { response?: { data?: { detail?: string } } };
       setErrorMsg(
-        error.response?.data?.detail || "Invalid OTP code. Please try again.",
+        axiosErr.response?.data?.detail ||
+          "Invalid OTP code. Please try again.",
       );
       setOtp(["", "", "", "", "", ""]);
       inputRefs.current[0]?.focus();
@@ -133,7 +123,6 @@ export default function VerifyOtpPage() {
   };
 
   const handleResend = () => {
-    // TODO: wire this up to a /resend-otp endpoint later
     alert("New OTP sent! Check your university email.");
   };
 
@@ -155,6 +144,7 @@ export default function VerifyOtpPage() {
         transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
         style={{ width: "100%", maxWidth: "400px" }}
       >
+        {/* Icon + heading */}
         <div
           style={{
             display: "flex",
@@ -198,13 +188,15 @@ export default function VerifyOtpPage() {
               lineHeight: "1.6",
             }}
           >
-            We sent a 6-digit verification code to <br />
+            We sent a 6-digit verification code to
+            <br />
             <strong style={{ color: colors.text.primary, fontWeight: 600 }}>
               {pendingEmail || "your email"}
             </strong>
           </p>
         </div>
 
+        {/* OTP form */}
         <form
           onSubmit={onSubmit}
           style={{ display: "flex", flexDirection: "column", gap: "24px" }}
@@ -236,7 +228,13 @@ export default function VerifyOtpPage() {
                   fontWeight: 700,
                   backgroundColor: colors.surface[50],
                   borderRadius: "8px",
-                  border: `1px solid ${errorMsg ? brand.aiAccent : digit ? brand.action : colors.surface[200]}`,
+                  border: `1px solid ${
+                    errorMsg
+                      ? brand.aiAccent
+                      : digit
+                        ? brand.action
+                        : colors.surface[200]
+                  }`,
                   color: colors.text.primary,
                   outline: "none",
                   transition: "all 0.2s ease",
@@ -292,6 +290,7 @@ export default function VerifyOtpPage() {
           </button>
         </form>
 
+        {/* Resend */}
         <p
           style={{
             fontSize: "14px",
@@ -324,6 +323,7 @@ export default function VerifyOtpPage() {
           </button>
         </p>
 
+        {/* Security note */}
         <div
           style={{
             marginTop: "32px",

@@ -1,4 +1,5 @@
 // src/constants/routes.ts
+// Part 2 additions: TEACHER_REVIEW, JOIN_COURSE
 
 export const ROUTES = {
   // ── Public ──────────────────────────────────────────────────────────────────
@@ -24,13 +25,14 @@ export const ROUTES = {
   SETTINGS: "/settings",
   HELP_DOCS: "/help",
   REPLAY: "/session/:sessionId/replay",
+  JOIN_COURSE: "/join-course",
 
   // ── Teacher App ─────────────────────────────────────────────────────────────
-  // These are Part 2 pages. They are declared here now so Part 2 has a
-  // consistent routing foundation to build on.
   TEACHER_DASHBOARD: "/teacher/dashboard",
   TEACHER_COURSES: "/teacher/courses",
   TEACHER_COURSE: "/teacher/courses/:courseId",
+  TEACHER_SUBMISSIONS: "/teacher/submissions",
+  TEACHER_STUDENTS: "/teacher/students",
   TEACHER_REVIEW: "/teacher/review/:sessionId",
 
   // ── Misc ────────────────────────────────────────────────────────────────────

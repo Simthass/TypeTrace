@@ -9,18 +9,20 @@ interface RoleGuardProps {
 export default function RoleGuard({ allowedRoles }: RoleGuardProps) {
   const { isAuthenticated, user } = useAuthStore();
 
-  // Not logged in at all — send to login
+  // Not logged in at all
   if (!isAuthenticated || !user) {
     return <Navigate to={ROUTES.LOGIN} replace />;
   }
 
-  // Logged in but wrong role — redirect to their correct home
-  if (!allowedRoles.includes(user.role)) {
+  // Role may be undefined in old persisted state — treat as STUDENT
+  const role: UserRole = user.role ?? "STUDENT";
+
+  // Wrong role for this section
+  if (!allowedRoles.includes(role)) {
     const redirectTo =
-      user.role === "TEACHER" ? ROUTES.TEACHER_DASHBOARD : ROUTES.DASHBOARD;
+      role === "TEACHER" ? ROUTES.TEACHER_DASHBOARD : ROUTES.DASHBOARD;
     return <Navigate to={redirectTo} replace />;
   }
 
-  // All checks passed — render the child route
   return <Outlet />;
 }
