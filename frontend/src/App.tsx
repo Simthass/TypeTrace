@@ -1,3 +1,5 @@
+// src/App.tsx — Part 3: TeacherCoursePage replaces the placeholder
+
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 // Layouts
@@ -24,7 +26,7 @@ import RegisterPage from "./pages/RegisterPage";
 import VerifyOtpPage from "./pages/VerifyOtpPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 
-// Student app pages
+// Student pages
 import DashboardPage from "./pages/DashboardPage";
 import EditorPage from "./pages/EditorPage";
 import SessionsPage from "./pages/SessionsPage";
@@ -33,9 +35,10 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import ReplayPage from "./pages/ReplayPage";
 import JoinCoursePage from "./pages/student/JoinCoursePage";
 
-// Teacher app pages
+// Teacher pages
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
 import TeacherCoursesPage from "./pages/teacher/TeacherCoursesPage";
+import TeacherCoursePage from "./pages/teacher/TeacherCoursesPage"; // ← PART 3
 import TeacherSubmissionsPage from "./pages/teacher/TeacherSubmissionsPage";
 import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
 
@@ -45,7 +48,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* ── PUBLIC ─────────────────────────────────────────────────────── */}
+        {/* ── PUBLIC ────────────────────────────────────────────────────────── */}
         <Route element={<RootLayout />}>
           <Route index element={<HomePage />} />
           <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
@@ -59,16 +62,11 @@ export default function App() {
           />
           <Route
             path={ROUTES.NOT_FOUND}
-            element={
-              <PlaceholderPage
-                title="Page not found"
-                description="The page you're looking for doesn't exist."
-              />
-            }
+            element={<PlaceholderPage title="Page not found" />}
           />
         </Route>
 
-        {/* ── AUTH ───────────────────────────────────────────────────────── */}
+        {/* ── AUTH ──────────────────────────────────────────────────────────── */}
         <Route element={<AuthLayout />}>
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
           <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
@@ -79,9 +77,8 @@ export default function App() {
           />
         </Route>
 
-        {/* ── STUDENT ROUTES ─────────────────────────────────────────────── */}
+        {/* ── STUDENT ───────────────────────────────────────────────────────── */}
         <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
-          {/* Pages with the resizable sidebar */}
           <Route element={<DashboardLayout />}>
             <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
             <Route path={ROUTES.EDITOR} element={<SessionsPage />} />
@@ -89,13 +86,11 @@ export default function App() {
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/join-course" element={<JoinCoursePage />} />
           </Route>
-
-          {/* Full-screen pages (no sidebar) */}
           <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
           <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
         </Route>
 
-        {/* ── TEACHER ROUTES ─────────────────────────────────────────────── */}
+        {/* ── TEACHER ───────────────────────────────────────────────────────── */}
         <Route element={<RoleGuard allowedRoles={["TEACHER"]} />}>
           <Route element={<TeacherLayout />}>
             <Route
@@ -106,32 +101,21 @@ export default function App() {
               path={ROUTES.TEACHER_COURSES}
               element={<TeacherCoursesPage />}
             />
+            {/* ← PART 3: real per-course page replaces the placeholder */}
+            <Route
+              path="/teacher/courses/:courseId"
+              element={<TeacherCoursePage />}
+            />
             <Route
               path="/teacher/submissions"
               element={<TeacherSubmissionsPage />}
             />
             <Route
               path="/teacher/students"
-              element={
-                <PlaceholderPage
-                  title="Students"
-                  description="Students roster view coming soon."
-                />
-              }
-            />
-            {/* Dynamic course detail */}
-            <Route
-              path="/teacher/courses/:courseId"
-              element={
-                <PlaceholderPage
-                  title="Course Detail"
-                  description="Detailed per-course view coming soon."
-                />
-              }
+              element={<PlaceholderPage title="Students" />}
             />
           </Route>
-
-          {/* Full-screen review page (no sidebar — needs full width for metrics) */}
+          {/* Full-screen — no sidebar */}
           <Route path={ROUTES.TEACHER_REVIEW} element={<TeacherReviewPage />} />
         </Route>
       </Routes>

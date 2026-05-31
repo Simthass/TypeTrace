@@ -240,6 +240,7 @@ class KeystrokeSession(BaseModel):
     text_content: str
     keystroke_array: Any
     stats: SessionStats
+    course_id: Optional[int] = None 
 
 class AnalysisResult(BaseModel):
     classification: str          
@@ -312,22 +313,31 @@ async def analyze_session(request: Request, data: KeystrokeSession, user_id: str
     if db_engine:
         try:
             with db_engine.begin() as conn:
+                # Auto-derive risk level from classification + confidence
+                risk_level = "HIGH" if classification in ("SYNTHETIC", "AI-GENERATED") \
+                    else "MEDIUM" if classification == "SUSPICIOUS" \
+                    else "LOW"
+
                 result = conn.execute(
                     text("""
                         INSERT INTO typing_sessions (
-                            user_id, title, text_content, wpm, total_keystrokes, deletions, pauses, avg_iki, 
+                            user_id, title, text_content, wpm, total_keystrokes, deletions, pauses, avg_iki,
                             duration_seconds, classification_result, ml_confidence_score, raw_keystroke_data,
-                            certificate_id, document_hash
+                            certificate_id, document_hash, course_id, risk_level
                         ) VALUES (
-                            :u, :t, :txt, :w, :tk, :d, :p, :avg, :ds, :cls, :conf, :raw, :cert, :hash
+                            :u, :t, :txt, :w, :tk, :d, :p, :avg, :ds, :cls, :conf, :raw, :cert, :hash,
+                            :course_id, :risk_level
                         ) RETURNING id
                     """),
                     {
-                        "u": user_id, "t": data.title, "txt": data.text_content, 
+                        "u": user_id, "t": data.title, "txt": data.text_content,
                         "w": round(features.get("net_wpm", data.stats.wpm)), "tk": data.stats.keystrokes,
-                        "d": data.stats.deletions, "p": data.stats.pauses, "avg": round(features.get("ft_mean", data.stats.avgIki)),
+                        "d": data.stats.deletions, "p": data.stats.pauses,
+                        "avg": round(features.get("ft_mean", data.stats.avgIki)),
                         "ds": data.stats.sessionSeconds, "cls": classification, "conf": float(confidence),
-                        "raw": json.dumps(data.keystroke_array[:500]), "cert": cert_id, "hash": doc_hash
+                        "raw": json.dumps(data.keystroke_array[:500]), "cert": cert_id, "hash": doc_hash,
+                        "course_id": data.course_id,
+                        "risk_level": risk_level,
                     }
                 )
                 row = result.fetchone()
@@ -714,8 +724,9 @@ async def get_teacher_sessions(
     payload: dict = Depends(get_full_token_payload),
 ):
     """
-    All typing sessions from students enrolled in the teacher's courses.
-    Optionally filter by course_id query param: /api/v1/teacher/sessions?course_id=3
+    All typing sessions from students enrolled in the teacher's courses,
+    where the session was explicitly submitted to that course.
+    Sessions with course_id = NULL (personal sessions) are never shown.
     """
     teacher_id = _require_teacher(payload)
     if not db_engine:
@@ -742,8 +753,7 @@ async def get_teacher_sessions(
                     ts.course_id
                 FROM typing_sessions ts
                 JOIN users u ON u.id = ts.user_id
-                JOIN course_students cs ON cs.student_id = u.id
-                JOIN courses c ON c.id = cs.course_id
+                JOIN courses c ON c.id = ts.course_id
                 WHERE c.teacher_id = :tid
                   {query_filter}
                 ORDER BY ts.created_at DESC
@@ -781,10 +791,6 @@ async def get_teacher_session_detail(
     session_id: int,
     payload: dict = Depends(get_full_token_payload),
 ):
-    """
-    Full session detail for the teacher review page.
-    Includes all ML metrics + student info. No raw keystroke data exposed.
-    """
     teacher_id = _require_teacher(payload)
     if not db_engine:
         raise HTTPException(status_code=503, detail="Database offline.")
@@ -800,12 +806,12 @@ async def get_teacher_session_detail(
                     ts.risk_level, ts.certificate_id, ts.document_hash,
                     ts.text_content,
                     u.first_name, u.last_name, u.email, u.student_id,
-                    c.course_name, c.id AS course_id, c.teacher_id
+                    c.course_name, c.id AS course_id
                 FROM typing_sessions ts
                 JOIN users u ON u.id = ts.user_id
-                JOIN course_students cs ON cs.student_id = u.id
-                JOIN courses c ON c.id = cs.course_id
-                WHERE ts.id = :sid AND c.teacher_id = :tid
+                JOIN courses c ON c.id = ts.course_id
+                WHERE ts.id = :sid
+                  AND c.teacher_id = :tid
                 LIMIT 1
             """),
             {"sid": session_id, "tid": teacher_id},
@@ -814,12 +820,11 @@ async def get_teacher_session_detail(
     if not row:
         raise HTTPException(
             status_code=404,
-            detail="Session not found or not in your courses.",
+            detail="Session not found or not submitted to your course.",
         )
 
     return {
-        "id": row[0],
-        "title": row[1],
+        "id": row[0], "title": row[1],
         "wpm": round(float(row[2] or 0), 1),
         "duration": round(float(row[3] or 0), 1),
         "classification": row[4],
@@ -834,12 +839,10 @@ async def get_teacher_session_detail(
         "risk_level": row[13] or "LOW",
         "certificate_id": row[14],
         "document_hash": row[15],
-        "text_preview": (row[16] or "")[:500],  # First 500 chars only
+        "text_preview": (row[16] or "")[:500],
         "student": {
-            "first_name": row[17],
-            "last_name": row[18],
-            "email": row[19],
-            "student_id": row[20],
+            "first_name": row[17], "last_name": row[18],
+            "email": row[19], "student_id": row[20],
         },
         "course_name": row[21],
         "course_id": row[22],
@@ -955,6 +958,86 @@ async def get_teacher_stats(
         "suspicious_pct": round((suspicious / total_subs * 100) if total_subs > 0 else 0, 1),
         "pending_reviews": int(stats[4] or 0),
         "total_courses": int(stats[5] or 0),
+    }
+
+
+@app.get("/api/v1/courses/{course_id}/students")
+@limiter.limit("30/minute")
+async def get_course_students(
+    request: Request,
+    course_id: int,
+    payload: dict = Depends(get_full_token_payload),
+):
+    """
+    Teacher fetches the full student roster for one of their courses,
+    including each student's submission stats for that specific course.
+    """
+    teacher_id = _require_teacher(payload)
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+
+    with db_engine.connect() as conn:
+        # First verify ownership
+        course_row = conn.execute(
+            text("SELECT id, course_name, course_code, invite_code FROM courses WHERE id = :cid AND teacher_id = :tid"),
+            {"cid": course_id, "tid": teacher_id},
+        ).fetchone()
+
+        if not course_row:
+            raise HTTPException(status_code=404, detail="Course not found or access denied.")
+
+        # Students enrolled in this course + their submission stats for it
+        students = conn.execute(
+            text("""
+                SELECT
+                    u.id,
+                    u.first_name,
+                    u.last_name,
+                    u.email,
+                    u.student_id,
+                    cs.joined_at,
+                    COUNT(ts.id)                                        AS submission_count,
+                    ROUND(AVG(ts.ml_confidence_score)::numeric, 1)      AS avg_confidence,
+                    MAX(ts.created_at)                                  AS last_submission,
+                    COUNT(CASE WHEN ts.classification_result IN ('SUSPICIOUS','SYNTHETIC','AI-GENERATED')
+                               THEN 1 END)                              AS suspicious_count,
+                    COUNT(CASE WHEN ts.review_status = 'PENDING'
+                               THEN 1 END)                              AS pending_reviews
+                FROM course_students cs
+                JOIN users u ON u.id = cs.student_id
+                LEFT JOIN typing_sessions ts
+                    ON ts.user_id = u.id
+                    AND ts.course_id = :cid
+                WHERE cs.course_id = :cid
+                GROUP BY u.id, u.first_name, u.last_name, u.email, u.student_id, cs.joined_at
+                ORDER BY cs.joined_at ASC
+            """),
+            {"cid": course_id},
+        ).fetchall()
+
+    return {
+        "course": {
+            "id": course_row[0],
+            "course_name": course_row[1],
+            "course_code": course_row[2],
+            "invite_code": course_row[3],
+        },
+        "students": [
+            {
+                "user_id": r[0],
+                "first_name": r[1],
+                "last_name": r[2],
+                "email": r[3],
+                "student_id": r[4],
+                "joined_at": r[5].strftime("%b %d, %Y") if r[5] else "Unknown",
+                "submission_count": int(r[6] or 0),
+                "avg_confidence": float(r[7] or 0),
+                "last_submission": r[8].strftime("%b %d, %Y") if r[8] else "Never",
+                "suspicious_count": int(r[9] or 0),
+                "pending_reviews": int(r[10] or 0),
+            }
+            for r in students
+        ],
     }
 
 # ─────────────────────────────────────────────────────────────────────────────
