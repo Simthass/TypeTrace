@@ -1,4 +1,4 @@
-// src/App.tsx — Part 3: TeacherCoursePage replaces the placeholder
+// src/App.tsx — Part 4: TeacherStudentsPage replaces the placeholder
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
@@ -38,8 +38,9 @@ import JoinCoursePage from "./pages/student/JoinCoursePage";
 // Teacher pages
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
 import TeacherCoursesPage from "./pages/teacher/TeacherCoursesPage";
-import TeacherCoursePage from "./pages/teacher/TeacherCoursesPage"; // ← PART 3
+import TeacherCoursePage from "./pages/teacher/TeacherCoursesPage";
 import TeacherSubmissionsPage from "./pages/teacher/TeacherSubmissionsPage";
+import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage"; // ← Part 4
 import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
 
 import { ROUTES } from "./constants/routes";
@@ -101,7 +102,6 @@ export default function App() {
               path={ROUTES.TEACHER_COURSES}
               element={<TeacherCoursesPage />}
             />
-            {/* ← PART 3: real per-course page replaces the placeholder */}
             <Route
               path="/teacher/courses/:courseId"
               element={<TeacherCoursePage />}
@@ -110,12 +110,9 @@ export default function App() {
               path="/teacher/submissions"
               element={<TeacherSubmissionsPage />}
             />
-            <Route
-              path="/teacher/students"
-              element={<PlaceholderPage title="Students" />}
-            />
+            <Route path="/teacher/students" element={<TeacherStudentsPage />} />{" "}
+            {/* ← Part 4 */}
           </Route>
-          {/* Full-screen — no sidebar */}
           <Route path={ROUTES.TEACHER_REVIEW} element={<TeacherReviewPage />} />
         </Route>
       </Routes>

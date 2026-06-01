@@ -365,24 +365,70 @@ async def analyze_session(request: Request, data: KeystrokeSession, user_id: str
 
 @app.get("/api/v1/sessions/history")
 @limiter.limit("30/minute")
-async def get_session_history(request: Request, user_id: str = Depends(get_current_user_id)):
-    if not db_engine: raise HTTPException(status_code=503, detail="DB offline.")
+async def get_session_history(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Returns the student's full session history.
+ 
+    Part 4 additions:
+      - review_status  — teacher's decision: PENDING / APPROVED / FLAGGED / UNDER_REVIEW
+      - risk_level     — LOW / MEDIUM / HIGH (auto-set at submission time)
+      - course_name    — which course this was submitted to (null = private session)
+      - review_notes   — instructor note, if any
+    These fields close the feedback loop: students now see whether their
+    teacher has reviewed their work and what the outcome was.
+    """
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="DB offline.")
+ 
     with db_engine.connect() as conn:
         rows = conn.execute(
             text("""
-                SELECT id, title, wpm, duration_seconds, classification_result, 
-                       ml_confidence_score, created_at, certificate_id 
-                FROM typing_sessions WHERE user_id = :u ORDER BY created_at DESC LIMIT 100
-            """), {"u": user_id}
+                SELECT
+                    ts.id,
+                    ts.title,
+                    ts.wpm,
+                    ts.duration_seconds,
+                    ts.classification_result,
+                    ts.ml_confidence_score,
+                    ts.created_at,
+                    ts.certificate_id,
+                    ts.review_status,
+                    ts.risk_level,
+                    ts.review_notes,
+                    c.course_name
+                FROM typing_sessions ts
+                LEFT JOIN courses c ON c.id = ts.course_id
+                WHERE ts.user_id = :u
+                ORDER BY ts.created_at DESC
+                LIMIT 100
+            """),
+            {"u": user_id},
         ).fetchall()
-    return {"status": "success", "sessions": [
-        {
-            "id": r[0], "title": r[1], "wpm": round(r[2] or 0, 1), "duration": round(r[3] or 0, 1),
-            "classification": r[4], "confidence": round(r[5] or 0, 1),
-            "date": r[6].strftime("%b %d, %Y") if r[6] else "Unknown",
-            "certificate_id": r[7]
-        } for r in rows
-    ]}
+ 
+    return {
+        "status": "success",
+        "sessions": [
+            {
+                "id": r[0],
+                "title": r[1],
+                "wpm": round(float(r[2] or 0), 1),
+                "duration": round(float(r[3] or 0), 1),
+                "classification": r[4],
+                "confidence": round(float(r[5] or 0), 1),
+                "date": r[6].strftime("%b %d, %Y") if r[6] else "Unknown",
+                "certificate_id": r[7],
+                # ── NEW: teacher feedback fields ──────────────────────────────
+                "review_status": r[8] or "PENDING",
+                "risk_level": r[9] or "LOW",
+                "review_notes": r[10] or "",
+                "course_name": r[11] or None,
+            }
+            for r in rows
+        ],
+    }
 
 @app.get("/api/v1/sessions/{session_id}/replay")
 @limiter.limit("20/minute")
