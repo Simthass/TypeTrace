@@ -1,452 +1,666 @@
-import { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { api } from "../lib/api";
 import { colors, brand } from "../styles/colors";
+import { ROUTES } from "../constants/routes";
 
-// ─── mock data for charts cos i cant afford a real bi metrics db yet ──────────
-const activityData = [
-  { day: "01", sessions: 4, score: 92 },
-  { day: "02", sessions: 2, score: 95 },
-  { day: "03", sessions: 5, score: 88 },
-  { day: "04", sessions: 7, score: 96 },
-  { day: "05", sessions: 1, score: 99 },
-  { day: "06", sessions: 3, score: 85 },
-  { day: "07", sessions: 8, score: 94 },
-  { day: "08", sessions: 6, score: 91 },
-  { day: "09", sessions: 2, score: 97 },
-  { day: "10", sessions: 9, score: 62 }, // the day i tested the ai paste script lol
-  { day: "11", sessions: 4, score: 96 },
-  { day: "12", sessions: 5, score: 93 },
-  { day: "13", sessions: 3, score: 98 },
-  { day: "14", sessions: 6, score: 95 },
-];
+// ─────────────────────────────────────────────────────────────────────────────
+// TYPES
+// ─────────────────────────────────────────────────────────────────────────────
 
-const featureImportance = [
-  { label: "Flight Time (IKI) Variance", value: 38 },
-  { label: "Paste Event Detection", value: 26 },
-  { label: "Pause Frequency (>1000ms)", value: 18 },
-  { label: "Mean Dwell Time", value: 12 },
-  { label: "Deletion Ratio", value: 6 },
-];
-
-// ─── icons ────────────────────────────────────────────────────────────────────
-function DownloadIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  );
+interface DayTrend {
+  date: string;
+  label: string;
+  session_count: number;
+  avg_wpm: number;
+  avg_confidence: number;
 }
 
-function CalendarIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  );
+interface CourseBreakdown {
+  course_name: string;
+  session_count: number;
+  avg_wpm: number;
+  avg_confidence: number;
+  human_count: number;
 }
 
-// ─── components ───────────────────────────────────────────────────────────────
-function MetricCard({
-  title,
+interface PersonalBests {
+  best_wpm: number;
+  best_confidence: number;
+  longest_session: number;
+  best_iki: number;
+  total_sessions: number;
+  total_seconds: number;
+}
+
+interface AnalyticsData {
+  daily_trend: DayTrend[];
+  course_breakdown: CourseBreakdown[];
+  personal_bests: PersonalBests;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+function formatDuration(seconds: number): string {
+  if (seconds >= 3600) return `${(seconds / 3600).toFixed(1)}h`;
+  if (seconds >= 60) return `${Math.round(seconds / 60)}m`;
+  return `${seconds}s`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUB-COMPONENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+function BestCard({
+  label,
   value,
-  change,
-  trend,
+  unit = "",
+  accent,
 }: {
-  title: string;
-  value: string;
-  change: string;
-  trend: "up" | "down" | "neutral";
+  label: string;
+  value: string | number;
+  unit?: string;
+  accent?: string;
 }) {
-  const trendColor =
-    trend === "up"
-      ? brand.humanAccent
-      : trend === "down"
-        ? brand.aiAccent
-        : colors.text.secondary;
-
   return (
     <div
-      className="bg-white border rounded-md p-5 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow"
+      className="bg-white border rounded-xl p-5 shadow-sm flex flex-col gap-2"
       style={{ borderColor: colors.surface[200] }}
     >
       <span
-        className="text-[13px] font-medium"
+        className="text-[10px] font-bold uppercase tracking-widest"
         style={{ color: colors.text.secondary }}
       >
-        {title}
+        {label}
       </span>
-      <div className="flex items-end justify-between">
+      <div className="flex items-baseline gap-1">
         <span
-          className="text-[28px] font-semibold leading-none tracking-tight"
-          style={{ color: colors.text.primary }}
+          className="text-[26px] font-extrabold font-mono tracking-tight"
+          style={{ color: accent ?? colors.text.primary }}
         >
           {value}
         </span>
-        <div
-          className="flex items-center gap-1 text-[12px] font-medium"
-          style={{ color: trendColor }}
-        >
-          {trend === "up" ? (
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            >
-              <polyline points="18 15 12 9 6 15" />
-            </svg>
-          ) : trend === "down" ? (
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          ) : (
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            >
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-          )}
-          {change}
-        </div>
+        {unit && (
+          <span
+            className="text-[13px] font-mono"
+            style={{ color: colors.text.secondary }}
+          >
+            {unit}
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN PAGE
-// ─────────────────────────────────────────────────────────────────────────────
-export default function AnalyticsPage() {
-  const [timeRange, setTimeRange] = useState("14d");
+// WPM bar chart — same visual pattern as DashboardPage activity chart
+function WpmChart({ trend }: { trend: DayTrend[] }) {
+  const maxWpm = Math.max(...trend.map((d) => d.avg_wpm), 1);
+  // Only render every 5th label to avoid crowding
+  const labelEvery = 5;
 
-  // math for the pure css charts
-  const maxSessions = Math.max(...activityData.map((d) => d.sessions));
+  const [hovered, setHovered] = useState<number | null>(null);
 
   return (
-    <div className="p-6 md:p-10 max-w-[1200px] mx-auto w-full flex flex-col gap-6">
-      {/* ── Page Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1
-            className="text-2xl font-semibold tracking-tight mb-1"
-            style={{ color: colors.text.primary }}
-          >
-            Analytics
-          </h1>
-          <p className="text-[14px]" style={{ color: colors.text.secondary }}>
-            Biometric telemetry and machine learning classification metrics.
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h3
+          className="text-[14px] font-semibold"
+          style={{ color: colors.text.primary }}
+        >
+          WPM Trend
+        </h3>
+        <span
+          className="text-[12px] px-2 py-1 rounded-md border"
+          style={{
+            borderColor: colors.surface[200],
+            color: colors.text.secondary,
+            background: colors.surface[50],
+          }}
+        >
+          Last 30 days
+        </span>
+      </div>
+      <div className="h-[180px] flex items-end justify-between gap-[3px] relative">
+        {/* Grid lines */}
+        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="w-full border-t"
+              style={{ borderColor: colors.surface[100] }}
+            />
+          ))}
+        </div>
+
+        {trend.map((day, i) => {
+          const heightPct = (day.avg_wpm / maxWpm) * 100;
+          const isHovered = hovered === i;
+          return (
+            <div
+              key={day.date}
+              className="flex-1 flex flex-col items-center gap-1 relative group z-10"
+              onMouseEnter={() => setHovered(i)}
+              onMouseLeave={() => setHovered(null)}
+            >
+              {/* Tooltip */}
+              {isHovered && (
+                <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] py-1 px-2 rounded-md whitespace-nowrap z-20 pointer-events-none">
+                  {day.session_count > 0
+                    ? `${day.avg_wpm} WPM · ${day.session_count} session${day.session_count !== 1 ? "s" : ""}`
+                    : "No sessions"}
+                </div>
+              )}
+
+              <div
+                className="w-full rounded-t-sm transition-all duration-300"
+                style={{
+                  height: `${Math.max(heightPct, day.session_count > 0 ? 5 : 1)}%`,
+                  minHeight: "2px",
+                  backgroundColor:
+                    day.session_count === 0
+                      ? colors.surface[100]
+                      : isHovered
+                        ? brand.action
+                        : colors.text.primary,
+                  opacity: isHovered ? 1 : 0.85,
+                }}
+              />
+
+              {/* X-axis label every 5th day */}
+              {i % labelEvery === 0 && (
+                <span
+                  className="text-[9px] font-mono absolute -bottom-5 whitespace-nowrap"
+                  style={{ color: colors.text.secondary }}
+                >
+                  {day.label.split(" ")[1]}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="h-5" /> {/* space for x-axis labels */}
+    </div>
+  );
+}
+
+// Confidence trend — rendered as a simple SVG polyline
+function ConfidenceChart({ trend }: { trend: DayTrend[] }) {
+  const activeDays = trend.filter((d) => d.session_count > 0);
+  const W = 600;
+  const H = 120;
+  const PAD = 12;
+
+  const maxConf = 100;
+  const toX = (i: number) =>
+    PAD + (i / Math.max(activeDays.length - 1, 1)) * (W - PAD * 2);
+  const toY = (v: number) => PAD + (1 - v / maxConf) * (H - PAD * 2);
+
+  const points = activeDays
+    .map((d, i) => `${toX(i)},${toY(d.avg_confidence)}`)
+    .join(" ");
+  const area =
+    activeDays.length > 0
+      ? `M${toX(0)},${H} ` +
+        activeDays
+          .map((d, i) => `L${toX(i)},${toY(d.avg_confidence)}`)
+          .join(" ") +
+        ` L${toX(activeDays.length - 1)},${H} Z`
+      : "";
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h3
+          className="text-[14px] font-semibold"
+          style={{ color: colors.text.primary }}
+        >
+          Confidence Trend
+        </h3>
+        <span
+          className="text-[12px] px-2 py-1 rounded-md border"
+          style={{
+            borderColor: colors.surface[200],
+            color: colors.text.secondary,
+            background: colors.surface[50],
+          }}
+        >
+          Per session
+        </span>
+      </div>
+
+      {activeDays.length === 0 ? (
+        <div className="flex items-center justify-center h-[120px]">
+          <p className="text-[12px]" style={{ color: colors.text.secondary }}>
+            No sessions yet — confidence trend will appear here.
           </p>
         </div>
+      ) : (
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          className="w-full"
+          style={{ height: 120 }}
+        >
+          {/* 80% and 60% threshold lines */}
+          {[80, 60].map((threshold) => (
+            <g key={threshold}>
+              <line
+                x1={PAD}
+                y1={toY(threshold)}
+                x2={W - PAD}
+                y2={toY(threshold)}
+                stroke={colors.surface[200]}
+                strokeWidth="1"
+                strokeDasharray="4 4"
+              />
+              <text
+                x={PAD}
+                y={toY(threshold) - 3}
+                fontSize="9"
+                fill={colors.text.secondary}
+              >
+                {threshold}%
+              </text>
+            </g>
+          ))}
 
-        {/* Toolbar */}
-        <div className="flex items-center gap-3">
-          <div
-            className="flex items-center border rounded-md shadow-sm bg-white overflow-hidden"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <div
-              className="pl-3 pr-2 py-1.5 border-r flex items-center"
-              style={{
-                borderColor: colors.surface[200],
-                color: colors.text.secondary,
-              }}
-            >
-              <CalendarIcon />
-            </div>
-            <select
-              className="bg-transparent text-[13px] font-medium outline-none px-3 py-1.5 appearance-none cursor-pointer"
-              style={{ color: colors.text.primary }}
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value)}
-            >
-              <option value="7d">Last 7 Days</option>
-              <option value="14d">Last 14 Days</option>
-              <option value="30d">Last 30 Days</option>
-            </select>
-          </div>
+          {/* Area fill */}
+          {area && <path d={area} fill={`${brand.action}15`} />}
 
-          <button
-            className="flex items-center justify-center h-9 w-9 border rounded-md shadow-sm bg-white hover:bg-surface-50 transition-colors"
-            style={{
-              borderColor: colors.surface[200],
-              color: colors.text.secondary,
-            }}
-            title="Export CSV"
-          >
-            <DownloadIcon />
-          </button>
+          {/* Line */}
+          {points && (
+            <polyline
+              points={points}
+              fill="none"
+              stroke={brand.action}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
+          {/* Dots */}
+          {activeDays.map((d, i) => (
+            <circle
+              key={d.date}
+              cx={toX(i)}
+              cy={toY(d.avg_confidence)}
+              r="3"
+              fill="white"
+              stroke={brand.action}
+              strokeWidth="2"
+            />
+          ))}
+        </svg>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function AnalyticsPage() {
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    api
+      .get<AnalyticsData>("/student/analytics")
+      .then((r) => setData(r.data))
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <span
+          className="text-[13px] font-mono tracking-widest uppercase"
+          style={{ color: colors.text.secondary }}
+        >
+          Loading analytics...
+        </span>
+      </div>
+    );
+  }
+
+  if (!data || data.personal_bests.total_sessions === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4 p-6">
+        <p
+          className="text-[15px] font-semibold"
+          style={{ color: colors.text.primary }}
+        >
+          No data yet
+        </p>
+        <p
+          className="text-[13px] text-center"
+          style={{ color: colors.text.secondary }}
+        >
+          Complete at least one session for your analytics to appear here.
+        </p>
+        <Link
+          to={ROUTES.EDITOR_NEW}
+          className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white"
+          style={{ background: colors.text.primary }}
+        >
+          Start a Session
+        </Link>
+      </div>
+    );
+  }
+
+  const { daily_trend, course_breakdown, personal_bests } = data;
+  const totalTime = formatDuration(personal_bests.total_seconds);
+
+  return (
+    <div
+      className="p-6 md:p-8 max-w-[1200px] mx-auto flex flex-col gap-6 font-sans"
+      style={{ background: colors.surface[50] }}
+    >
+      {/* ── Page header ── */}
+      <div>
+        <h1
+          className="text-[20px] font-semibold"
+          style={{ color: colors.text.primary }}
+        >
+          Analytics
+        </h1>
+        <p
+          className="text-[13px] mt-0.5"
+          style={{ color: colors.text.secondary }}
+        >
+          Your behavioral authorship profile over time.
+        </p>
+      </div>
+
+      {/* ── Personal bests row ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <BestCard
+          label="Total Sessions"
+          value={personal_bests.total_sessions}
+        />
+        <BestCard
+          label="Best WPM"
+          value={personal_bests.best_wpm}
+          unit="wpm"
+          accent={brand.action}
+        />
+        <BestCard
+          label="Best Confidence"
+          value={`${personal_bests.best_confidence}%`}
+          accent={brand.humanText}
+        />
+        <BestCard
+          label="Longest Session"
+          value={formatDuration(personal_bests.longest_session)}
+        />
+        <BestCard
+          label="Best Avg IKI"
+          value={personal_bests.best_iki}
+          unit="ms"
+        />
+        <BestCard label="Total Time" value={totalTime} />
+      </div>
+
+      {/* ── Charts row ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div
+          className="bg-white border rounded-xl shadow-sm p-6"
+          style={{ borderColor: colors.surface[200] }}
+        >
+          <WpmChart trend={daily_trend} />
+        </div>
+        <div
+          className="bg-white border rounded-xl shadow-sm p-6"
+          style={{ borderColor: colors.surface[200] }}
+        >
+          <ConfidenceChart trend={daily_trend} />
         </div>
       </div>
 
-      {/* ── Top Metrics Grid ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard title="Total Sessions" value="65" change="12%" trend="up" />
-        <MetricCard
-          title="Avg. Verification Score"
-          value="94.2%"
-          change="2.1%"
-          trend="up"
-        />
-        <MetricCard
-          title="AI Anomalies Blocked"
-          value="3"
-          change="1"
-          trend="down"
-        />
-        <MetricCard
-          title="Average WPM"
-          value="62"
-          change="0%"
-          trend="neutral"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 items-start">
-        {/* ── Main Activity Chart ── */}
+      {/* ── Course breakdown ── */}
+      {course_breakdown.length > 0 && (
         <div
-          className="bg-white border rounded-md shadow-sm p-6 flex flex-col"
+          className="bg-white border rounded-xl shadow-sm overflow-hidden"
           style={{ borderColor: colors.surface[200] }}
         >
-          <div className="flex items-center justify-between mb-8">
+          <div
+            className="px-5 py-4 border-b"
+            style={{ borderColor: colors.surface[200] }}
+          >
             <h3
               className="text-[14px] font-semibold"
               style={{ color: colors.text.primary }}
             >
-              Session Activity
+              Performance by Course
             </h3>
-            <span
-              className="text-[12px] font-medium px-2 py-1 rounded-md bg-surface-50 border"
-              style={{
-                borderColor: colors.surface[200],
-                color: colors.text.secondary,
-              }}
-            >
-              Sessions per day
-            </span>
           </div>
-
-          {/* Pure CSS Bar Chart (Vercel Style) */}
-          <div className="h-[240px] flex items-end justify-between gap-2 md:gap-4 mt-auto relative">
-            {/* Background grid lines */}
-            <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <div
-                  key={i}
-                  className="w-full border-t"
-                  style={{ borderColor: colors.surface[100] }}
-                />
-              ))}
-            </div>
-
-            {activityData.map((data, i) => {
-              const heightPct = (data.sessions / maxSessions) * 100;
-              // if score dropped below 70, flag it red, otherwise black
-              const isAnomaly = data.score < 70;
-
-              return (
-                <div
-                  key={i}
-                  className="flex-1 flex flex-col items-center gap-3 relative group z-10"
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr
+                  style={{
+                    background: colors.surface[50],
+                    borderBottom: `1px solid ${colors.surface[200]}`,
+                  }}
                 >
-                  {/* Tooltip on hover */}
-                  <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[11px] py-1 px-2 rounded-md whitespace-nowrap pointer-events-none z-20">
-                    {data.sessions} sessions ({data.score}% avg)
-                  </div>
-
-                  {/* The Bar */}
-                  <div
-                    className="w-full rounded-t-md transition-all duration-500 ease-out group-hover:opacity-80"
-                    style={{
-                      height: `${heightPct}%`,
-                      minHeight: "4px",
-                      backgroundColor: isAnomaly
-                        ? brand.aiAccent
-                        : colors.text.primary,
-                    }}
-                  />
-                  {/* X Axis Label */}
-                  <span
-                    className="text-[11px] font-mono"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {data.day}
-                  </span>
-                </div>
-              );
-            })}
+                  {[
+                    "Course",
+                    "Sessions",
+                    "Avg WPM",
+                    "Avg Confidence",
+                    "Human Rate",
+                    "",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-widest"
+                      style={{ color: colors.text.secondary }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {course_breakdown.map((c) => {
+                  const humanRate =
+                    c.session_count > 0
+                      ? Math.round((c.human_count / c.session_count) * 100)
+                      : 0;
+                  const isPersonal = c.course_name === "Personal";
+                  return (
+                    <tr
+                      key={c.course_name}
+                      className="border-b last:border-0 hover:bg-[#fafafa] transition-colors"
+                      style={{ borderColor: colors.surface[100] }}
+                    >
+                      <td className="px-5 py-3">
+                        <span
+                          className="font-semibold"
+                          style={{ color: colors.text.primary }}
+                        >
+                          {c.course_name}
+                        </span>
+                        {isPersonal && (
+                          <span
+                            className="ml-2 text-[10px] px-1.5 py-0.5 rounded-md"
+                            style={{
+                              background: colors.surface[100],
+                              color: colors.text.secondary,
+                            }}
+                          >
+                            private
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        className="px-5 py-3 font-mono font-semibold"
+                        style={{ color: colors.text.primary }}
+                      >
+                        {c.session_count}
+                      </td>
+                      <td
+                        className="px-5 py-3 font-mono font-semibold"
+                        style={{ color: colors.text.primary }}
+                      >
+                        {c.avg_wpm}
+                      </td>
+                      <td className="px-5 py-3">
+                        {/* Mini progress bar for confidence */}
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-20 h-1.5 rounded-full overflow-hidden"
+                            style={{ background: colors.surface[100] }}
+                          >
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${c.avg_confidence}%`,
+                                background:
+                                  c.avg_confidence >= 80
+                                    ? brand.humanText
+                                    : c.avg_confidence >= 60
+                                      ? "#f59e0b"
+                                      : brand.aiAccent,
+                              }}
+                            />
+                          </div>
+                          <span
+                            className="font-mono text-[12px]"
+                            style={{ color: colors.text.secondary }}
+                          >
+                            {c.avg_confidence}%
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-16 h-1.5 rounded-full overflow-hidden"
+                            style={{ background: colors.surface[100] }}
+                          >
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${humanRate}%`,
+                                background:
+                                  humanRate >= 80 ? brand.humanText : "#f59e0b",
+                              }}
+                            />
+                          </div>
+                          <span
+                            className="font-mono text-[12px]"
+                            style={{ color: colors.text.secondary }}
+                          >
+                            {humanRate}%
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        {!isPersonal && (
+                          <Link
+                            to={ROUTES.EDITOR}
+                            className="text-[12px] font-semibold"
+                            style={{ color: brand.action }}
+                          >
+                            Sessions →
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
+      )}
 
-        {/* ── Feature Importance Radar/List ── */}
-        {/* building a custom CSS progress bar list to explain to the prof how the ML model works */}
-        <div
-          className="bg-white border rounded-md shadow-sm p-6 flex flex-col gap-6"
-          style={{ borderColor: colors.surface[200] }}
-        >
-          <div>
-            <h3
-              className="text-[14px] font-semibold mb-1"
-              style={{ color: colors.text.primary }}
-            >
-              Random Forest Features
-            </h3>
-            <p className="text-[12px]" style={{ color: colors.text.secondary }}>
-              Weighting of biometric parameters used for classification.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            {featureImportance.map((feat, i) => (
-              <div key={i} className="flex flex-col gap-1.5">
-                <div className="flex justify-between items-center text-[12px]">
-                  <span
-                    className="font-medium"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {feat.label}
-                  </span>
-                  <span
-                    className="font-mono font-semibold"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {feat.value}%
-                  </span>
-                </div>
-                <div
-                  className="h-1.5 w-full rounded-full overflow-hidden"
-                  style={{ backgroundColor: colors.surface[100] }}
-                >
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${feat.value}%`,
-                      backgroundColor:
-                        i === 0 ? brand.humanAccent : colors.text.primary,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Bottom Section: Anomaly Log ── */}
+      {/* ── Activity heatmap hint — 30-day summary ── */}
       <div
-        className="bg-white border rounded-md shadow-sm overflow-hidden"
+        className="bg-white border rounded-xl shadow-sm p-6"
         style={{ borderColor: colors.surface[200] }}
       >
-        <div
-          className="px-6 py-4 border-b"
-          style={{
-            borderColor: colors.surface[200],
-            backgroundColor: colors.surface[50],
-          }}
-        >
+        <div className="flex items-center justify-between mb-5">
           <h3
             className="text-[14px] font-semibold"
             style={{ color: colors.text.primary }}
           >
-            Recent Anomalies Detected
+            30-Day Activity
           </h3>
+          <span
+            className="text-[12px]"
+            style={{ color: colors.text.secondary }}
+          >
+            {daily_trend.filter((d) => d.session_count > 0).length} active days
+          </span>
         </div>
 
-        <div
-          className="flex flex-col divide-y"
-          style={{ borderColor: colors.surface[200] }}
-        >
-          {/* Mock anomaly rows */}
-          {[
-            {
-              id: "1",
-              file: "CopyPaste_Test.txt",
-              trigger: "Paste Event > 500 chars",
-              conf: "12.4%",
-              date: "Day 10",
-            },
-            {
-              id: "2",
-              file: "Distributed Systems Notes",
-              trigger: "Erratic IKI Variance",
-              conf: "67.2%",
-              date: "Day 06",
-            },
-          ].map((row) => (
-            <div
-              key={row.id}
-              className="grid grid-cols-[1fr_2fr_100px_80px] gap-4 px-6 py-3.5 items-center hover:bg-surface-50 transition-colors"
-            >
-              <span
-                className="text-[13px] font-medium truncate"
-                style={{ color: colors.text.primary }}
-              >
-                {row.file}
-              </span>
-              <div className="flex items-center gap-2">
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: brand.aiAccent }}
-                />
-                <span
-                  className="text-[12px]"
-                  style={{ color: colors.text.secondary }}
-                >
-                  {row.trigger}
-                </span>
-              </div>
-              <span
-                className="text-[12px] font-bold font-mono"
-                style={{ color: brand.aiAccent }}
-              >
-                {row.conf}
-              </span>
-              <span
-                className="text-[12px] text-right"
-                style={{ color: colors.text.secondary }}
-              >
-                {row.date}
-              </span>
-            </div>
-          ))}
+        {/* Calendar-style dot grid */}
+        <div className="flex gap-1 flex-wrap">
+          {daily_trend.map((day) => {
+            const intensity =
+              day.session_count === 0
+                ? 0
+                : day.session_count === 1
+                  ? 1
+                  : day.session_count <= 3
+                    ? 2
+                    : 3;
+            const bgMap = [
+              "#eaeaea",
+              `${brand.action}30`,
+              `${brand.action}70`,
+              brand.action,
+            ];
+            return (
+              <div
+                key={day.date}
+                className="w-4 h-4 rounded-sm transition-opacity"
+                style={{ background: bgMap[intensity] }}
+                title={`${day.label}: ${day.session_count} session${day.session_count !== 1 ? "s" : ""}${day.avg_wpm > 0 ? ` · ${day.avg_wpm} WPM` : ""}`}
+              />
+            );
+          })}
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center gap-2 mt-3">
+          <span
+            className="text-[11px]"
+            style={{ color: colors.text.secondary }}
+          >
+            Less
+          </span>
+          {[0, 1, 2, 3].map((i) => {
+            const bgMap = [
+              "#eaeaea",
+              `${brand.action}30`,
+              `${brand.action}70`,
+              brand.action,
+            ];
+            return (
+              <div
+                key={i}
+                className="w-3.5 h-3.5 rounded-sm"
+                style={{ background: bgMap[i] }}
+              />
+            );
+          })}
+          <span
+            className="text-[11px]"
+            style={{ color: colors.text.secondary }}
+          >
+            More
+          </span>
         </div>
       </div>
     </div>

@@ -526,6 +526,115 @@ async def get_session_replay(
         },
         "events": raw_events,
     }
+@app.get("/api/v1/student/analytics")
+@limiter.limit("30/minute")
+async def get_student_analytics(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Returns all data needed for the student Analytics page:
+      - daily_trend:      last 30 days, each day's session count + avg WPM + avg confidence
+      - course_breakdown: per-course submission count + avg WPM + avg confidence
+      - personal_bests:   highest single-session WPM, highest confidence, longest session
+      - totals:           lifetime aggregates
+    """
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+ 
+    with db_engine.connect() as conn:
+ 
+        # ── 1. Daily trend — last 30 days ──────────────────────────────────────
+        daily_rows = conn.execute(
+            text("""
+                SELECT
+                    DATE(created_at)                              AS day,
+                    COUNT(*)                                      AS session_count,
+                    ROUND(AVG(wpm)::numeric, 1)                   AS avg_wpm,
+                    ROUND(AVG(ml_confidence_score)::numeric, 1)   AS avg_confidence
+                FROM typing_sessions
+                WHERE user_id = :u
+                  AND created_at >= NOW() - INTERVAL '30 days'
+                GROUP BY DATE(created_at)
+                ORDER BY day ASC
+            """),
+            {"u": user_id},
+        ).fetchall()
+ 
+        # ── 2. Course breakdown ─────────────────────────────────────────────────
+        course_rows = conn.execute(
+            text("""
+                SELECT
+                    COALESCE(c.course_name, 'Personal')           AS course_name,
+                    COUNT(ts.id)                                  AS session_count,
+                    ROUND(AVG(ts.wpm)::numeric, 1)                AS avg_wpm,
+                    ROUND(AVG(ts.ml_confidence_score)::numeric, 1) AS avg_confidence,
+                    COUNT(CASE WHEN ts.classification_result = 'HUMAN' THEN 1 END) AS human_count
+                FROM typing_sessions ts
+                LEFT JOIN courses c ON c.id = ts.course_id
+                WHERE ts.user_id = :u
+                GROUP BY COALESCE(c.course_name, 'Personal')
+                ORDER BY session_count DESC
+            """),
+            {"u": user_id},
+        ).fetchall()
+ 
+        # ── 3. Personal bests ───────────────────────────────────────────────────
+        bests_row = conn.execute(
+            text("""
+                SELECT
+                    MAX(wpm)                  AS best_wpm,
+                    MAX(ml_confidence_score)  AS best_confidence,
+                    MAX(duration_seconds)     AS longest_session,
+                    MIN(avg_iki)              AS best_iki,
+                    COUNT(*)                  AS total_sessions,
+                    SUM(duration_seconds)     AS total_seconds
+                FROM typing_sessions
+                WHERE user_id = :u
+            """),
+            {"u": user_id},
+        ).fetchone()
+ 
+    # Build the 30-day lookup for fast gap-filling
+    daily_map: dict = {str(r[0]): r for r in daily_rows}
+ 
+    # Fill every day in the last 30 (including zero-session days)
+    import datetime
+    today = datetime.date.today()
+    trend: list = []
+    for i in range(29, -1, -1):
+        d = today - datetime.timedelta(days=i)
+        key = str(d)
+        r = daily_map.get(key)
+        trend.append({
+            "date":           key,
+            "label":          d.strftime("%b %d"),
+            "session_count":  int(r[1]) if r else 0,
+            "avg_wpm":        float(r[2]) if r else 0,
+            "avg_confidence": float(r[3]) if r else 0,
+        })
+ 
+    return {
+        "daily_trend": trend,
+        "course_breakdown": [
+            {
+                "course_name":    r[0],
+                "session_count":  int(r[1] or 0),
+                "avg_wpm":        float(r[2] or 0),
+                "avg_confidence": float(r[3] or 0),
+                "human_count":    int(r[4] or 0),
+            }
+            for r in course_rows
+        ],
+        "personal_bests": {
+            "best_wpm":         round(float(bests_row[0] or 0), 1),
+            "best_confidence":  round(float(bests_row[1] or 0), 1),
+            "longest_session":  int(bests_row[2] or 0),
+            "best_iki":         int(bests_row[3] or 0),
+            "total_sessions":   int(bests_row[4] or 0),
+            "total_seconds":    int(bests_row[5] or 0),
+        },
+    }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 7. COURSE MANAGEMENT ENDPOINTS

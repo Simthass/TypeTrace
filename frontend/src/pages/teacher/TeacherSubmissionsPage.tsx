@@ -1,6 +1,5 @@
-// src/pages/teacher/TeacherSubmissionsPage.tsx
 import React, { useEffect, useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { colors } from "../../styles/colors";
 
@@ -35,7 +34,7 @@ type RiskFilter = "ALL" | "HIGH" | "MEDIUM" | "LOW";
 type StatusFilter = "ALL" | "PENDING" | "APPROVED" | "FLAGGED" | "UNDER_REVIEW";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BADGE HELPERS
+// BADGE HELPERS (unchanged from Part 2)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const RISK_STYLE: Record<string, { bg: string; text: string; border: string }> =
@@ -79,16 +78,29 @@ function StatusBadge({ status }: { status: string }) {
 // PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 
+const TEACHER_BLUE = "#0369a1";
+
 export default function TeacherSubmissionsPage() {
+  const [searchParams] = useSearchParams();
+
+  // ← PART 5 FIX: read URL params on mount for pre-filtering
+  const paramCourseId = searchParams.get("course")
+    ? Number(searchParams.get("course"))
+    : "ALL";
+  const paramStudentId = searchParams.get("student") ?? "";
+
   const [sessions, setSessions] = useState<Session[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [courseFilter, setCourseFilter] = useState<number | "ALL">("ALL");
+
+  // Filters — initialised from URL params
+  const [search, setSearch] = useState<string>(paramStudentId ? "" : "");
+  const [studentIdFilter] = useState<string>(paramStudentId);
+  const [courseFilter, setCourseFilter] = useState<number | "ALL">(
+    paramCourseId,
+  );
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-
-  const TEACHER_BLUE = "#0369a1";
 
   useEffect(() => {
     Promise.all([
@@ -105,6 +117,8 @@ export default function TeacherSubmissionsPage() {
 
   const filtered = useMemo(() => {
     return sessions.filter((s) => {
+      // ← PART 5: student ID filter from URL param
+      if (studentIdFilter && s.student_id !== studentIdFilter) return false;
       if (courseFilter !== "ALL" && s.course_id !== courseFilter) return false;
       if (riskFilter !== "ALL" && s.risk_level !== riskFilter) return false;
       if (statusFilter !== "ALL" && s.review_status !== statusFilter)
@@ -120,7 +134,27 @@ export default function TeacherSubmissionsPage() {
       }
       return true;
     });
-  }, [sessions, courseFilter, riskFilter, statusFilter, search]);
+  }, [
+    sessions,
+    courseFilter,
+    riskFilter,
+    statusFilter,
+    search,
+    studentIdFilter,
+  ]);
+
+  // Derive context label for the active filter
+  const contextLabel = useMemo(() => {
+    if (studentIdFilter) {
+      const student = sessions.find((s) => s.student_id === studentIdFilter);
+      return student ? `Showing sessions for ${student.student_name}` : null;
+    }
+    if (courseFilter !== "ALL") {
+      const course = courses.find((c) => c.id === courseFilter);
+      return course ? `Filtered to ${course.course_name}` : null;
+    }
+    return null;
+  }, [studentIdFilter, courseFilter, sessions, courses]);
 
   const filterBtnStyle = (active: boolean): React.CSSProperties => ({
     padding: "4px 10px",
@@ -144,12 +178,28 @@ export default function TeacherSubmissionsPage() {
         >
           Submissions
         </h1>
-        <p
-          className="text-[13px] mt-0.5"
-          style={{ color: colors.text.secondary }}
-        >
-          All student sessions across your courses. Filter, review, and flag.
-        </p>
+        {contextLabel ? (
+          <p
+            className="text-[13px] mt-0.5 flex items-center gap-2"
+            style={{ color: colors.text.secondary }}
+          >
+            {contextLabel}
+            <button
+              onClick={() => (window.location.href = "/teacher/submissions")}
+              className="text-[11px] font-semibold underline"
+              style={{ color: TEACHER_BLUE }}
+            >
+              Clear filter
+            </button>
+          </p>
+        ) : (
+          <p
+            className="text-[13px] mt-0.5"
+            style={{ color: colors.text.secondary }}
+          >
+            All student sessions across your courses.
+          </p>
+        )}
       </div>
 
       {/* Filters */}
@@ -157,10 +207,9 @@ export default function TeacherSubmissionsPage() {
         className="flex flex-wrap gap-3 items-center mb-5 p-4 bg-white rounded-xl border"
         style={{ borderColor: colors.surface[200] }}
       >
-        {/* Search */}
         <input
           type="text"
-          placeholder="Search student, title, ID..."
+          placeholder="Search student, title, ID…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="px-3 py-2 rounded-lg text-[13px] outline-none border flex-1 min-w-[180px]"
@@ -177,7 +226,6 @@ export default function TeacherSubmissionsPage() {
           }}
         />
 
-        {/* Course filter */}
         <select
           value={courseFilter}
           onChange={(e) =>
@@ -200,7 +248,6 @@ export default function TeacherSubmissionsPage() {
           ))}
         </select>
 
-        {/* Risk filter */}
         <div className="flex gap-1.5">
           {(["ALL", "HIGH", "MEDIUM", "LOW"] as const).map((r) => (
             <button
@@ -213,7 +260,6 @@ export default function TeacherSubmissionsPage() {
           ))}
         </div>
 
-        {/* Status filter */}
         <div className="flex gap-1.5 flex-wrap">
           {(
             ["ALL", "PENDING", "FLAGGED", "UNDER_REVIEW", "APPROVED"] as const
