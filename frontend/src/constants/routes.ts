@@ -1,6 +1,3 @@
-// src/constants/routes.ts
-// Part 2 additions: TEACHER_REVIEW, JOIN_COURSE
-
 export const ROUTES = {
   // ── Public ──────────────────────────────────────────────────────────────────
   HOME: "/",
@@ -27,6 +24,9 @@ export const ROUTES = {
   REPLAY: "/session/:sessionId/replay",
   JOIN_COURSE: "/join-course",
 
+  // ── Public Certificate Verification (NO AUTH REQUIRED) ───────────────────
+  VERIFY: "/verify/:certId", // ← PART 6 NEW
+
   // ── Teacher App ─────────────────────────────────────────────────────────────
   TEACHER_DASHBOARD: "/teacher/dashboard",
   TEACHER_COURSES: "/teacher/courses",
@@ -35,7 +35,6 @@ export const ROUTES = {
   TEACHER_STUDENTS: "/teacher/students",
   TEACHER_REVIEW: "/teacher/review/:sessionId",
 
-  // ── Misc ────────────────────────────────────────────────────────────────────
   NOT_FOUND: "*",
 } as const;
 

@@ -636,6 +636,184 @@ async def get_student_analytics(
         },
     }
 
+@app.get("/api/v1/verify/{cert_id}")
+@limiter.limit("30/minute")
+async def verify_certificate(
+    request: Request,
+    cert_id: str,
+):
+    """
+    Public endpoint — verifies a TypeTrace certificate by its ID.
+    Returns session metadata and classification result.
+    No authentication required: this URL is shared with institutions
+    so they can confirm a certificate's authenticity without an account.
+    """
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+ 
+    # Sanitise — cert IDs are alphanumeric with dashes only
+    import re as _re
+    if not _re.match(r"^[A-Za-z0-9\-_]{8,60}$", cert_id):
+        raise HTTPException(status_code=400, detail="Invalid certificate ID format.")
+ 
+    with db_engine.connect() as conn:
+        row = conn.execute(
+            text("""
+                SELECT
+                    ts.id,
+                    ts.title,
+                    ts.wpm,
+                    ts.duration_seconds,
+                    ts.classification_result,
+                    ts.ml_confidence_score,
+                    ts.created_at,
+                    ts.certificate_id,
+                    ts.document_hash,
+                    ts.total_keystrokes,
+                    ts.deletions,
+                    ts.avg_iki,
+                    u.first_name,
+                    u.last_name,
+                    u.student_id,
+                    u.university_name,
+                    c.course_name
+                FROM typing_sessions ts
+                JOIN users u ON u.id = ts.user_id
+                LEFT JOIN courses c ON c.id = ts.course_id
+                WHERE ts.certificate_id = :cid
+                LIMIT 1
+            """),
+            {"cid": cert_id},
+        ).fetchone()
+ 
+    if not row:
+        # Return a structured "invalid" response rather than a 404
+        # so the frontend can render a proper "Certificate not found" page
+        return {
+            "valid": False,
+            "certificate_id": cert_id,
+            "reason": "Certificate ID not found in the TypeTrace ledger.",
+        }
+ 
+    duration_mins = int((row[3] or 0) // 60)
+    duration_secs = int((row[3] or 0) % 60)
+ 
+    return {
+        "valid": True,
+        "certificate_id": row[7],
+        "document_hash": row[8],
+        "issued_at": row[6].strftime("%Y-%m-%d %H:%M:%S UTC") if row[6] else "Unknown",
+        "session": {
+            "title":             row[1] or "Untitled Document",
+            "classification":    row[4] or "UNKNOWN",
+            "confidence":        round(float(row[5] or 0), 1),
+            "wpm":               round(float(row[2] or 0), 1),
+            "duration":          f"{duration_mins}m {duration_secs:02d}s",
+            "total_keystrokes":  int(row[9] or 0),
+            "deletion_rate":     round((row[10] or 0) / max(row[9] or 1, 1) * 100, 1),
+            "avg_iki_ms":        int(row[11] or 0),
+            "course":            row[16] or None,
+        },
+        "student": {
+            # Only expose first name + last initial for privacy
+            "display_name":   f"{row[12]} {(row[13] or '')[:1]}.",
+            "student_id":     row[14] or "N/A",
+            "institution":    row[15] or "Not specified",
+        },
+    }
+ 
+ 
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. CERTIFICATE PDF DATA ENDPOINT
+#    GET /api/v1/sessions/{session_id}/certificate-data
+#    JWT required — returns all data needed for jsPDF rendering on the frontend.
+#    Keeping PDF generation client-side avoids heavy server dependencies.
+# ─────────────────────────────────────────────────────────────────────────────
+ 
+@app.get("/api/v1/sessions/{session_id}/certificate-data")
+@limiter.limit("20/minute")
+async def get_certificate_data(
+    request: Request,
+    session_id: int,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Returns the full data payload needed for the frontend to generate
+    a PDF certificate using jsPDF. JWT-authenticated — students can only
+    download their own certificates.
+    """
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+ 
+    with db_engine.connect() as conn:
+        row = conn.execute(
+            text("""
+                SELECT
+                    ts.id,
+                    ts.title,
+                    ts.wpm,
+                    ts.duration_seconds,
+                    ts.classification_result,
+                    ts.ml_confidence_score,
+                    ts.created_at,
+                    ts.certificate_id,
+                    ts.document_hash,
+                    ts.total_keystrokes,
+                    ts.deletions,
+                    ts.avg_iki,
+                    ts.pauses,
+                    ts.user_id,
+                    u.first_name,
+                    u.last_name,
+                    u.student_id,
+                    u.university_name,
+                    c.course_name
+                FROM typing_sessions ts
+                JOIN users u ON u.id = ts.user_id
+                LEFT JOIN courses c ON c.id = ts.course_id
+                WHERE ts.id = :sid
+                LIMIT 1
+            """),
+            {"sid": session_id},
+        ).fetchone()
+ 
+    if not row:
+        raise HTTPException(status_code=404, detail="Session not found.")
+ 
+    # Ownership check — students can only get their own certificate data
+    if str(row[13]) != str(user_id):
+        raise HTTPException(status_code=403, detail="Access denied.")
+ 
+    if not row[7]:
+        raise HTTPException(status_code=404, detail="No certificate issued for this session.")
+ 
+    duration_mins = int((row[3] or 0) // 60)
+    duration_secs = int((row[3] or 0) % 60)
+    deletion_rate = round((row[10] or 0) / max(row[9] or 1, 1) * 100, 1)
+    word_count = round(float(row[2] or 0) * (row[3] or 0) / 60)
+ 
+    return {
+        "certificate_id":   row[7],
+        "document_hash":    row[8] or "",
+        "issued_at":        row[6].strftime("%Y-%m-%d %H:%M:%S UTC") if row[6] else "",
+        "student_name":     f"{row[14]} {row[15] or ''}".strip(),
+        "student_id":       row[16] or "N/A",
+        "institution":      row[17] or "University of Bedfordshire",
+        "document_title":   row[1] or "Untitled Document",
+        "course":           row[18] or "Personal Session",
+        "classification":   row[4] or "UNKNOWN",
+        "confidence":       round(float(row[5] or 0), 1),
+        "wpm":              round(float(row[2] or 0), 1),
+        "duration":         f"{duration_mins}m {duration_secs:02d}s",
+        "word_count":       word_count,
+        "total_keystrokes": int(row[9] or 0),
+        "deletion_rate":    deletion_rate,
+        "avg_iki_ms":       int(row[11] or 0),
+        "pause_count":      int(row[12] or 0),
+        # Public verify URL — frontend uses this to embed a QR/link in the PDF
+        "verify_url":       f"/verify/{row[7]}",
+    }
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 7. COURSE MANAGEMENT ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────

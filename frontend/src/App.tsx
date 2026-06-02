@@ -40,8 +40,9 @@ import TeacherDashboard from "./pages/teacher/TeacherDashboard";
 import TeacherCoursesPage from "./pages/teacher/TeacherCoursesPage";
 import TeacherCoursePage from "./pages/teacher/TeacherCoursesPage";
 import TeacherSubmissionsPage from "./pages/teacher/TeacherSubmissionsPage";
-import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage"; // ← Part 4
+import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage";
 import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
+import VerifyCertificatePage from "./pages/VerifyCertificatePage";
 
 import { ROUTES } from "./constants/routes";
 
@@ -49,7 +50,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* ── PUBLIC ────────────────────────────────────────────────────────── */}
+        // ── PUBLIC
+        ────────────────────────────────────────────────────────────────
         <Route element={<RootLayout />}>
           <Route index element={<HomePage />} />
           <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
@@ -66,7 +68,7 @@ export default function App() {
             element={<PlaceholderPage title="Page not found" />}
           />
         </Route>
-
+        <Route path={ROUTES.VERIFY} element={<VerifyCertificatePage />} />
         {/* ── AUTH ──────────────────────────────────────────────────────────── */}
         <Route element={<AuthLayout />}>
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
@@ -77,7 +79,6 @@ export default function App() {
             element={<ForgotPasswordPage />}
           />
         </Route>
-
         {/* ── STUDENT ───────────────────────────────────────────────────────── */}
         <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
           <Route element={<DashboardLayout />}>
@@ -90,7 +91,6 @@ export default function App() {
           <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
           <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
         </Route>
-
         {/* ── TEACHER ───────────────────────────────────────────────────────── */}
         <Route element={<RoleGuard allowedRoles={["TEACHER"]} />}>
           <Route element={<TeacherLayout />}>

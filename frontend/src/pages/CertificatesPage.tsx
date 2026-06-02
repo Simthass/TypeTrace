@@ -1,12 +1,20 @@
+// src/pages/CertificatesPage.tsx
+// =============================================================================
+// Part 6 update: PDF download button wired to useCertificateDownload hook.
+// The rest of the page is unchanged from Part 5.
+// Only the CertificateCard component is updated.
+// =============================================================================
+
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { colors, brand } from "../styles/colors";
 import { ROUTES } from "../constants/routes";
 import { useAuthStore } from "../store/authStore";
+import { useCertificateDownload } from "../hooks/useCertificateDownload";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES
+// TYPES (unchanged from Part 5)
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Classification = "HUMAN" | "SUSPICIOUS" | "AI-GENERATED";
@@ -45,7 +53,6 @@ function ShieldCheckIcon() {
     </svg>
   );
 }
-
 function CopyIcon() {
   return (
     <svg
@@ -63,7 +70,6 @@ function CopyIcon() {
     </svg>
   );
 }
-
 function ExternalLinkIcon() {
   return (
     <svg
@@ -82,7 +88,6 @@ function ExternalLinkIcon() {
     </svg>
   );
 }
-
 function PlayIcon() {
   return (
     <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
@@ -90,9 +95,27 @@ function PlayIcon() {
     </svg>
   );
 }
+function DownloadIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CERTIFICATE CARD
+// CERTIFICATE CARD — Part 6: adds PDF download button
 // ─────────────────────────────────────────────────────────────────────────────
 
 function CertificateCard({
@@ -103,8 +126,10 @@ function CertificateCard({
   studentName: string;
 }) {
   const [copied, setCopied] = useState(false);
-  const isHuman = session.classification === "HUMAN";
+  const { downloadCertificate, isDownloading } = useCertificateDownload();
   const certId = session.certificate_id!;
+  const isHuman = session.classification === "HUMAN";
+  const verifyUrl = `/verify/${certId}`;
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(certId);
@@ -112,15 +137,12 @@ function CertificateCard({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Public verify URL — matches the existing /verify/:certId route
-  const verifyUrl = `${window.location.origin}/verify/${certId}`;
-
   return (
     <div
       className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col"
       style={{ borderColor: colors.surface[200] }}
     >
-      {/* Certificate header strip — styled to feel like a real document */}
+      {/* Certificate header strip */}
       <div
         className="px-6 py-5 flex items-start justify-between gap-3"
         style={{
@@ -131,7 +153,6 @@ function CertificateCard({
         }}
       >
         <div className="flex items-center gap-3">
-          {/* Certificate seal */}
           <div
             className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 border-2"
             style={{
@@ -157,8 +178,6 @@ function CertificateCard({
             </p>
           </div>
         </div>
-
-        {/* Classification badge */}
         <div
           className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider border"
           style={{
@@ -175,9 +194,8 @@ function CertificateCard({
         </div>
       </div>
 
-      {/* Certificate body */}
+      {/* Body */}
       <div className="px-6 py-4 flex flex-col gap-4 flex-1">
-        {/* Stats row */}
         <div className="grid grid-cols-3 gap-3">
           {[
             { label: "Confidence", value: `${session.confidence}%` },
@@ -201,7 +219,7 @@ function CertificateCard({
           ))}
         </div>
 
-        {/* Certificate ID block */}
+        {/* Certificate ID */}
         <div
           className="flex items-center gap-2 px-3 py-2 rounded-lg"
           style={{
@@ -236,68 +254,74 @@ function CertificateCard({
         </div>
       </div>
 
-      {/* Footer actions */}
+      {/* Footer — Part 6: PDF download added */}
       <div
-        className="px-6 py-3 flex items-center gap-3 border-t"
+        className="px-6 py-3 flex items-center gap-3 border-t flex-wrap"
         style={{
           borderColor: colors.surface[200],
           background: colors.surface[50],
         }}
       >
+        {/* ← PART 6: Download PDF */}
+        <button
+          onClick={() => downloadCertificate(session.id)}
+          disabled={isDownloading}
+          className="flex items-center gap-1.5 text-[12px] font-semibold transition-opacity"
+          style={{
+            color: colors.text.primary,
+            opacity: isDownloading ? 0.6 : 1,
+          }}
+        >
+          <DownloadIcon />
+          {isDownloading ? "Generating..." : "Download PDF"}
+        </button>
+
+        <span style={{ color: colors.surface[200] }}>·</span>
+
         {/* Verify publicly */}
         <a
           href={verifyUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-[12px] font-semibold transition-colors"
+          className="flex items-center gap-1.5 text-[12px] font-semibold transition-opacity hover:opacity-80"
           style={{ color: brand.action }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.opacity = "0.8";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.opacity = "1";
-          }}
         >
           <ExternalLinkIcon />
-          Verify Certificate
+          Verify
         </a>
 
         <span style={{ color: colors.surface[200] }}>·</span>
 
-        {/* Replay link */}
+        {/* Replay */}
         <Link
           to={`/session/${session.id}/replay`}
           className="flex items-center gap-1.5 text-[12px] font-semibold transition-opacity hover:opacity-70"
           style={{ color: colors.text.secondary }}
         >
-          <PlayIcon />
-          Replay
+          <PlayIcon /> Replay
         </Link>
 
-        {/* Review status if submitted */}
+        {/* Review status */}
         {session.review_status &&
           session.review_status !== "PENDING" &&
           session.course_name && (
-            <>
-              <span style={{ color: colors.surface[200] }}>·</span>
-              <span
-                className="text-[11px] font-semibold ml-auto"
-                style={{
-                  color:
-                    session.review_status === "APPROVED"
-                      ? "#15803d"
-                      : session.review_status === "FLAGGED"
-                        ? "#b91c1c"
-                        : "#a16207",
-                }}
-              >
-                {session.review_status === "APPROVED"
-                  ? "✓ Approved"
-                  : session.review_status === "FLAGGED"
-                    ? "⚑ Flagged"
-                    : "◎ Under Review"}
-              </span>
-            </>
+            <span
+              className="text-[11px] font-semibold ml-auto"
+              style={{
+                color:
+                  session.review_status === "APPROVED"
+                    ? "#15803d"
+                    : session.review_status === "FLAGGED"
+                      ? "#b91c1c"
+                      : "#a16207",
+              }}
+            >
+              {session.review_status === "APPROVED"
+                ? "✓ Approved"
+                : session.review_status === "FLAGGED"
+                  ? "⚑ Flagged"
+                  : "◎ Under Review"}
+            </span>
           )}
       </div>
     </div>
@@ -305,7 +329,7 @@ function CertificateCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PAGE
+// PAGE (unchanged from Part 5 except CertificateCard now downloads PDFs)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function CertificatesPage() {
@@ -323,7 +347,6 @@ export default function CertificatesPage() {
       .get<{ status: string; sessions: Session[] }>("/sessions/history")
       .then((r) => {
         if (r.data.status === "success") {
-          // Only sessions that actually have a certificate
           setSessions(r.data.sessions.filter((s) => !!s.certificate_id));
         }
       })
@@ -352,7 +375,6 @@ export default function CertificatesPage() {
       className="p-6 md:p-8 max-w-[1200px] mx-auto flex flex-col gap-6 font-sans min-h-screen"
       style={{ background: colors.surface[50] }}
     >
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1
@@ -365,7 +387,8 @@ export default function CertificatesPage() {
             className="text-[13px] mt-0.5"
             style={{ color: colors.text.secondary }}
           >
-            Cryptographic proof of authorship for all your verified sessions.
+            Cryptographic proof of authorship. Download PDFs to submit with your
+            assignments.
           </p>
         </div>
         <Link
@@ -377,7 +400,6 @@ export default function CertificatesPage() {
         </Link>
       </div>
 
-      {/* Stats row */}
       {sessions.length > 0 && (
         <div className="grid grid-cols-3 gap-3">
           {[
@@ -415,7 +437,6 @@ export default function CertificatesPage() {
         </div>
       )}
 
-      {/* Filter tabs */}
       {sessions.length > 0 && (
         <div className="flex items-center gap-2">
           {(["ALL", "HUMAN", "OTHER"] as const).map((f) => (
@@ -442,7 +463,6 @@ export default function CertificatesPage() {
         </div>
       )}
 
-      {/* Content */}
       {isLoading ? (
         <div className="flex items-center justify-center h-40">
           <span
@@ -503,14 +523,13 @@ export default function CertificatesPage() {
         </div>
       )}
 
-      {/* GDPR note */}
       <p
         className="text-[11px] text-center pb-4"
         style={{ color: colors.text.secondary }}
       >
         Certificates are cryptographically sealed with SHA-256 and immutably
-        stored in the TypeTrace ledger. Share the "Verify Certificate" link with
-        your institution to prove authorship.
+        stored in the TypeTrace ledger. Share the verify link or download the
+        PDF to prove authorship to your institution.
       </p>
     </div>
   );
