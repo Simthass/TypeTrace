@@ -635,6 +635,149 @@ async def get_student_analytics(
             "total_seconds":    int(bests_row[5] or 0),
         },
     }
+class ProfileUpdateSchema(BaseModel):
+    first_name: str
+    last_name: Optional[str] = None
+    university_name: Optional[str] = None
+    department: Optional[str] = None
+ 
+ 
+class PasswordChangeSchema(BaseModel):
+    current_password: str
+    new_password: str
+ 
+ 
+@app.get("/api/v1/user/profile")
+@limiter.limit("30/minute")
+async def get_user_profile(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Returns the authenticated user's profile data for the Settings page."""
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+ 
+    with db_engine.connect() as conn:
+        row = conn.execute(
+            text("""
+                SELECT
+                    id, first_name, last_name, email,
+                    student_id, role, university_name, department,
+                    created_at
+                FROM users
+                WHERE id = :uid
+                LIMIT 1
+            """),
+            {"uid": user_id},
+        ).fetchone()
+ 
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found.")
+ 
+    return {
+        "id":              row[0],
+        "first_name":      row[1] or "",
+        "last_name":       row[2] or "",
+        "email":           row[3] or "",
+        "student_id":      row[4] or "",
+        "role":            row[5] or "STUDENT",
+        "university_name": row[6] or "",
+        "department":      row[7] or "",
+        "member_since":    row[8].strftime("%B %Y") if row[8] else "",
+    }
+ 
+ 
+@app.patch("/api/v1/user/profile")
+@limiter.limit("10/minute")
+async def update_user_profile(
+    request: Request,
+    data: ProfileUpdateSchema,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Updates the authenticated user's display name and institution fields."""
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+ 
+    if not data.first_name.strip():
+        raise HTTPException(status_code=400, detail="First name cannot be empty.")
+ 
+    with db_engine.begin() as conn:
+        conn.execute(
+            text("""
+                UPDATE users
+                SET first_name      = :fn,
+                    last_name       = :ln,
+                    university_name = :uni,
+                    department      = :dept
+                WHERE id = :uid
+            """),
+            {
+                "fn":   data.first_name.strip(),
+                "ln":   (data.last_name or "").strip() or None,
+                "uni":  (data.university_name or "").strip() or None,
+                "dept": (data.department or "").strip() or None,
+                "uid":  user_id,
+            },
+        )
+ 
+    return {"message": "Profile updated successfully."}
+ 
+ 
+@app.post("/api/v1/user/change-password")
+@limiter.limit("5/minute")
+async def change_password(
+    request: Request,
+    data: PasswordChangeSchema,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Validates current password then updates to the new one.
+    Rate-limited to 5/minute to prevent brute-force.
+    """
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+ 
+    if len(data.new_password) < 8:
+        raise HTTPException(
+            status_code=400, detail="New password must be at least 8 characters."
+        )
+    if not any(c.isdigit() for c in data.new_password):
+        raise HTTPException(
+            status_code=400, detail="New password must contain at least one number."
+        )
+ 
+    with db_engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT hashed_password FROM users WHERE id = :uid LIMIT 1"),
+            {"uid": user_id},
+        ).fetchone()
+ 
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found.")
+ 
+    # Verify current password using bcrypt (passlib is already a dependency)
+    import bcrypt as _bcrypt
+    stored_hash: str = row[0]
+    current_matches = _bcrypt.checkpw(
+        data.current_password.encode("utf-8"),
+        stored_hash.encode("utf-8"),
+    )
+    if not current_matches:
+        raise HTTPException(status_code=401, detail="Current password is incorrect.")
+ 
+    new_hashed = _bcrypt.hashpw(
+        data.new_password.encode("utf-8"),
+        _bcrypt.gensalt(),
+    ).decode("utf-8")
+ 
+    with db_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE users SET hashed_password = :h WHERE id = :uid"),
+            {"h": new_hashed, "uid": user_id},
+        )
+ 
+    return {"message": "Password changed successfully."}
+
 
 @app.get("/api/v1/verify/{cert_id}")
 @limiter.limit("30/minute")
