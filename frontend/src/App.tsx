@@ -1,5 +1,3 @@
-// src/App.tsx — Part 4: TeacherStudentsPage replaces the placeholder
-
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 // Layouts
@@ -43,6 +41,7 @@ import TeacherSubmissionsPage from "./pages/teacher/TeacherSubmissionsPage";
 import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage";
 import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
 import VerifyCertificatePage from "./pages/VerifyCertificatePage";
+import VerifyLookupPage from "./pages/VerifyLookupPage";
 
 import { ROUTES } from "./constants/routes";
 
@@ -68,6 +67,7 @@ export default function App() {
             element={<PlaceholderPage title="Page not found" />}
           />
         </Route>
+        <Route path={ROUTES.VERIFY_LOOKUP} element={<VerifyLookupPage />} />
         <Route path={ROUTES.VERIFY} element={<VerifyCertificatePage />} />
         {/* ── AUTH ──────────────────────────────────────────────────────────── */}
         <Route element={<AuthLayout />}>

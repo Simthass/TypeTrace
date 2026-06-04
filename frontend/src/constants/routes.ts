@@ -25,6 +25,7 @@ export const ROUTES = {
   JOIN_COURSE: "/join-course",
 
   // ── Public Certificate Verification (NO AUTH REQUIRED) ───────────────────
+  VERIFY_LOOKUP: "/verify",
   VERIFY: "/verify/:certId", // ← PART 6 NEW
 
   // ── Teacher App ─────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ export const PUBLIC_NAV = [
   { label: "How It Works", path: ROUTES.HOW_IT_WORKS },
   { label: "Features", path: ROUTES.FEATURES },
   { label: "About", path: ROUTES.ABOUT },
+  { label: "Verify", path: ROUTES.VERIFY_LOOKUP },
 ] as const;
 
 export const AUTH_NAV = [
