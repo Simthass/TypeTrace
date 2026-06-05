@@ -94,9 +94,10 @@ export default function Header() {
     <>
       <header
         role="banner"
-        className="fixed top-0 inset-x-0 z-50 transition-colors duration-300"
+        className="fixed top-0 inset-x-0 z-50 transition-all duration-300"
         style={{
-          backgroundColor: colors.surface[50],
+          backgroundColor: isScrolled ? "rgba(255,255,255,0.92)" : "#FFFFFF",
+          backdropFilter: isScrolled ? "blur(12px)" : "none",
           borderBottom: isScrolled
             ? `1px solid ${colors.surface[200]}`
             : "1px solid transparent",
@@ -107,7 +108,8 @@ export default function Header() {
           <div className="flex-shrink-0 flex items-center">
             <Link
               to={ROUTES.HOME}
-              className="flex items-center outline-none focus-visible:ring-2 rounded-lg"
+              className="flex items-center outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded-lg"
+              style={{ "--tw-ring-color": brand.action } as React.CSSProperties}
             >
               <img
                 src="/Logo.png"
@@ -126,16 +128,17 @@ export default function Header() {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className="relative px-4 py-2 rounded-lg text-[13.5px] font-medium transition-colors duration-200 outline-none"
-                  style={{
-                    color: isActive
-                      ? colors.text.primary
-                      : colors.text.secondary,
-                  }}
+                  className="relative px-4 py-2 rounded-lg text-[13.5px] font-medium transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                  style={
+                    {
+                      color: isActive ? brand.action : colors.text.secondary,
+                      "--tw-ring-color": brand.action,
+                    } as React.CSSProperties
+                  }
                   onMouseEnter={(e) => {
                     if (!isActive)
                       e.currentTarget.style.color = colors.text.primary;
-                    e.currentTarget.style.backgroundColor = colors.surface[50];
+                    e.currentTarget.style.backgroundColor = colors.surface[100];
                   }}
                   onMouseLeave={(e) => {
                     if (!isActive)
@@ -148,7 +151,7 @@ export default function Header() {
                     <motion.div
                       layoutId="nav-indicator"
                       className="absolute bottom-1 left-4 right-4 h-[2px] rounded-full"
-                      style={{ backgroundColor: colors.text.primary }}
+                      style={{ backgroundColor: brand.action }}
                       transition={{
                         type: "spring",
                         stiffness: 500,
@@ -167,15 +170,19 @@ export default function Header() {
               <div className="relative" ref={profileMenuRef}>
                 <button
                   onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                  className="flex items-center gap-2 p-1.5 rounded-lg transition-colors outline-none focus-visible:ring-2"
-                  style={{
-                    backgroundColor: isProfileMenuOpen
-                      ? colors.surface[50]
-                      : "transparent",
-                  }}
+                  className="flex items-center gap-2 p-1.5 rounded-lg transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                  style={
+                    {
+                      backgroundColor: isProfileMenuOpen
+                        ? colors.surface[100]
+                        : "transparent",
+                      "--tw-ring-color": brand.action,
+                    } as React.CSSProperties
+                  }
                   onMouseEnter={(e) =>
                     !isProfileMenuOpen &&
-                    (e.currentTarget.style.backgroundColor = colors.surface[50])
+                    (e.currentTarget.style.backgroundColor =
+                      colors.surface[100])
                   }
                   onMouseLeave={(e) =>
                     !isProfileMenuOpen &&
@@ -185,8 +192,8 @@ export default function Header() {
                   <div
                     className="h-8 w-8 rounded-md flex items-center justify-center font-bold text-[13px]"
                     style={{
-                      backgroundColor: `${brand.action}15`,
-                      color: brand.action,
+                      backgroundColor: "#DBEAFE",
+                      color: "#2563EB",
                     }}
                   >
                     {getInitials()}
@@ -228,7 +235,7 @@ export default function Header() {
                         className="px-4 py-3 border-b"
                         style={{
                           borderColor: colors.surface[200],
-                          backgroundColor: colors.surface[50],
+                          backgroundColor: colors.surface[100],
                         }}
                       >
                         <p
@@ -249,11 +256,16 @@ export default function Header() {
                       <div className="p-1.5 flex flex-col">
                         <Link
                           to={ROUTES.DASHBOARD}
-                          className="px-3 py-2 text-[13px] font-medium rounded-md transition-colors"
-                          style={{ color: colors.text.primary }}
+                          className="px-3 py-2 text-[13px] font-medium rounded-md transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                          style={
+                            {
+                              color: colors.text.primary,
+                              "--tw-ring-color": brand.action,
+                            } as React.CSSProperties
+                          }
                           onMouseEnter={(e) =>
                             (e.currentTarget.style.backgroundColor =
-                              colors.surface[50])
+                              colors.surface[100])
                           }
                           onMouseLeave={(e) =>
                             (e.currentTarget.style.backgroundColor =
@@ -264,11 +276,16 @@ export default function Header() {
                         </Link>
                         <Link
                           to={ROUTES.EDITOR_NEW}
-                          className="px-3 py-2 text-[13px] font-medium rounded-md transition-colors"
-                          style={{ color: colors.text.primary }}
+                          className="px-3 py-2 text-[13px] font-medium rounded-md transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                          style={
+                            {
+                              color: colors.text.primary,
+                              "--tw-ring-color": brand.action,
+                            } as React.CSSProperties
+                          }
                           onMouseEnter={(e) =>
                             (e.currentTarget.style.backgroundColor =
-                              colors.surface[50])
+                              colors.surface[100])
                           }
                           onMouseLeave={(e) =>
                             (e.currentTarget.style.backgroundColor =
@@ -281,17 +298,22 @@ export default function Header() {
                         {/* subtle divider */}
                         <div
                           className="my-1 border-t mx-2"
-                          style={{ borderColor: colors.surface[100] }}
+                          style={{ borderColor: colors.surface[200] }}
                         />
 
                         {/* SECONDARY ACTIONS (Settings & Help) */}
                         <Link
                           to={ROUTES.SETTINGS}
-                          className="px-3 py-2 text-[13px] font-medium rounded-md transition-colors"
-                          style={{ color: colors.text.secondary }}
+                          className="px-3 py-2 text-[13px] font-medium rounded-md transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                          style={
+                            {
+                              color: colors.text.secondary,
+                              "--tw-ring-color": brand.action,
+                            } as React.CSSProperties
+                          }
                           onMouseEnter={(e) => {
                             e.currentTarget.style.backgroundColor =
-                              colors.surface[50];
+                              colors.surface[100];
                             e.currentTarget.style.color = colors.text.primary;
                           }}
                           onMouseLeave={(e) => {
@@ -304,11 +326,16 @@ export default function Header() {
                         </Link>
                         <Link
                           to="/help"
-                          className="px-3 py-2 text-[13px] font-medium rounded-md transition-colors"
-                          style={{ color: colors.text.secondary }}
+                          className="px-3 py-2 text-[13px] font-medium rounded-md transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                          style={
+                            {
+                              color: colors.text.secondary,
+                              "--tw-ring-color": brand.action,
+                            } as React.CSSProperties
+                          }
                           onMouseEnter={(e) => {
                             e.currentTarget.style.backgroundColor =
-                              colors.surface[50];
+                              colors.surface[100];
                             e.currentTarget.style.color = colors.text.primary;
                           }}
                           onMouseLeave={(e) => {
@@ -328,8 +355,13 @@ export default function Header() {
                       >
                         <button
                           onClick={handleLogout}
-                          className="w-full text-left px-3 py-2 text-[13px] font-medium rounded-md transition-colors outline-none"
-                          style={{ color: brand.aiAccent }}
+                          className="w-full text-left px-3 py-2 text-[13px] font-medium rounded-md transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                          style={
+                            {
+                              color: brand.aiAccent,
+                              "--tw-ring-color": brand.action,
+                            } as React.CSSProperties
+                          }
                           onMouseEnter={(e) =>
                             (e.currentTarget.style.backgroundColor = `${brand.aiAccent}10`)
                           }
@@ -350,11 +382,16 @@ export default function Header() {
               <>
                 <Link
                   to={ROUTES.LOGIN}
-                  className="px-4 py-2 rounded-lg text-[13.5px] font-medium transition-colors duration-200 outline-none"
-                  style={{ color: colors.text.secondary }}
+                  className="px-4 py-2 rounded-lg text-[13.5px] font-medium transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                  style={
+                    {
+                      color: colors.text.secondary,
+                      "--tw-ring-color": brand.action,
+                    } as React.CSSProperties
+                  }
                   onMouseEnter={(e) => {
                     e.currentTarget.style.color = colors.text.primary;
-                    e.currentTarget.style.backgroundColor = colors.surface[50];
+                    e.currentTarget.style.backgroundColor = colors.surface[100];
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.color = colors.text.secondary;
@@ -365,8 +402,13 @@ export default function Header() {
                 </Link>
                 <Link
                   to={ROUTES.REGISTER}
-                  className="px-5 py-2 rounded-lg text-[13.5px] font-medium text-white transition-all duration-200 outline-none shadow-sm"
-                  style={{ backgroundColor: brand.action }}
+                  className="px-5 py-2 rounded-lg text-[13.5px] font-medium text-white transition-all duration-200 outline-none shadow-sm focus-visible:ring-2 focus-visible:ring-offset-2"
+                  style={
+                    {
+                      backgroundColor: brand.action,
+                      "--tw-ring-color": brand.action,
+                    } as React.CSSProperties
+                  }
                   onMouseEnter={(e) =>
                     (e.currentTarget.style.backgroundColor = brand.actionHover)
                   }
@@ -382,10 +424,11 @@ export default function Header() {
 
           <button
             type="button"
-            className="md:hidden flex items-center justify-center w-10 h-10 rounded-lg transition-colors outline-none"
+            className="md:hidden flex items-center justify-center w-10 h-10 rounded-lg transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+            style={{ "--tw-ring-color": brand.action } as React.CSSProperties}
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = colors.surface[50])
+              (e.currentTarget.style.backgroundColor = colors.surface[100])
             }
             onMouseLeave={(e) =>
               (e.currentTarget.style.backgroundColor = "transparent")
@@ -422,13 +465,18 @@ export default function Header() {
                     >
                       <Link
                         to={item.path}
-                        className="block px-4 py-3 rounded-lg text-xl font-semibold tracking-tight transition-colors"
-                        style={{
-                          color: isActive ? brand.action : colors.text.primary,
-                          backgroundColor: isActive
-                            ? `${brand.action}10`
-                            : "transparent",
-                        }}
+                        className="block px-4 py-3 rounded-lg text-xl font-semibold tracking-tight transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                        style={
+                          {
+                            color: isActive
+                              ? brand.action
+                              : colors.text.primary,
+                            backgroundColor: isActive
+                              ? `${brand.action}10`
+                              : "transparent",
+                            "--tw-ring-color": brand.action,
+                          } as React.CSSProperties
+                        }
                       >
                         {item.label}
                       </Link>
@@ -449,33 +497,42 @@ export default function Header() {
                   <>
                     <Link
                       to={ROUTES.DASHBOARD}
-                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center transition-colors shadow-sm"
-                      style={{
-                        backgroundColor: colors.surface[50],
-                        color: colors.text.primary,
-                        border: `1px solid ${colors.surface[200]}`,
-                      }}
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center transition-colors shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                      style={
+                        {
+                          backgroundColor: colors.surface[100],
+                          color: colors.text.primary,
+                          border: `1px solid ${colors.surface[200]}`,
+                          "--tw-ring-color": brand.action,
+                        } as React.CSSProperties
+                      }
                     >
                       Dashboard
                     </Link>
                     <Link
                       to={ROUTES.SETTINGS}
-                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center transition-colors shadow-sm"
-                      style={{
-                        backgroundColor: colors.surface[50],
-                        color: colors.text.primary,
-                        border: `1px solid ${colors.surface[200]}`,
-                      }}
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center transition-colors shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                      style={
+                        {
+                          backgroundColor: colors.surface[100],
+                          color: colors.text.primary,
+                          border: `1px solid ${colors.surface[200]}`,
+                          "--tw-ring-color": brand.action,
+                        } as React.CSSProperties
+                      }
                     >
                       Settings
                     </Link>
                     <button
                       onClick={handleLogout}
-                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center transition-colors mt-2"
-                      style={{
-                        color: brand.aiAccent,
-                        border: `1px solid ${brand.aiAccent}30`,
-                      }}
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center transition-colors mt-2 outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                      style={
+                        {
+                          color: brand.aiAccent,
+                          border: `1px solid ${brand.aiAccent}30`,
+                          "--tw-ring-color": brand.action,
+                        } as React.CSSProperties
+                      }
                     >
                       Sign Out
                     </button>
@@ -485,18 +542,26 @@ export default function Header() {
                   <>
                     <Link
                       to={ROUTES.LOGIN}
-                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center border transition-colors shadow-sm"
-                      style={{
-                        color: colors.text.primary,
-                        borderColor: colors.surface[200],
-                      }}
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center border transition-colors shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                      style={
+                        {
+                          color: colors.text.primary,
+                          borderColor: colors.surface[200],
+                          "--tw-ring-color": brand.action,
+                        } as React.CSSProperties
+                      }
                     >
                       Sign In
                     </Link>
                     <Link
                       to={ROUTES.REGISTER}
-                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center text-white transition-colors shadow-sm"
-                      style={{ backgroundColor: brand.action }}
+                      className="w-full py-3.5 rounded-lg text-[15px] font-medium text-center text-white transition-colors shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                      style={
+                        {
+                          backgroundColor: brand.action,
+                          "--tw-ring-color": brand.action,
+                        } as React.CSSProperties
+                      }
                     >
                       Start Free Session
                     </Link>

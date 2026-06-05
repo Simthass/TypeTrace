@@ -90,7 +90,7 @@ export default function Footer() {
 
   // Strict mapping to your colors.ts source of truth
   const dynamicStyles = {
-    "--bg-footer": colors.text.light,
+    "--bg-footer": "#FFFFFF",
     "--border-light": colors.surface[200],
     "--text-primary": colors.text.primary,
     "--text-muted": colors.text.secondary,
@@ -100,6 +100,7 @@ export default function Footer() {
     "--verify-bg": brand.humanBg,
     "--verify-border": brand.humanAccent,
     "--surface-50": colors.surface[50],
+    "--surface-100": colors.surface[100],
   } as React.CSSProperties;
 
   return (
@@ -121,7 +122,7 @@ export default function Footer() {
               <img
                 src="/Logo.png"
                 alt="TypeTrace"
-                className="h-[35px] w-auto object-contain transition-opacity hover:opacity-80"
+                className="h-[35px] w-auto object-contain transition-opacity hover:opacity-90"
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).style.display = "none";
                 }}
@@ -134,7 +135,21 @@ export default function Footer() {
               era.
             </p>
 
-            {/* Strict Social Links - No round pills, no shadows */}
+            {/* Trust Accent Badge - Single Blue Trust Signal */}
+            <div
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md w-fit"
+              style={{
+                backgroundColor: "#EFF6FF",
+                color: brand.action,
+              }}
+            >
+              <span className="h-2 w-2 rounded-full bg-current" />
+              <span className="text-[13px] font-semibold">
+                Academic Integrity Platform
+              </span>
+            </div>
+
+            {/* Premium Social Links */}
             <div className="flex items-center gap-2 mt-2">
               {socialLinks.map(({ label, href, Icon }) => (
                 <a
@@ -143,17 +158,20 @@ export default function Footer() {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={label}
-                  // STRICT TOKEN: rounded-lg
-                  className="flex items-center justify-center h-10 w-10 rounded-lg border border-transparent bg-[var(--surface-50)] text-[var(--text-muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--action-primary)]"
+                  className="flex items-center justify-center h-10 w-10 rounded-lg border border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--action-primary)]"
+                  style={{
+                    backgroundColor: colors.surface[100],
+                    color: colors.text.secondary,
+                  }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--action-primary)";
-                    e.currentTarget.style.borderColor = "var(--border-light)";
-                    e.currentTarget.style.backgroundColor = "var(--bg-footer)";
+                    e.currentTarget.style.color = "#FFFFFF";
+                    e.currentTarget.style.backgroundColor = brand.action;
+                    e.currentTarget.style.borderColor = brand.action;
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--text-muted)";
+                    e.currentTarget.style.color = colors.text.secondary;
+                    e.currentTarget.style.backgroundColor = colors.surface[100];
                     e.currentTarget.style.borderColor = "transparent";
-                    e.currentTarget.style.backgroundColor = "var(--surface-50)";
                   }}
                 >
                   <Icon />
@@ -166,7 +184,10 @@ export default function Footer() {
           <div className="lg:col-span-4 grid grid-cols-2 md:grid-cols-3 gap-10 lg:pl-12">
             {footerColumns.map((col) => (
               <div key={col.heading} className="flex flex-col gap-5">
-                <h3 className="text-[12px] font-bold uppercase tracking-widest text-[var(--text-primary)]">
+                <h3
+                  className="text-[12px] font-bold uppercase tracking-widest"
+                  style={{ color: brand.action }}
+                >
                   {col.heading}
                 </h3>
                 <ul className="flex flex-col gap-3.5" role="list">
@@ -174,8 +195,7 @@ export default function Footer() {
                     <li key={link.label}>
                       <Link
                         to={link.path}
-                        // Minimalist text color transition. Removed the 2021 animated underline.
-                        className="text-[14px] font-medium text-[var(--text-muted)] transition-colors duration-200 hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--action-primary)] rounded-md"
+                        className="text-[14px] font-medium text-[var(--text-muted)] transition-colors duration-200 hover:text-[var(--action-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--action-primary)] rounded-md"
                       >
                         {link.label}
                       </Link>
@@ -189,7 +209,12 @@ export default function Footer() {
       </div>
 
       {/* ─── Bottom Legal & Status Bar ─── */}
-      <div className="border-t border-[var(--border-light)] bg-[var(--surface-50)]">
+      <div
+        className="border-t border-[var(--border-light)]"
+        style={{
+          backgroundColor: colors.surface[100],
+        }}
+      >
         <div className="max-w-[1440px] mx-auto px-6 md:px-12 py-6 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
             <p className="text-[13px] font-medium text-[var(--text-muted)]">
@@ -205,15 +230,25 @@ export default function Footer() {
 
           {/* System Status Indicators */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* STRICT TOKEN: rounded-md */}
-            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-[var(--bg-footer)] border border-[var(--border-light)]">
+            <div
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border"
+              style={{
+                backgroundColor: colors.surface[100],
+                borderColor: colors.surface[200],
+              }}
+            >
               <span className="text-[11.5px] font-medium text-[var(--text-muted)]">
                 GDPR Compliant
               </span>
             </div>
 
-            {/* STRICT TOKEN: rounded-md */}
-            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-[var(--bg-footer)] border border-[var(--border-light)]">
+            <div
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border"
+              style={{
+                backgroundColor: colors.surface[100],
+                borderColor: colors.surface[200],
+              }}
+            >
               <span className="text-[11.5px] font-medium text-[var(--text-muted)]">
                 WCAG 2.1 AA
               </span>
