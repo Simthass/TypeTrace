@@ -112,36 +112,14 @@ db_engine = None
 if DB_URL:
     try:
         db_engine = create_engine(DB_URL, pool_pre_ping=True)
-        with db_engine.begin() as conn:
-            conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS certificate_id VARCHAR(50) UNIQUE;"))
-            conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS document_hash VARCHAR(64);"))
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS courses (
-                    id          SERIAL PRIMARY KEY,
-                    teacher_id  VARCHAR(50) NOT NULL,
-                    course_name VARCHAR(200) NOT NULL,
-                    course_code VARCHAR(100) NOT NULL,
-                    invite_code VARCHAR(20) UNIQUE NOT NULL,
-                    created_at  TIMESTAMP DEFAULT NOW()
-                );
-            """))
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS course_students (
-                    id         SERIAL PRIMARY KEY,
-                    course_id  INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-                    student_id VARCHAR(50) NOT NULL,
-                    joined_at  TIMESTAMP DEFAULT NOW(),
-                    UNIQUE(course_id, student_id)
-                );
-            """))
-            conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS course_id INTEGER REFERENCES courses(id);"))
-            conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS review_status VARCHAR(30) DEFAULT 'PENDING';"))
-            conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS reviewed_by VARCHAR(50);"))
-            conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS review_notes TEXT;"))
-            conn.execute(text("ALTER TABLE typing_sessions ADD COLUMN IF NOT EXISTS risk_level VARCHAR(20) DEFAULT 'LOW';"))
-        log.info("✅ Database engine initialized & schema patched.")
+
+        with db_engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+
+        log.info("Database engine initialized.")
     except Exception as e:
-        log.warning(f"⚠️  Database connection/patch failed: {e}")
+        db_engine = None
+        log.warning(f"Database connection failed: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. AUTHENTICATION

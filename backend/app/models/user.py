@@ -1,36 +1,74 @@
 # backend/app/models/user.py
-from sqlalchemy import Column, String, Boolean, DateTime
-from datetime import datetime
+
 import uuid
+
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, String
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+
 from app.db.database import Base
 
 
 class User(Base):
     __tablename__ = "users"
 
-    # UUID primary key so attackers can't enumerate user counts
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    id = Column(
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+        index=True,
+    )
 
     first_name = Column(String(50), nullable=False)
-    last_name = Column(String(50), nullable=False)
+    last_name = Column(String(50), nullable=False, default="")
 
-    # ── RBAC: "STUDENT" or "TEACHER" ─────────────────────────────────────────
-    # Default to STUDENT so existing rows in the DB are backwards-compatible.
-    role = Column(String(20), nullable=False, default="STUDENT")
+    role = Column(String(20), nullable=False, default="STUDENT", index=True)
 
-    # student_id is NOW NULLABLE because teachers don't have one.
-    # The unique constraint still works: Postgres treats NULLs as distinct,
-    # so multiple teachers with NULL student_id won't collide.
-    student_id = Column(String(20), unique=True, index=True, nullable=True)
+    student_id = Column(String(30), unique=True, index=True, nullable=True)
 
-    email = Column(String(100), unique=True, index=True, nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
 
-    # Shared optional institutional fields
     university_name = Column(String(200), nullable=True)
-
-    # Teachers fill this in; students leave it NULL
     department = Column(String(200), nullable=True)
 
-    is_verified = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    is_verified = Column(Boolean, nullable=False, default=True, server_default="true")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    sessions = relationship(
+        "TypingSession",
+        back_populates="user",
+        foreign_keys="TypingSession.user_id",
+        cascade="all, delete-orphan",
+    )
+
+    reviewed_sessions = relationship(
+        "TypingSession",
+        foreign_keys="TypingSession.reviewed_by",
+    )
+
+    courses_taught = relationship(
+        "Course",
+        back_populates="teacher",
+        cascade="all, delete-orphan",
+    )
+
+    joined_courses = relationship(
+        "CourseStudent",
+        back_populates="student",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('STUDENT', 'TEACHER')",
+            name="ck_users_role_valid",
+        ),
+    )
