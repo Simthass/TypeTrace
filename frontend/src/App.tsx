@@ -1,3 +1,5 @@
+// frontend/src/App.tsx
+
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 // Layouts
@@ -40,6 +42,8 @@ import TeacherCoursePage from "./pages/teacher/TeacherCoursesPage";
 import TeacherSubmissionsPage from "./pages/teacher/TeacherSubmissionsPage";
 import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage";
 import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
+
+// Verification pages
 import VerifyCertificatePage from "./pages/VerifyCertificatePage";
 import VerifyLookupPage from "./pages/VerifyLookupPage";
 
@@ -49,8 +53,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        // ── PUBLIC
-        ────────────────────────────────────────────────────────────────
+        {/* Public routes */}
         <Route element={<RootLayout />}>
           <Route index element={<HomePage />} />
           <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
@@ -62,14 +65,11 @@ export default function App() {
             path={ROUTES.PRICING}
             element={<PlaceholderPage title="Pricing" />}
           />
-          <Route
-            path={ROUTES.NOT_FOUND}
-            element={<PlaceholderPage title="Page not found" />}
-          />
           <Route path={ROUTES.VERIFY_LOOKUP} element={<VerifyLookupPage />} />
           <Route path={ROUTES.VERIFY} element={<VerifyCertificatePage />} />
         </Route>
-        {/* ── AUTH ──────────────────────────────────────────────────────────── */}
+
+        {/* Auth routes */}
         <Route element={<AuthLayout />}>
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
           <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
@@ -79,11 +79,18 @@ export default function App() {
             element={<ForgotPasswordPage />}
           />
         </Route>
-        {/* ── STUDENT ───────────────────────────────────────────────────────── */}
+
+        {/* Student routes */}
         <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
           <Route element={<DashboardLayout />}>
             <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+
+            {/* Important bug fix: dashboard New Session uses /editor/new */}
+            <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
+
+            {/* Keep /editor working too */}
             <Route path={ROUTES.EDITOR} element={<EditorPage />} />
+
             <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
             <Route path={ROUTES.CERTIFICATES} element={<CertificatesPage />} />
             <Route path={ROUTES.ANALYTICS} element={<AnalyticsPage />} />
@@ -91,7 +98,8 @@ export default function App() {
             <Route path={ROUTES.JOIN_COURSE} element={<JoinCoursePage />} />
           </Route>
         </Route>
-        {/* ── TEACHER ───────────────────────────────────────────────────────── */}
+
+        {/* Teacher routes */}
         <Route element={<RoleGuard allowedRoles={["TEACHER"]} />}>
           <Route element={<TeacherLayout />}>
             <Route
@@ -120,6 +128,12 @@ export default function App() {
             />
           </Route>
         </Route>
+
+        {/* Global fallback */}
+        <Route
+          path={ROUTES.NOT_FOUND}
+          element={<PlaceholderPage title="Page not found" />}
+        />
       </Routes>
     </BrowserRouter>
   );

@@ -184,7 +184,7 @@ class SessionStats(BaseModel):
 class KeystrokeSession(BaseModel):
     title: str
     text_content: str
-    keystroke_array: Any
+    keystroke_array: List[Dict[str, Any]]
     stats: SessionStats
     course_id: Optional[int] = None
 
@@ -371,54 +371,163 @@ async def analyze_session(
     data: KeystrokeSession,
     user_id: str = Depends(get_current_user_id),
 ):
+    """
+    Analyze a student's writing session and store the writing evidence.
+
+    Part 4 fixes:
+    - validates minimum keystroke evidence
+    - stores raw_keystroke_data correctly into JSONB
+    - keeps paste events without storing pasted text content
+    - validates selected course enrollment before attaching course_id
+    - returns session_id, certificate_id, document_hash for frontend result page
+    """
+    if not data.text_content.strip():
+        raise HTTPException(status_code=400, detail="Document text cannot be empty.")
+
     if not data.keystroke_array or len(data.keystroke_array) < MINIMUM_KEYS_PER_SESSION:
-        raise HTTPException(status_code=400, detail="Insufficient keystroke data.")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient keystroke data. Minimum required: {MINIMUM_KEYS_PER_SESSION}.",
+        )
+
+    cleaned_events: List[Dict[str, Any]] = []
+    for event in data.keystroke_array:
+        if not isinstance(event, dict):
+            continue
+
+        cleaned_event = {
+            "key": event.get("key"),
+            "keyCode": event.get("keyCode", 0),
+            "code": event.get("code"),
+            "type": event.get("type"),
+            "timestamp": event.get("timestamp"),
+            "down_time": event.get("down_time"),
+            "up_time": event.get("up_time"),
+            "dwell_time": event.get("dwell_time"),
+            "flight_time": event.get("flight_time"),
+            "documentLength": event.get("documentLength"),
+            "cursorPosition": event.get("cursorPosition"),
+        }
+
+        if event.get("key") == "__PASTE_EVENT__":
+            cleaned_event["pastedLength"] = event.get("pastedLength", 0)
+
+        cleaned_events.append(cleaned_event)
+
+    if len(cleaned_events) < MINIMUM_KEYS_PER_SESSION:
+        raise HTTPException(
+            status_code=400,
+            detail="Valid keystroke evidence is insufficient.",
+        )
 
     classification, confidence, kill_triggered, kill_reason, features = run_inference(
-        data.keystroke_array, data.stats, data.text_content
+        cleaned_events,
+        data.stats,
+        data.text_content,
     )
 
-    cert_id  = f"TT26-{_secrets.token_hex(4).upper()}"
+    cert_id = f"TT26-{_secrets.token_hex(4).upper()}"
     doc_hash = hashlib.sha256(data.text_content.encode("utf-8")).hexdigest()
     session_id = None
 
-    if db_engine:
-        try:
-            with db_engine.begin() as conn:
-                risk_level = (
-                    "HIGH" if classification in ("SYNTHETIC", "AI-GENERATED")
-                    else "MEDIUM" if classification == "SUSPICIOUS"
-                    else "LOW"
-                )
-                result = conn.execute(
+    if not db_engine:
+        raise HTTPException(status_code=503, detail="Database offline.")
+
+    try:
+        with db_engine.begin() as conn:
+            if data.course_id is not None:
+                enrollment = conn.execute(
                     text("""
-                        INSERT INTO typing_sessions (
-                            user_id, title, text_content, wpm, total_keystrokes, deletions, pauses, avg_iki,
-                            duration_seconds, classification_result, ml_confidence_score, raw_keystroke_data,
-                            certificate_id, document_hash, course_id, risk_level
-                        ) VALUES (
-                            :u, :t, :txt, :w, :tk, :d, :p, :avg, :ds, :cls, :conf, :raw, :cert, :hash,
-                            :course_id, :risk_level
-                        ) RETURNING id
+                        SELECT cs.id
+                        FROM course_students cs
+                        WHERE cs.course_id = :course_id
+                          AND cs.student_id = :student_id
+                        LIMIT 1
                     """),
                     {
-                        "u": user_id, "t": data.title, "txt": data.text_content,
-                        "w": round(features.get("net_wpm", data.stats.wpm)),
-                        "tk": data.stats.keystrokes,
-                        "d": data.stats.deletions, "p": data.stats.pauses,
-                        "avg": round(features.get("ft_mean", data.stats.avgIki)),
-                        "ds": data.stats.sessionSeconds, "cls": classification,
-                        "conf": float(confidence),
-                        "raw": json.dumps(data.keystroke_array[:500]),
-                        "cert": cert_id, "hash": doc_hash,
                         "course_id": data.course_id,
-                        "risk_level": risk_level,
+                        "student_id": user_id,
                     },
-                )
-                row = result.fetchone()
-                session_id = row[0] if row else None
-        except Exception as e:
-            log.error(f"DB save failed: {e}")
+                ).fetchone()
+
+                if not enrollment:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You are not enrolled in the selected course.",
+                    )
+
+            risk_level = _compute_risk_level(classification, float(confidence))
+
+            result = conn.execute(
+                text("""
+                    INSERT INTO typing_sessions (
+                        user_id,
+                        title,
+                        text_content,
+                        wpm,
+                        total_keystrokes,
+                        deletions,
+                        pauses,
+                        avg_iki,
+                        duration_seconds,
+                        classification_result,
+                        ml_confidence_score,
+                        raw_keystroke_data,
+                        certificate_id,
+                        document_hash,
+                        course_id,
+                        risk_level
+                    ) VALUES (
+                        :user_id,
+                        :title,
+                        :text_content,
+                        :wpm,
+                        :total_keystrokes,
+                        :deletions,
+                        :pauses,
+                        :avg_iki,
+                        :duration_seconds,
+                        :classification_result,
+                        :ml_confidence_score,
+                        CAST(:raw_keystroke_data AS jsonb),
+                        :certificate_id,
+                        :document_hash,
+                        :course_id,
+                        :risk_level
+                    )
+                    RETURNING id
+                """),
+                {
+                    "user_id": user_id,
+                    "title": data.title.strip() or "Untitled Document",
+                    "text_content": data.text_content,
+                    "wpm": round(features.get("net_wpm", data.stats.wpm)),
+                    "total_keystrokes": data.stats.keystrokes,
+                    "deletions": data.stats.deletions,
+                    "pauses": data.stats.pauses,
+                    "avg_iki": round(features.get("ft_mean", data.stats.avgIki)),
+                    "duration_seconds": data.stats.sessionSeconds,
+                    "classification_result": classification,
+                    "ml_confidence_score": float(confidence),
+                    "raw_keystroke_data": json.dumps(cleaned_events),
+                    "certificate_id": cert_id,
+                    "document_hash": doc_hash,
+                    "course_id": data.course_id,
+                    "risk_level": risk_level,
+                },
+            )
+
+            row = result.fetchone()
+            session_id = row[0] if row else None
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.error(f"DB save failed: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to save writing session.",
+        )
 
     return AnalysisResult(
         classification=classification,
@@ -426,21 +535,20 @@ async def analyze_session(
         kill_switch_triggered=kill_triggered,
         kill_switch_reason=kill_reason,
         advanced_stats={
-            "ht_mean":     round(features.get("ht_mean",     0), 1),
-            "ht_std":      round(features.get("ht_std",      0), 1),
-            "ft_mean":     round(features.get("ft_mean",     0), 1),
-            "ft_std":      round(features.get("ft_std",      0), 1),
-            "ft_entropy":  round(features.get("ft_entropy",  0), 3),
+            "ht_mean": round(features.get("ht_mean", 0), 1),
+            "ht_std": round(features.get("ht_std", 0), 1),
+            "ft_mean": round(features.get("ft_mean", 0), 1),
+            "ft_std": round(features.get("ft_std", 0), 1),
+            "ft_entropy": round(features.get("ft_entropy", 0), 3),
             "ft_autocorr": round(features.get("ft_autocorr", 0), 3),
             "burst_ratio": round(features.get("burst_ratio", 0), 3),
             "pause_ratio": round(features.get("pause_ratio", 0), 3),
-            "net_wpm":     round(features.get("net_wpm",     0), 1),
+            "net_wpm": round(features.get("net_wpm", 0), 1),
         },
         session_id=session_id,
         certificate_id=cert_id,
         document_hash=doc_hash,
     )
-
 
 @router.get("/api/v1/sessions/history")
 @limiter.limit("30/minute")

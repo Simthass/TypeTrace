@@ -1,41 +1,44 @@
+// frontend/src/constants/routes.ts
+
 export const ROUTES = {
-  // ── Public ──────────────────────────────────────────────────────────────────
+  // Public
   HOME: "/",
   HOW_IT_WORKS: "/how-it-works",
   FEATURES: "/features",
   ABOUT: "/about",
   PRICING: "/pricing",
+  SETTINGS: "/settings",
+  HELP_DOCS: "/help",
 
-  // ── Auth ────────────────────────────────────────────────────────────────────
+  // Auth
   LOGIN: "/login",
   REGISTER: "/register",
   VERIFY_OTP: "/verify-otp",
   FORGOT_PASSWORD: "/forgot-password",
 
-  // ── Student App ─────────────────────────────────────────────────────────────
+  // Student App
   DASHBOARD: "/dashboard",
   EDITOR: "/editor",
   EDITOR_NEW: "/editor/new",
-  SESSION: "/editor/:sessionId",
-  CERTIFICATE: "/certificate/:sessionId",
-  REPORTS: "/reports",
-  SETTINGS: "/settings",
-  HELP_DOCS: "/help",
+  SESSIONS: "/sessions",
+  CERTIFICATES: "/certificates",
+  ANALYTICS: "/analytics",
   REPLAY: "/session/:sessionId/replay",
   JOIN_COURSE: "/join-course",
 
-  // ── Public Certificate Verification (NO AUTH REQUIRED) ───────────────────
+  // Public Certificate Verification
   VERIFY_LOOKUP: "/verify",
-  VERIFY: "/verify/:certId", // ← PART 6 NEW
+  VERIFY: "/verify/:certId",
 
-  // ── Teacher App ─────────────────────────────────────────────────────────────
+  // Teacher App
   TEACHER_DASHBOARD: "/teacher/dashboard",
   TEACHER_COURSES: "/teacher/courses",
-  TEACHER_COURSE: "/teacher/courses/:courseId",
+  TEACHER_COURSE_DETAIL: "/teacher/courses/:courseId",
   TEACHER_SUBMISSIONS: "/teacher/submissions",
   TEACHER_STUDENTS: "/teacher/students",
   TEACHER_REVIEW: "/teacher/review/:sessionId",
 
+  // Fallback
   NOT_FOUND: "*",
 } as const;
 
@@ -51,6 +54,6 @@ export const PUBLIC_NAV = [
 
 export const AUTH_NAV = [
   { label: "Dashboard", path: ROUTES.DASHBOARD },
-  { label: "Sessions", path: ROUTES.EDITOR },
-  { label: "Reports", path: ROUTES.REPORTS },
+  { label: "Sessions", path: ROUTES.SESSIONS },
+  { label: "Analytics", path: ROUTES.ANALYTICS },
 ] as const;
