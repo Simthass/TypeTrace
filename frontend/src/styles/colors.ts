@@ -1,82 +1,66 @@
-/**
- * TypeTrace — Brand Color System
- * Single source of truth for all colors across the application.
- */
-
 export const colors = {
-  // ─── Light Backgrounds (Vercel/Linear aesthetic) ──────────────────────
   surface: {
-    50: "#FAFAFA", // main page bg, header bg (ultra-light gray)
-    100: "#F4F4F5", // slightly darker for hover states/menus
-    200: "#EAEAEA", // crisp, thin borders and dividers
+    50: "#FFFFFF",
+    100: "#F8FAFC",
+    200: "#E2E8F0",
   },
 
-  // ─── Text Colors ──────────────────────────────────────────────────────
   text: {
-    primary: "#111827", // Almost black for maximum readability
-    secondary: "#6B7280", // Sharp slate gray for secondary info
-    light: "#FFFFFF", // Pure white for text on black buttons
+    primary: "#0F172A",
+    secondary: "#64748B",
+    light: "#FFFFFF",
   },
 
-  // ─── Brand Colors (Monochromatic primary) ─────────────────────────────
+  brand: "#2563EB",
+  brandHover: "#1D4ED8",
 
-  // Black — Primary action: buttons, links, active states
-  black: "#000000",
+  steel: "#64748B",
 
-  // Steel — Secondary text, metadata, labels
-  steel: "#4B5563",
+  green: "#10B981",
+  amber: "#F59E0B",
+  red: "#EF4444",
 
-  // ─── Semantic Colors (Kept for Biometric Badges) ──────────────────────
-  green: "#10B67E",
-  amber: "#D48A00",
-  red: "#E03B30",
-  lime: "#C4E26B",
-
-  // Tints — Badge background fills
-  mintTint: "#E6F9F0",
-  amberTint: "#FEF4E0",
-  roseTint: "#FDECEA",
+  mintTint: "#ECFDF5",
+  amberTint: "#FFFBEB",
+  roseTint: "#FEF2F2",
 } as const;
 
-/**
- * Semantic aliases — preferred for component usage.
- */
 export const brand = {
-  // Structure
+  // Backgrounds
   bgHeader: colors.surface[50],
   bgPage: colors.surface[50],
-  bgCard: "#FFFFFF", // Strict white for cards resting on FAFAFA
-  bgNavActive: colors.surface[100],
+  bgCard: "#FFFFFF",
+  bgNavActive: "#EFF6FF",
 
   // Text
   textOnLight: colors.text.primary,
   textMuted: colors.text.secondary,
   textOnDark: colors.text.light,
 
-  // Actions (Now Monochromatic)
-  action: colors.black,
-  actionHover: "#333333", // Dark graphite for hover states
+  // Primary Actions
+  action: colors.brand,
+  actionHover: colors.brandHover,
 
   // Borders
   borderLight: colors.surface[200],
   borderCard: colors.surface[200],
 
-  // Classification
+  // Human
   humanBg: colors.mintTint,
-  humanText: "#0D7A4C",
+  humanText: "#065F46",
   humanAccent: colors.green,
 
+  // Suspicious
   suspiciousBg: colors.amberTint,
-  suspiciousText: "#8C5B00",
+  suspiciousText: "#92400E",
   suspiciousAccent: colors.amber,
 
+  // AI
   aiBg: colors.roseTint,
-  aiText: "#9B1C1C",
+  aiText: "#991B1B",
   aiAccent: colors.red,
 
-  // Data viz
-  chartPrimary: colors.black,
-  chartSecondary: colors.lime,
+  // Charts
+  chartPrimary: colors.brand,
+  chartSecondary: colors.green,
 } as const;
-
-export type BrandColor = keyof typeof brand;

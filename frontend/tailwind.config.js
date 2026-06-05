@@ -4,53 +4,53 @@ export default {
   theme: {
     extend: {
       colors: {
-        // ─── Surface colors ───────────────────────────────
+        // ─── Surface Colors ──────────────────────────────────
         surface: {
-          50: "#FAFAFA",
-          100: "#F4F4F5",
-          200: "#EAEAEA",
+          50: "#FFFFFF",
+          100: "#F8FAFC",
+          200: "#E2E8F0",
         },
 
-        // ─── Text colors ──────────────────────────────────
+        // ─── Text Colors ─────────────────────────────────────
         text: {
-          primary: "#111827",
-          secondary: "#6B7280",
+          primary: "#0F172A",
+          secondary: "#64748B",
+          light: "#FFFFFF",
         },
 
-        // ─── Official brand palette (Now Black/White) ─────
+        // ─── Brand Colors ────────────────────────────────────
         brand: {
-          DEFAULT: "#000000",
-          hover: "#333333",
-          light: "#F4F4F5",
-          muted: "#888888",
+          DEFAULT: "#2563EB",
+          hover: "#1D4ED8",
+          light: "#DBEAFE",
+          muted: "#93C5FD",
         },
 
+        // ─── Neutral Supporting Colors ──────────────────────
         steel: {
-          DEFAULT: "#4B5563",
-          light: "#E5E7EB",
+          DEFAULT: "#64748B",
+          light: "#E2E8F0",
         },
 
+        // ─── Success ────────────────────────────────────────
         verify: {
-          DEFAULT: "#10B67E",
-          bg: "#E6F9F0",
-          text: "#0D7A4C",
+          DEFAULT: "#10B981",
+          bg: "#ECFDF5",
+          text: "#065F46",
         },
 
+        // ─── Warning ────────────────────────────────────────
         warn: {
-          DEFAULT: "#D48A00",
-          bg: "#FEF4E0",
-          text: "#8C5B00",
+          DEFAULT: "#F59E0B",
+          bg: "#FFFBEB",
+          text: "#92400E",
         },
 
+        // ─── Danger ─────────────────────────────────────────
         danger: {
-          DEFAULT: "#E03B30",
-          bg: "#FDECEA",
-          text: "#9B1C1C",
-        },
-
-        lime: {
-          DEFAULT: "#C4E26B",
-          dark: "#3C6000",
+          DEFAULT: "#EF4444",
+          bg: "#FEF2F2",
+          text: "#991B1B",
         },
       },
 
