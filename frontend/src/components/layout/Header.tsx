@@ -114,7 +114,7 @@ export default function Header() {
               <img
                 src="/Logo.png"
                 alt="TypeTrace"
-                className="h-[30px] w-auto object-contain transition-opacity hover:opacity-80"
+                className="h-[35px] w-auto object-contain transition-opacity hover:opacity-80"
               />
             </Link>
           </div>
