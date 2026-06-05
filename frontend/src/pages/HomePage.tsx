@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   motion,
@@ -6,45 +6,27 @@ import {
   useTransform,
   AnimatePresence,
 } from "framer-motion";
+import {
+  Activity,
+  ArrowRight,
+  BarChart3,
+  Check,
+  CheckCircle2,
+  FileCheck2,
+  Fingerprint,
+  Keyboard,
+  LockKeyhole,
+  Plus,
+  Radio,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react";
+
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
 
-// ─── arrow icon used in buttons ───────────────────────────────────────────────
-function ArrowRight() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-      <path
-        d="M3 7.5h9M8 3.5l4 4-4 4"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-// ─── Vercel-style grid background with + corner markers ──────────────────────
-// this took me ages to get the cell sizes right so it doesnt look weird on diff screen sizes
+// ─── Vercel-style grid background with corner markers ──────────────────────
 function HeroGridBackground() {
-  // the + crosshair marker at each intersection point
   const CrossMarker = ({ x, y }: { x: string; y: string }) => (
     <g transform={`translate(${x}, ${y})`}>
       <line
@@ -66,16 +48,14 @@ function HeroGridBackground() {
     </g>
   );
 
-  // grid config — 8 columns, rows fill the viewport height
-  // using percentages so it stays responsive
   const cols = 8;
   const rows = 5;
 
-  // colPositions as percentages of the SVG width
   const colPositions = Array.from(
     { length: cols + 1 },
     (_, i) => `${(i / cols) * 100}%`,
   );
+
   const rowPositions = Array.from(
     { length: rows + 1 },
     (_, i) => `${(i / rows) * 100}%`,
@@ -90,7 +70,6 @@ function HeroGridBackground() {
         preserveAspectRatio="xMidYMid slice"
       >
         <defs>
-          {/* fade out towards centre so the grid doesnt compete with the text */}
           <radialGradient
             id="grid-fade"
             cx="50%"
@@ -103,7 +82,6 @@ function HeroGridBackground() {
             <stop offset="70%" stopColor={colors.surface[50]} stopOpacity="0" />
           </radialGradient>
 
-          {/* fade mask that makes the top edge solid and fades to nothing at bottom */}
           <linearGradient id="grid-vertical-fade" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="white" stopOpacity="1" />
             <stop offset="100%" stopColor="white" stopOpacity="0" />
@@ -114,8 +92,7 @@ function HeroGridBackground() {
           </mask>
         </defs>
 
-        {/* vertical grid lines */}
-        <g mask="url(#grid-mask)" opacity="0.6">
+        <g mask="url(#grid-mask)" opacity="0.68">
           {colPositions.map((x, i) => (
             <line
               key={`v${i}`}
@@ -128,7 +105,6 @@ function HeroGridBackground() {
             />
           ))}
 
-          {/* horizontal grid lines */}
           {rowPositions.map((y, i) => (
             <line
               key={`h${i}`}
@@ -141,7 +117,6 @@ function HeroGridBackground() {
             />
           ))}
 
-          {/* + crosshair markers at every intersection point */}
           {colPositions.map((x, ci) =>
             rowPositions.map((y, ri) => (
               <CrossMarker key={`cross-${ci}-${ri}`} x={x} y={y} />
@@ -149,35 +124,33 @@ function HeroGridBackground() {
           )}
         </g>
 
-        {/* radial fade overlay — punches a soft hole in the centre so grid
-            pulls back from the headline and doesnt distract from it */}
         <rect width="100%" height="100%" fill="url(#grid-fade)" />
       </svg>
 
-      {/* the original soft black gradient blobs still sit on top of the grid,
-          they add depth and prevent it from looking flat like a spreadsheet */}
       <div
         className="absolute top-[5%] left-[-12%] w-[55vw] h-[55vw] rounded-full"
         style={{
           background:
-            "radial-gradient(circle, rgba(0,0,0,0.05) 0%, transparent 65%)",
-          filter: "blur(80px)",
+            "radial-gradient(circle, rgba(37,99,235,0.08) 0%, transparent 65%)",
+          filter: "blur(90px)",
         }}
       />
+
       <div
         className="absolute top-[10%] right-[-12%] w-[50vw] h-[50vw] rounded-full"
         style={{
           background:
-            "radial-gradient(circle, rgba(0,0,0,0.04) 0%, transparent 65%)",
-          filter: "blur(90px)",
+            "radial-gradient(circle, rgba(37,99,235,0.06) 0%, transparent 65%)",
+          filter: "blur(95px)",
         }}
       />
+
       <div
         className="absolute bottom-0 left-[30%] w-[40vw] h-[30vw] rounded-full"
         style={{
           background:
-            "radial-gradient(circle, rgba(0,0,0,0.03) 0%, transparent 70%)",
-          filter: "blur(80px)",
+            "radial-gradient(circle, rgba(15,23,42,0.04) 0%, transparent 70%)",
+          filter: "blur(90px)",
         }}
       />
     </div>
@@ -192,7 +165,7 @@ function FloatingCard({
   yOffset = 0,
   rotate = 0,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
   delay: number;
   yOffset?: number;
@@ -218,7 +191,7 @@ function FloatingCard({
       className={`absolute hidden lg:flex items-center gap-3 px-4 py-3 rounded-2xl bg-white border ${className ?? ""}`}
       style={{
         borderColor: colors.surface[200],
-        boxShadow: "0 4px 24px -6px rgba(0,0,0,0.1)",
+        boxShadow: "0 18px 50px -24px rgba(15,23,42,0.28)",
       }}
     >
       {children}
@@ -229,6 +202,7 @@ function FloatingCard({
 // ─── scroll-reveal dashboard image ───────────────────────────────────────────
 function DashboardReveal() {
   const containerRef = useRef<HTMLDivElement>(null);
+
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start end", "center center"],
@@ -246,13 +220,14 @@ function DashboardReveal() {
       style={{ marginTop: "-8vh" }}
     >
       <motion.div
-        style={{ opacity }}
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] rounded-full pointer-events-none"
-        // @ts-ignore — framer-motion style prop accepts these fine
+        className="absolute top-1/2 left-1/2 w-[80%] h-[80%] rounded-full pointer-events-none"
         style={{
-          background: `radial-gradient(circle, ${colors.surface[200]} 0%, transparent 60%)`,
-          filter: "blur(80px)",
           opacity,
+          x: "-50%",
+          y: "-50%",
+          background:
+            "radial-gradient(circle, rgba(37,99,235,0.12) 0%, transparent 60%)",
+          filter: "blur(90px)",
         }}
       />
 
@@ -264,12 +239,12 @@ function DashboardReveal() {
           borderRadius,
           borderColor: colors.surface[200],
         }}
-        className="w-full overflow-hidden bg-white border shadow-[0_30px_100px_-20px_rgba(0,0,0,0.15)] relative z-10"
+        className="w-full overflow-hidden bg-white border shadow-[0_30px_100px_-20px_rgba(15,23,42,0.20)] relative z-10"
       >
         <div
           className="h-12 w-full flex items-center px-4 gap-4 border-b"
           style={{
-            backgroundColor: colors.surface[50],
+            backgroundColor: colors.surface[100],
             borderColor: colors.surface[200],
           }}
         >
@@ -287,10 +262,11 @@ function DashboardReveal() {
               style={{ backgroundColor: colors.surface[200] }}
             />
           </div>
+
           <div
             className="h-7 flex-1 max-w-[320px] mx-auto rounded-md flex items-center justify-center border"
             style={{
-              backgroundColor: "#fff",
+              backgroundColor: colors.surface[50],
               borderColor: colors.surface[200],
             }}
           >
@@ -298,22 +274,11 @@ function DashboardReveal() {
               className="text-[11px] font-mono font-medium flex items-center gap-2"
               style={{ color: colors.text.secondary }}
             >
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
+              <LockKeyhole size={11} strokeWidth={2.4} />
               typetrace.com
             </span>
           </div>
+
           <div className="w-12" />
         </div>
 
@@ -327,9 +292,8 @@ function DashboardReveal() {
             background: colors.surface[100],
           }}
           onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.minHeight = "480px";
-            (e.currentTarget as HTMLImageElement).style.background =
-              colors.surface[100];
+            e.currentTarget.style.minHeight = "480px";
+            e.currentTarget.style.background = colors.surface[100];
           }}
         />
       </motion.div>
@@ -342,7 +306,7 @@ const FAQ_ITEMS = [
   {
     title: "Zero Server-Side Storage",
     content:
-      "Your essay content never leaves your browser. Only cryptographically hashed keystroke metadata (Inter-Key Intervals) is transmitted to our ML inference engine, ensuring strict GDPR compliance and total data sovereignty.",
+      "Your essay content never leaves your browser. Only cryptographically hashed keystroke metadata is transmitted to our ML inference engine, ensuring strict GDPR compliance and total data sovereignty.",
   },
   {
     title: "SHA-256 Tamper-Proof Seals",
@@ -352,12 +316,13 @@ const FAQ_ITEMS = [
   {
     title: "Open-Source Classifier",
     content:
-      "Academic integrity requires absolute transparency. Our Random Forest classification model, including its feature extraction logic and synthetic datasets (SMOTE), is fully auditable by university IT departments and researchers worldwide.",
+      "Academic integrity requires absolute transparency. Our Random Forest classification model, including its feature extraction logic and synthetic datasets, is fully auditable by university IT departments and researchers worldwide.",
   },
 ];
 
 function TrustAccordion() {
   const [active, setActive] = useState<number>(0);
+
   return (
     <div
       className="flex flex-col w-full border-t"
@@ -365,6 +330,7 @@ function TrustAccordion() {
     >
       {FAQ_ITEMS.map((item, i) => {
         const isOpen = active === i;
+
         return (
           <div
             key={i}
@@ -382,30 +348,23 @@ function TrustAccordion() {
               >
                 {item.title}
               </h3>
+
               <motion.div
                 animate={{ rotate: isOpen ? 45 : 0 }}
                 transition={{ duration: 0.22 }}
                 className="h-7 w-7 rounded-full flex items-center justify-center shrink-0 transition-colors"
                 style={{
-                  background: isOpen ? colors.text.primary : "transparent",
-                  color: isOpen ? "#fff" : colors.text.primary,
-                  border: `1.5px solid ${isOpen ? colors.text.primary : colors.surface[200]}`,
+                  background: isOpen ? brand.action : "transparent",
+                  color: isOpen ? colors.text.light : colors.text.primary,
+                  border: `1.5px solid ${
+                    isOpen ? brand.action : colors.surface[200]
+                  }`,
                 }}
               >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                >
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
+                <Plus size={13} strokeWidth={2.4} />
               </motion.div>
             </div>
+
             <AnimatePresence initial={false}>
               {isOpen && (
                 <motion.div
@@ -446,7 +405,7 @@ function FeatureRow({
   title: string;
   body: string;
   bullets?: string[];
-  visual: React.ReactNode;
+  visual: ReactNode;
   flip?: boolean;
 }) {
   return (
@@ -458,18 +417,21 @@ function FeatureRow({
         >
           {tag}
         </span>
+
         <h3
           className="text-[2.4rem] md:text-[3rem] font-bold tracking-tight leading-[1.05]"
           style={{ color: colors.text.primary }}
         >
           {title}
         </h3>
+
         <p
           className="text-lg leading-relaxed"
           style={{ color: colors.text.secondary }}
         >
           {body}
         </p>
+
         {bullets && (
           <ul className="flex flex-col gap-3 mt-2">
             {bullets.map((b, i) => (
@@ -480,9 +442,9 @@ function FeatureRow({
               >
                 <span
                   className="mt-0.5 shrink-0"
-                  style={{ color: colors.text.primary }}
+                  style={{ color: brand.action }}
                 >
-                  <CheckIcon />
+                  <Check size={15} strokeWidth={2.5} />
                 </span>
                 {b}
               </li>
@@ -490,6 +452,7 @@ function FeatureRow({
           </ul>
         )}
       </div>
+
       <div className={flip ? "lg:order-1" : ""}>{visual}</div>
     </div>
   );
@@ -511,16 +474,18 @@ function StatCard({
     >
       <span
         className="text-[3.5rem] font-extrabold tracking-tight leading-none"
-        style={{ color: colors.text.primary }}
+        style={{ color: brand.action }}
       >
         {value}
       </span>
+
       <span
         className="text-[15px] font-semibold"
         style={{ color: colors.text.primary }}
       >
         {label}
       </span>
+
       {sub && (
         <span className="text-[13px]" style={{ color: colors.text.secondary }}>
           {sub}
@@ -537,6 +502,7 @@ function OutcomeCard({
   accent,
   bg,
   textColor,
+  icon,
 }: {
   label: string;
   score: string;
@@ -544,14 +510,19 @@ function OutcomeCard({
   accent: string;
   bg: string;
   textColor: string;
+  icon: ReactNode;
 }) {
   return (
     <div
       className="flex flex-col gap-4 p-7 rounded-2xl border"
-      style={{ background: bg, borderColor: `${accent}28` }}
+      style={{
+        background: bg,
+        borderColor: `${accent}28`,
+      }}
     >
       <div className="flex items-center gap-2">
-        <span className="h-2 w-2 rounded-full" style={{ background: accent }} />
+        <span style={{ color: accent }}>{icon}</span>
+
         <span
           className="text-[10px] font-bold uppercase tracking-widest"
           style={{ color: textColor }}
@@ -559,15 +530,20 @@ function OutcomeCard({
           {label}
         </span>
       </div>
+
       <span
         className="text-[3.2rem] font-extrabold leading-none"
         style={{ color: accent }}
       >
         {score}
       </span>
+
       <p
         className="text-[13px] leading-relaxed border-t pt-4"
-        style={{ color: textColor, borderColor: `${accent}22` }}
+        style={{
+          color: textColor,
+          borderColor: `${accent}22`,
+        }}
       >
         {desc}
       </p>
@@ -584,14 +560,10 @@ export default function HomePage() {
       className="w-full min-h-screen overflow-x-hidden font-sans"
       style={{ background: colors.surface[50] }}
     >
-      {/* ══════════════════════════════════════════════════════
-          1. HERO — Vercel grid BG + floating cards
-      ══════════════════════════════════════════════════════ */}
+      {/* Hero */}
       <section className="relative min-h-[95vh] flex flex-col items-center justify-start text-center overflow-hidden pt-12 pb-16">
-        {/* ── NEW: Vercel-style grid background with + markers ── */}
         <HeroGridBackground />
 
-        {/* ── Floating data cards ── */}
         <FloatingCard
           className="top-[15%] left-[2%] xl:left-[6%] 2xl:left-[7%]"
           delay={0.3}
@@ -603,20 +575,12 @@ export default function HomePage() {
             style={{
               background: brand.humanBg,
               border: `1px solid ${brand.humanAccent}30`,
+              color: brand.humanAccent,
             }}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={brand.humanAccent}
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
+            <CheckCircle2 size={17} strokeWidth={2.5} />
           </div>
+
           <div className="flex flex-col items-start gap-0.5">
             <span
               className="text-[10px] font-bold uppercase tracking-widest leading-none"
@@ -624,6 +588,7 @@ export default function HomePage() {
             >
               Authorship Status
             </span>
+
             <span
               className="text-[15px] font-bold leading-none"
               style={{ color: colors.text.primary }}
@@ -642,11 +607,13 @@ export default function HomePage() {
           <div className="flex flex-col gap-2 w-[140px]">
             <div className="flex justify-between items-center">
               <span
-                className="text-[10px] font-bold uppercase tracking-widest"
+                className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5"
                 style={{ color: colors.text.secondary }}
               >
+                <BarChart3 size={12} strokeWidth={2.3} />
                 Avg. IKI
               </span>
+
               <span
                 className="text-[12px] font-bold font-mono"
                 style={{ color: colors.text.primary }}
@@ -654,6 +621,7 @@ export default function HomePage() {
                 284ms
               </span>
             </div>
+
             <div className="flex items-end gap-[3px] h-7">
               {[35, 55, 28, 72, 48, 85, 42, 68, 50, 78].map((h, i) => (
                 <div
@@ -662,9 +630,7 @@ export default function HomePage() {
                   style={{
                     height: `${h}%`,
                     background:
-                      i > 3 && i < 7
-                        ? colors.text.primary
-                        : colors.surface[200],
+                      i > 3 && i < 7 ? brand.action : colors.surface[200],
                   }}
                 />
               ))}
@@ -680,21 +646,14 @@ export default function HomePage() {
         >
           <div
             className="h-9 w-9 rounded-md flex items-center justify-center shrink-0"
-            style={{ background: colors.surface[100] }}
+            style={{
+              background: "#EFF6FF",
+              color: brand.action,
+            }}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={colors.text.primary}
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            >
-              <rect x="5" y="10" width="14" height="11" rx="2" />
-              <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-            </svg>
+            <LockKeyhole size={17} strokeWidth={2.2} />
           </div>
+
           <div className="flex flex-col items-start gap-0.5">
             <span
               className="text-[13px] font-semibold leading-none"
@@ -702,11 +661,12 @@ export default function HomePage() {
             >
               Certificate Sealed
             </span>
+
             <span
               className="text-[10px] font-mono leading-none"
               style={{ color: colors.text.secondary }}
             >
-              SHA-256 · Verified
+              SHA-256 / Verified
             </span>
           </div>
         </FloatingCard>
@@ -718,16 +678,17 @@ export default function HomePage() {
           rotate={-2}
         >
           <div className="flex items-center gap-2.5">
-            <div className="relative h-2.5 w-2.5">
-              <span
-                className="animate-ping absolute h-full w-full rounded-full opacity-60"
-                style={{ background: brand.humanAccent }}
-              />
-              <span
-                className="relative block h-2.5 w-2.5 rounded-full"
-                style={{ background: brand.humanAccent }}
-              />
+            <div
+              className="h-9 w-9 rounded-md flex items-center justify-center"
+              style={{
+                background: brand.humanBg,
+                color: brand.humanAccent,
+                border: `1px solid ${brand.humanAccent}30`,
+              }}
+            >
+              <Radio size={16} strokeWidth={2.2} />
             </div>
+
             <div className="flex flex-col items-start gap-0.5">
               <span
                 className="text-[10px] font-bold uppercase tracking-widest leading-none"
@@ -735,6 +696,7 @@ export default function HomePage() {
               >
                 Live Session
               </span>
+
               <span
                 className="text-[15px] font-bold font-mono leading-none"
                 style={{ color: colors.text.primary }}
@@ -753,16 +715,20 @@ export default function HomePage() {
         >
           <div className="flex flex-col gap-1 pr-2">
             <span
-              className="text-[10px] font-bold uppercase tracking-widest"
+              className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5"
               style={{ color: colors.text.secondary }}
             >
+              <Activity size={12} strokeWidth={2.3} />
               ML Result
             </span>
+
             <div className="flex items-center gap-2">
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: brand.humanAccent }}
+              <CheckCircle2
+                size={13}
+                strokeWidth={2.5}
+                color={brand.humanAccent}
               />
+
               <span
                 className="text-[13px] font-bold"
                 style={{ color: brand.humanAccent }}
@@ -770,6 +736,7 @@ export default function HomePage() {
                 HUMAN CONFIRMED
               </span>
             </div>
+
             <span
               className="text-[11px]"
               style={{ color: colors.text.secondary }}
@@ -785,30 +752,61 @@ export default function HomePage() {
           yOffset={6}
           rotate={-1}
         >
-          <div className="flex flex-col gap-1 pr-2">
-            <span
-              className="text-[10px] font-bold uppercase tracking-widest"
-              style={{ color: colors.text.secondary }}
+          <div className="flex items-center gap-3">
+            <div
+              className="h-9 w-9 rounded-md flex items-center justify-center"
+              style={{
+                background: "#EFF6FF",
+                color: brand.action,
+                border: "1px solid #BFDBFE",
+              }}
             >
-              Captured
-            </span>
-            <span
-              className="text-[22px] font-extrabold leading-none"
-              style={{ color: colors.text.primary }}
-            >
-              3,291
-            </span>
-            <span
-              className="text-[11px]"
-              style={{ color: colors.text.secondary }}
-            >
-              keystroke events
-            </span>
+              <Keyboard size={16} strokeWidth={2.2} />
+            </div>
+
+            <div className="flex flex-col gap-1 pr-2">
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest"
+                style={{ color: colors.text.secondary }}
+              >
+                Captured
+              </span>
+
+              <span
+                className="text-[22px] font-extrabold leading-none"
+                style={{ color: brand.action }}
+              >
+                3,291
+              </span>
+
+              <span
+                className="text-[11px]"
+                style={{ color: colors.text.secondary }}
+              >
+                keystroke events
+              </span>
+            </div>
           </div>
         </FloatingCard>
 
-        {/* ── Hero copy ── */}
         <div className="relative z-10 max-w-[900px] px-6 flex flex-col items-center mt-16 lg:mt-24">
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.06 }}
+            className="mb-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border"
+            style={{
+              background: "#EFF6FF",
+              borderColor: "#BFDBFE",
+              color: brand.action,
+            }}
+          >
+            <Fingerprint size={14} strokeWidth={2.3} />
+            <span className="text-[12px] font-semibold">
+              Human authorship verification for academic writing
+            </span>
+          </motion.div>
+
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -818,7 +816,7 @@ export default function HomePage() {
           >
             Prove your humanity.
             <br />
-            <span style={{ color: colors.text.secondary }}>Line by line.</span>
+            <span style={{ color: brand.action }}>Line by line.</span>
           </motion.h1>
 
           <motion.p
@@ -841,21 +839,38 @@ export default function HomePage() {
           >
             <Link
               to={ROUTES.REGISTER}
-              className="px-8 py-3.5 rounded-md font-semibold text-[15px] text-white transition-all duration-150 hover:opacity-90 active:scale-[0.98] flex items-center gap-2"
+              className="px-8 py-3.5 rounded-md font-semibold text-[15px] text-white transition-all duration-150 hover:opacity-95 active:scale-[0.98] flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
               style={{
-                background: colors.text.primary,
-                boxShadow: "0 4px 20px -6px rgba(0,0,0,0.4)",
+                background: brand.action,
+                boxShadow: "0 16px 40px -18px rgba(37,99,235,0.65)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = brand.actionHover;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = brand.action;
               }}
             >
-              Get Started Free <ArrowRight />
+              Get Started Free <ArrowRight size={16} strokeWidth={2.3} />
             </Link>
+
             <Link
               to={ROUTES.HOW_IT_WORKS}
-              className="px-8 py-3.5 rounded-md font-semibold text-[15px] transition-all duration-150 border hover:bg-surface-100 flex items-center gap-2"
+              className="px-8 py-3.5 rounded-md font-semibold text-[15px] transition-all duration-150 border flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
               style={{
                 color: colors.text.primary,
                 borderColor: colors.surface[200],
-                background: "#fff",
+                background: colors.surface[50],
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = colors.surface[100];
+                e.currentTarget.style.borderColor = "#BFDBFE";
+                e.currentTarget.style.color = brand.action;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = colors.surface[50];
+                e.currentTarget.style.borderColor = colors.surface[200];
+                e.currentTarget.style.color = colors.text.primary;
               }}
             >
               Read Documentation
@@ -878,7 +893,9 @@ export default function HomePage() {
                 className="flex items-center gap-1.5 text-[12.5px]"
                 style={{ color: colors.text.secondary }}
               >
-                <CheckIcon />
+                <span style={{ color: brand.action }}>
+                  <Check size={14} strokeWidth={2.5} />
+                </span>
                 {t}
               </span>
             ))}
@@ -886,17 +903,15 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════════
-          2. SCROLL-REVEAL DASHBOARD IMAGE
-      ══════════════════════════════════════════════════════ */}
       <DashboardReveal />
 
-      {/* ══════════════════════════════════════════════════════
-          3. STATS NUMBERS BAR
-      ══════════════════════════════════════════════════════ */}
+      {/* Stats */}
       <section
         className="border-y mt-24"
-        style={{ borderColor: colors.surface[200], background: "#fff" }}
+        style={{
+          borderColor: colors.surface[200],
+          background: colors.surface[50],
+        }}
       >
         <div className="max-w-[1200px] mx-auto grid grid-cols-2 lg:grid-cols-4">
           <StatCard
@@ -922,20 +937,22 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════════
-          4. THE PROBLEM
-      ══════════════════════════════════════════════════════ */}
+      {/* Problem */}
       <section
         className="py-32 px-6 md:px-12 border-b"
-        style={{ borderColor: colors.surface[200] }}
+        style={{
+          borderColor: colors.surface[200],
+          background: colors.surface[100],
+        }}
       >
         <div className="max-w-[1100px] mx-auto flex flex-col items-center text-center gap-8">
           <span
             className="text-[11px] font-bold uppercase tracking-widest"
-            style={{ color: colors.text.secondary }}
+            style={{ color: brand.action }}
           >
             The Problem
           </span>
+
           <h2
             className="text-[2.5rem] md:text-[4rem] font-bold tracking-tight leading-[1.05]"
             style={{ color: colors.text.primary }}
@@ -947,6 +964,7 @@ export default function HomePage() {
             <br />
             That is a fundamental architectural flaw.
           </h2>
+
           <p
             className="text-lg md:text-xl max-w-3xl leading-relaxed"
             style={{ color: colors.text.secondary }}
@@ -960,6 +978,7 @@ export default function HomePage() {
             rather than <em>how</em> it was written. TypeTrace solves this at
             the source.
           </p>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-[800px] mt-8">
             {[
               { name: "GPTZero (ESL)", rate: 35, color: brand.aiAccent },
@@ -970,7 +989,10 @@ export default function HomePage() {
               <div
                 key={name}
                 className="flex flex-col gap-2.5 p-5 rounded-2xl text-left border bg-white"
-                style={{ borderColor: colors.surface[200] }}
+                style={{
+                  borderColor: colors.surface[200],
+                  boxShadow: "0 18px 44px -34px rgba(15,23,42,0.35)",
+                }}
               >
                 <div className="flex justify-between items-center">
                   <span
@@ -979,10 +1001,12 @@ export default function HomePage() {
                   >
                     {name}
                   </span>
+
                   <span className="text-[15px] font-bold" style={{ color }}>
                     {rate}%
                   </span>
                 </div>
+
                 <div
                   className="h-1.5 rounded-full overflow-hidden"
                   style={{ background: colors.surface[200] }}
@@ -995,6 +1019,7 @@ export default function HomePage() {
                     style={{ background: color }}
                   />
                 </div>
+
                 <span
                   className="text-[11px]"
                   style={{ color: colors.text.secondary }}
@@ -1007,36 +1032,44 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════════
-          5. DEEP DIVE FEATURES
-      ══════════════════════════════════════════════════════ */}
+      {/* Deep dive features */}
       <section className="py-32 px-6 md:px-12 max-w-[1300px] mx-auto flex flex-col gap-32">
         <FeatureRow
-          tag="Phase 01 — Data Ingestion"
+          tag="Phase 01 - Data Ingestion"
           tagColor={brand.action}
           title="Sub-millisecond behavioral capture."
-          body="TypeTrace operates at the raw DOM level, intercepting every keydown and keyup event with exact timestamp precision. We calculate Inter-Key Intervals and dwell times to build a time-series dataset of your unique typing rhythm — completely invisible to you while you write."
+          body="TypeTrace operates at the raw DOM level, intercepting every keydown and keyup event with exact timestamp precision. We calculate Inter-Key Intervals and dwell times to build a time-series dataset of your unique typing rhythm - completely invisible to you while you write."
           bullets={[
-            "Zero UI latency — built on React 18 Virtual DOM optimisation",
+            "Zero UI latency - built on React 18 Virtual DOM optimisation",
             "Captures backspaces, pauses, cursor jumps, and editing patterns",
             "Browser-agnostic event normalisation for consistent data",
           ]}
           visual={
             <div
               className="h-[380px] flex flex-col justify-center gap-5 rounded-3xl border p-10 bg-white overflow-hidden"
-              style={{ borderColor: colors.surface[200] }}
+              style={{
+                borderColor: colors.surface[200],
+                boxShadow: "0 24px 70px -42px rgba(15,23,42,0.32)",
+              }}
             >
               <div
-                className="text-[11px] font-bold uppercase tracking-widest mb-2"
-                style={{ color: colors.text.secondary }}
+                className="text-[11px] font-bold uppercase tracking-widest mb-2 flex items-center gap-2"
+                style={{ color: brand.action }}
               >
+                <Keyboard size={14} strokeWidth={2.3} />
                 Live Keystroke Event Stream
               </div>
+
               {[
-                { key: "T", iki: "—", dwell: "82ms", idx: 0 },
+                { key: "T", iki: "-", dwell: "82ms", idx: 0 },
                 { key: "h", iki: "142ms", dwell: "71ms", idx: 1 },
                 { key: "e", iki: "198ms", dwell: "68ms", idx: 2 },
-                { key: "⌫", iki: "312ms", dwell: "94ms", idx: 3 },
+                {
+                  key: <Trash2 size={14} strokeWidth={2.3} />,
+                  iki: "312ms",
+                  dwell: "94ms",
+                  idx: 3,
+                },
                 { key: "i", iki: "245ms", dwell: "77ms", idx: 4 },
               ].map((row) => (
                 <motion.div
@@ -1047,18 +1080,19 @@ export default function HomePage() {
                   className="flex items-center gap-4 py-2.5 px-4 rounded-md border"
                   style={{
                     borderColor: colors.surface[200],
-                    background: colors.surface[50],
+                    background: colors.surface[100],
                   }}
                 >
                   <span
                     className="h-8 w-8 rounded-lg flex items-center justify-center font-bold font-mono text-[14px] shrink-0"
                     style={{
-                      background: colors.surface[200],
-                      color: colors.text.primary,
+                      background: "#EFF6FF",
+                      color: brand.action,
                     }}
                   >
                     {row.key}
                   </span>
+
                   <div className="flex-1 flex gap-4">
                     <div>
                       <div
@@ -1067,6 +1101,7 @@ export default function HomePage() {
                       >
                         IKI
                       </div>
+
                       <div
                         className="text-[13px] font-bold font-mono"
                         style={{ color: colors.text.primary }}
@@ -1074,6 +1109,7 @@ export default function HomePage() {
                         {row.iki}
                       </div>
                     </div>
+
                     <div>
                       <div
                         className="text-[9px] font-bold uppercase tracking-wider"
@@ -1081,6 +1117,7 @@ export default function HomePage() {
                       >
                         Dwell
                       </div>
+
                       <div
                         className="text-[13px] font-bold font-mono"
                         style={{ color: colors.text.primary }}
@@ -1089,10 +1126,10 @@ export default function HomePage() {
                       </div>
                     </div>
                   </div>
-                  <span
-                    className="h-2 w-2 rounded-full shrink-0"
-                    style={{ background: brand.humanAccent }}
-                  />
+
+                  <span style={{ color: brand.humanAccent }}>
+                    <CheckCircle2 size={14} strokeWidth={2.3} />
+                  </span>
                 </motion.div>
               ))}
             </div>
@@ -1101,8 +1138,8 @@ export default function HomePage() {
 
         <FeatureRow
           flip
-          tag="Phase 02 — Intelligence"
-          tagColor={brand.humanAccent}
+          tag="Phase 02 - Intelligence"
+          tagColor={brand.action}
           title="Random Forest Classification."
           body="Raw keystrokes become a statistical feature vector: mean IKI, standard deviation, deletion frequency, paste event flags, and burst typing ratios. These features are fed into our serialised scikit-learn Random Forest model, trained on authentic student essays and simulated AI paste attacks."
           bullets={[
@@ -1113,15 +1150,20 @@ export default function HomePage() {
           visual={
             <div
               className="h-[380px] flex flex-col items-center justify-center gap-6 rounded-3xl border p-10 bg-white"
-              style={{ borderColor: colors.surface[200] }}
+              style={{
+                borderColor: colors.surface[200],
+                boxShadow: "0 24px 70px -42px rgba(15,23,42,0.32)",
+              }}
             >
               <div className="w-full flex flex-col gap-3">
                 <div
-                  className="text-[11px] font-bold uppercase tracking-widest mb-2"
-                  style={{ color: colors.text.secondary }}
+                  className="text-[11px] font-bold uppercase tracking-widest mb-2 flex items-center gap-2"
+                  style={{ color: brand.action }}
                 >
+                  <BarChart3 size={14} strokeWidth={2.3} />
                   Feature Importance
                 </div>
+
                 {[
                   { label: "IKI Variance", value: 38 },
                   { label: "Paste Detection", value: 26 },
@@ -1132,10 +1174,14 @@ export default function HomePage() {
                   <div key={label} className="flex flex-col gap-1">
                     <div className="flex justify-between text-[12px]">
                       <span
-                        style={{ color: colors.text.primary, fontWeight: 500 }}
+                        style={{
+                          color: colors.text.primary,
+                          fontWeight: 500,
+                        }}
                       >
                         {label}
                       </span>
+
                       <span
                         style={{
                           color: colors.text.secondary,
@@ -1145,6 +1191,7 @@ export default function HomePage() {
                         {value}%
                       </span>
                     </div>
+
                     <div
                       className="h-2 rounded-full overflow-hidden"
                       style={{ background: colors.surface[100] }}
@@ -1160,7 +1207,7 @@ export default function HomePage() {
                         className="h-full rounded-full"
                         style={{
                           background:
-                            i === 0 ? colors.text.primary : colors.surface[200],
+                            i === 0 ? brand.action : colors.surface[200],
                         }}
                       />
                     </div>
@@ -1172,10 +1219,10 @@ export default function HomePage() {
         />
 
         <FeatureRow
-          tag="Phase 03 — Certification"
-          tagColor={brand.suspiciousAccent}
+          tag="Phase 03 - Certification"
+          tagColor={brand.action}
           title="Cryptographic sealing."
-          body="Once classification completes, the entire session footprint — keystroke timing array, statistical features, and ML result — is hashed using SHA-256. This hash is embedded in a downloadable PDF certificate that university instructors can independently verify via our public endpoint."
+          body="Once classification completes, the entire session footprint - keystroke timing array, statistical features, and ML result - is hashed using SHA-256. This hash is embedded in a downloadable PDF certificate that university instructors can independently verify via our public endpoint."
           bullets={[
             "SHA-256 hash bound to raw keystroke JSON payload",
             "Any tampering immediately invalidates the certificate",
@@ -1184,7 +1231,10 @@ export default function HomePage() {
           visual={
             <div
               className="h-[380px] flex items-center justify-center rounded-3xl border p-10 bg-white"
-              style={{ borderColor: colors.surface[200] }}
+              style={{
+                borderColor: colors.surface[200],
+                boxShadow: "0 24px 70px -42px rgba(15,23,42,0.32)",
+              }}
             >
               <div
                 className="w-full max-w-[320px] rounded-2xl border overflow-hidden"
@@ -1193,32 +1243,32 @@ export default function HomePage() {
                 <div
                   className="px-5 py-3 border-b flex justify-between items-center"
                   style={{
-                    background: colors.surface[50],
+                    background: colors.surface[100],
                     borderColor: colors.surface[200],
                   }}
                 >
                   <span
-                    className="text-[11px] font-bold uppercase tracking-widest"
+                    className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-2"
                     style={{ color: colors.text.secondary }}
                   >
+                    <FileCheck2 size={13} strokeWidth={2.2} />
                     Certificate of Authorship
                   </span>
+
                   <span
                     className="flex items-center gap-1.5 text-[10px] font-bold"
                     style={{ color: brand.humanAccent }}
                   >
-                    <span
-                      className="h-1.5 w-1.5 rounded-full"
-                      style={{ background: brand.humanAccent }}
-                    />
+                    <CheckCircle2 size={12} strokeWidth={2.4} />
                     VALID
                   </span>
                 </div>
+
                 <div className="p-5 flex flex-col gap-3 bg-white">
                   {[
                     { label: "Student", value: "Simthass MYM" },
                     { label: "Document", value: "Climate Essay" },
-                    { label: "Classification", value: "HUMAN · 96.3%" },
+                    { label: "Classification", value: "HUMAN / 96.3%" },
                   ].map(({ label, value }) => (
                     <div key={label} className="flex justify-between">
                       <span
@@ -1227,6 +1277,7 @@ export default function HomePage() {
                       >
                         {label}
                       </span>
+
                       <span
                         className="text-[11px] font-semibold"
                         style={{ color: colors.text.primary }}
@@ -1235,14 +1286,16 @@ export default function HomePage() {
                       </span>
                     </div>
                   ))}
+
                   <div
-                    className="mt-2 p-2.5 rounded-md font-mono text-[9px] break-all"
+                    className="mt-2 p-2.5 rounded-md font-mono text-[9px] break-all flex items-start gap-2"
                     style={{
-                      background: colors.surface[50],
-                      color: colors.text.secondary,
+                      background: "#EFF6FF",
+                      color: brand.action,
                     }}
                   >
-                    SHA-256: a3f5b8c2d94e1f07…
+                    <LockKeyhole size={12} strokeWidth={2.3} />
+                    <span>SHA-256: a3f5b8c2d94e1f07...</span>
                   </div>
                 </div>
               </div>
@@ -1251,35 +1304,39 @@ export default function HomePage() {
         />
       </section>
 
-      {/* ══════════════════════════════════════════════════════
-          6. CLASSIFICATION OUTCOMES
-      ══════════════════════════════════════════════════════ */}
+      {/* Classification outcomes */}
       <section
         className="py-32 px-6 md:px-12 border-t"
-        style={{ borderColor: colors.surface[200] }}
+        style={{
+          borderColor: colors.surface[200],
+          background: colors.surface[100],
+        }}
       >
         <div className="max-w-[1200px] mx-auto">
           <div className="flex flex-col items-center text-center gap-4 mb-16">
             <span
               className="text-[11px] font-bold uppercase tracking-widest"
-              style={{ color: colors.text.secondary }}
+              style={{ color: brand.action }}
             >
               Results
             </span>
+
             <h2
               className="text-[2.5rem] md:text-[3.5rem] font-bold tracking-tight"
               style={{ color: colors.text.primary }}
             >
               Three clear verdicts
             </h2>
+
             <p
               className="text-lg max-w-xl"
               style={{ color: colors.text.secondary }}
             >
-              Every session ends with one of three outcomes — immediately
+              Every session ends with one of three outcomes - immediately
               understood by students and educators.
             </p>
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <OutcomeCard
               label="Human"
@@ -1288,7 +1345,9 @@ export default function HomePage() {
               accent={brand.humanAccent}
               bg={brand.humanBg}
               textColor={brand.humanText}
+              icon={<CheckCircle2 size={13} strokeWidth={2.5} />}
             />
+
             <OutcomeCard
               label="Suspicious"
               score="67.2%"
@@ -1296,7 +1355,9 @@ export default function HomePage() {
               accent={brand.suspiciousAccent}
               bg={brand.suspiciousBg}
               textColor={brand.suspiciousText}
+              icon={<Activity size={13} strokeWidth={2.5} />}
             />
+
             <OutcomeCard
               label="AI-Generated"
               score="94.8%"
@@ -1304,32 +1365,36 @@ export default function HomePage() {
               accent={brand.aiAccent}
               bg={brand.aiBg}
               textColor={brand.aiText}
+              icon={<ShieldCheck size={13} strokeWidth={2.5} />}
             />
           </div>
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════════
-          7. TRUST ACCORDION
-      ══════════════════════════════════════════════════════ */}
+      {/* Trust accordion */}
       <section
         className="py-32 px-6 md:px-12 border-t"
-        style={{ borderColor: colors.surface[200] }}
+        style={{
+          borderColor: colors.surface[200],
+          background: colors.surface[50],
+        }}
       >
         <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-start">
           <div className="lg:sticky lg:top-32">
             <span
               className="text-[11px] font-bold uppercase tracking-widest block mb-6"
-              style={{ color: colors.text.secondary }}
+              style={{ color: brand.action }}
             >
               Trust & Privacy
             </span>
+
             <h2
               className="text-[2.8rem] md:text-[3.5rem] font-bold tracking-tight leading-[1.05] mb-6"
               style={{ color: colors.text.primary }}
             >
               Engineered for absolute data sovereignty.
             </h2>
+
             <p
               className="text-lg leading-relaxed"
               style={{ color: colors.text.secondary }}
@@ -1339,39 +1404,52 @@ export default function HomePage() {
               never monetized, stored unnecessarily, or mishandled.
             </p>
           </div>
+
           <TrustAccordion />
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════════
-          8. FINAL CTA
-      ══════════════════════════════════════════════════════ */}
+      {/* Final CTA */}
       <section
-        className="py-32 px-6 text-center"
+        className="py-32 px-6 text-center relative overflow-hidden"
         style={{ background: colors.text.primary }}
       >
-        <div className="max-w-[800px] mx-auto flex flex-col items-center gap-6">
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(circle at 50% 0%, rgba(37,99,235,0.34) 0%, transparent 48%)",
+          }}
+        />
+
+        <div className="max-w-[800px] mx-auto flex flex-col items-center gap-6 relative z-10">
           <h2
             className="text-[2.8rem] md:text-[4.5rem] font-bold tracking-tight leading-tight"
-            style={{ color: "#fff" }}
+            style={{ color: colors.text.light }}
           >
             Stop worrying about false accusations.
           </h2>
+
           <p
             className="text-lg md:text-xl max-w-xl leading-relaxed"
-            style={{ color: "rgba(255,255,255,0.65)" }}
+            style={{ color: "rgba(255,255,255,0.68)" }}
           >
             Create your student account today and generate cryptographic proof
             of your hard work in minutes. Completely free.
           </p>
+
           <div className="flex flex-col sm:flex-row gap-3 mt-6">
             <Link
               to={ROUTES.REGISTER}
-              className="px-8 py-3.5 rounded-md font-semibold text-[15px] transition-all hover:opacity-90 active:scale-[0.98] flex items-center gap-2"
-              style={{ background: "#fff", color: colors.text.primary }}
+              className="px-8 py-3.5 rounded-md font-semibold text-[15px] transition-all hover:opacity-95 active:scale-[0.98] flex items-center gap-2"
+              style={{
+                background: colors.text.light,
+                color: brand.action,
+              }}
             >
-              Start Free Session <ArrowRight />
+              Start Free Session <ArrowRight size={16} strokeWidth={2.3} />
             </Link>
+
             <Link
               to={ROUTES.HOW_IT_WORKS}
               className="px-8 py-3.5 rounded-md font-semibold text-[15px] transition-all flex items-center gap-2 border"
@@ -1380,15 +1458,14 @@ export default function HomePage() {
                 borderColor: "rgba(255,255,255,0.2)",
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor =
-                  "rgba(255,255,255,0.5)";
-                (e.currentTarget as HTMLElement).style.color = "#fff";
+                e.currentTarget.style.borderColor = "rgba(255,255,255,0.5)";
+                e.currentTarget.style.color = colors.text.light;
+                e.currentTarget.style.background = "rgba(255,255,255,0.06)";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor =
-                  "rgba(255,255,255,0.2)";
-                (e.currentTarget as HTMLElement).style.color =
-                  "rgba(255,255,255,0.75)";
+                e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)";
+                e.currentTarget.style.color = "rgba(255,255,255,0.75)";
+                e.currentTarget.style.background = "transparent";
               }}
             >
               Read the Docs

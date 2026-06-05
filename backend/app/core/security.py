@@ -1,38 +1,46 @@
-# backend/app/core/security.py
+
 import bcrypt
 import secrets
 import string
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifies a plain password against the stored bcrypt hash."""
-    # bcrypt requires bytes, not strings. so we encode them first.
-    password_bytes = plain_password.encode('utf-8')
-    hashed_password_bytes = hashed_password.encode('utf-8')
-    
-    return bcrypt.checkpw(password=password_bytes, hashed_password=hashed_password_bytes)
+    """
+    Verifies a plain-text password against a stored bcrypt hash.
+
+    Both arguments are strings; we encode to bytes before calling bcrypt
+    because the library operates on bytes, not str.
+
+    Used by:
+      - app/api/routes/auth.py  → login endpoint
+      - app/ml/ml_service.py   → change_password endpoint  (✅ unified here)
+    """
+    password_bytes = plain_password.encode("utf-8")
+    hashed_bytes = hashed_password.encode("utf-8")
+    return bcrypt.checkpw(password=password_bytes, hashed_password=hashed_bytes)
+
 
 def get_password_hash(password: str) -> str:
-    """Hashes the password using bcrypt natively."""
-    # encoding to utf-8 cos bcrypt needs bytes
-    pwd_bytes = password.encode('utf-8')
-    
-    # generating a cryptographically secure salt
+    """
+    Hashes a plain-text password with bcrypt + a freshly generated salt.
+    Returns a UTF-8 string suitable for storing in PostgreSQL VARCHAR.
+
+    Used by:
+      - app/api/routes/auth.py  → register + password reset endpoints
+      - app/ml/ml_service.py   → change_password endpoint  (✅ unified here)
+    """
+    pwd_bytes = password.encode("utf-8")
     salt = bcrypt.gensalt()
-    
-    # hashing the password with the salt
-    hashed_password_bytes = bcrypt.hashpw(password=pwd_bytes, salt=salt)
-    
-    # returning as a string so it can be saved in our PostgreSQL database easily
-    return hashed_password_bytes.decode('utf-8')
+    hashed_bytes = bcrypt.hashpw(password=pwd_bytes, salt=salt)
+    return hashed_bytes.decode("utf-8")
+
 
 def generate_otp() -> str:
     """
-    Generates a cryptographically secure 6-digit OTP.
-    Using secrets module instead of random cos random is predictable.
+    Generates a cryptographically secure 6-digit OTP string.
+
+    Uses the `secrets` module (not `random`) because `random` is seeded
+    from system time and is predictable. `secrets` uses the OS CSPRNG.
     """
-    # i read online that standard random() can be guessed by hackers. 
-    # secrets module is cryptographically safe.
     digits = string.digits
-    otp = ''.join(secrets.choice(digits) for i in range(6))
-    return otp
+    return "".join(secrets.choice(digits) for _ in range(6))

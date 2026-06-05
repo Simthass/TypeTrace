@@ -66,9 +66,9 @@ export default function App() {
             path={ROUTES.NOT_FOUND}
             element={<PlaceholderPage title="Page not found" />}
           />
+          <Route path={ROUTES.VERIFY_LOOKUP} element={<VerifyLookupPage />} />
+          <Route path={ROUTES.VERIFY} element={<VerifyCertificatePage />} />
         </Route>
-        <Route path={ROUTES.VERIFY_LOOKUP} element={<VerifyLookupPage />} />
-        <Route path={ROUTES.VERIFY} element={<VerifyCertificatePage />} />
         {/* ── AUTH ──────────────────────────────────────────────────────────── */}
         <Route element={<AuthLayout />}>
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
