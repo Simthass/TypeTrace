@@ -32,11 +32,9 @@ from reportlab.lib import colors
 from reportlab.lib.utils import ImageReader
 
 # Import the shared feature extractor
-from train_model import (
-    extract_features_from_keystroke_array,
-    FEATURE_COLUMNS,
-    MINIMUM_KEYS_PER_SESSION,
-)
+from train_model import MINIMUM_KEYS_PER_SESSION
+
+from app.ml.inference_engine import inference_engine
 
 # ✅ FIX 3: Import unified password helpers instead of calling bcrypt directly
 from app.core.security import verify_password, get_password_hash
@@ -93,20 +91,15 @@ KILL_ENTROPY_THRESHOLD = 0.5
 limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter()
-rf_model, scaler, label_encoder = None, None, None
-feature_cols = FEATURE_COLUMNS
-model_metadata = {}
 
-try:
-    rf_model      = joblib.load(MODEL_PATH)
-    scaler        = joblib.load(SCALER_PATH)
-    label_encoder = joblib.load(ENCODER_PATH)
-    feature_cols  = joblib.load(FEATURES_PATH)
-    with open(META_PATH) as f:
-        model_metadata = json.load(f)
-    log.info(f"✅ Model v{model_metadata.get('version','?')} loaded.")
-except Exception as e:
-    log.error(f"❌ Failed to load model: {e}")
+model_status = inference_engine.get_status()
+if model_status["loaded"]:
+    log.info(
+        "TypeTrace ML model loaded. Feature count: %s",
+        model_status["feature_count"],
+    )
+else:
+    log.error("TypeTrace ML model not loaded: %s", model_status["load_error"])
 
 db_engine = None
 if DB_URL:
@@ -223,36 +216,48 @@ class PasswordChangeSchema(BaseModel):
 # 5. CORE INFERENCE
 # ─────────────────────────────────────────────────────────────────────────────
 def run_inference(keystroke_array: list, stats: SessionStats, text_content: str):
-    features = extract_features_from_keystroke_array(
-        raw_array=keystroke_array,
-        total_keystrokes=stats.keystrokes,
-        deletions=stats.deletions,
-        pauses=stats.pauses,
-        duration_seconds=stats.sessionSeconds,
-        text_length=len(text_content),
+    """
+    Compatibility wrapper for older endpoints.
+
+    Part 5 moves the real logic into app.ml.inference_engine.
+    """
+    result = inference_engine.analyze(
+        events=keystroke_array,
+        stats=stats,
+        text_content=text_content,
     )
 
-    paste_count = sum(1 for e in keystroke_array if isinstance(e, dict) and e.get("key") == "__PASTE_EVENT__")
-    net_wpm = features.get("net_wpm", 0)
-    iki_std = features.get("ft_std", 999)
-    entropy = features.get("ft_entropy", 999)
+    return (
+        result.classification,
+        result.confidence_score,
+        result.kill_switch_triggered,
+        result.kill_switch_reason,
+        result.features,
+    )
 
-    if net_wpm > KILL_WPM_THRESHOLD or paste_count > KILL_PASTE_THRESHOLD:
-        return "SYNTHETIC", 99.9, True, "Superhuman speed or bulk paste detected.", features
-    if stats.keystrokes > 30 and iki_std < KILL_IKI_STD_THRESHOLD:
-        return "SYNTHETIC", 99.9, True, "Mechanically uniform timing detected.", features
-    if stats.keystrokes > 50 and entropy < KILL_ENTROPY_THRESHOLD:
-        return "SYNTHETIC", 99.9, True, "Robotic typing rhythm detected.", features
+@router.get("/api/v1/model/status")
+@limiter.limit("30/minute")
+async def get_model_status(request: Request):
+    """
+    Returns model readiness, feature count, metadata, and artifact paths.
+    Used by the frontend/admin/debug flow and dissertation evidence.
+    """
+    return inference_engine.get_status()
 
-    if not rf_model:
-        raise HTTPException(status_code=503, detail="ML model not loaded.")
 
-    fv_sc = scaler.transform(np.array([[features.get(col, 0.0) for col in feature_cols]]))
-    probs = rf_model.predict_proba(fv_sc)[0]
-    pred_idx = int(np.argmax(probs))
+@router.post("/api/v1/model/reload")
+@limiter.limit("5/minute")
+async def reload_model(
+    request: Request,
+    payload: dict = Depends(get_full_token_payload),
+):
+    """
+    Reloads model artifacts from disk.
 
-    return label_encoder.inverse_transform([pred_idx])[0], round(float(probs[pred_idx]) * 100, 2), False, None, features
-
+    Teacher-only because this is an operational action.
+    """
+    _require_teacher(payload)
+    return inference_engine.reload()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ✅ FIX 2 HELPER — Compute real replay metrics from raw keystroke event array
@@ -374,12 +379,12 @@ async def analyze_session(
     """
     Analyze a student's writing session and store the writing evidence.
 
-    Part 4 fixes:
-    - validates minimum keystroke evidence
-    - stores raw_keystroke_data correctly into JSONB
-    - keeps paste events without storing pasted text content
-    - validates selected course enrollment before attaching course_id
-    - returns session_id, certificate_id, document_hash for frontend result page
+    Part 5 finalization:
+    - uses centralized inference engine
+    - returns richer behavioral analysis
+    - stores calibrated risk_level
+    - keeps explainable advanced_stats
+    - validates selected course enrollment before saving
     """
     if not data.text_content.strip():
         raise HTTPException(status_code=400, detail="Document text cannot be empty.")
@@ -391,6 +396,7 @@ async def analyze_session(
         )
 
     cleaned_events: List[Dict[str, Any]] = []
+
     for event in data.keystroke_array:
         if not isinstance(event, dict):
             continue
@@ -409,7 +415,9 @@ async def analyze_session(
             "cursorPosition": event.get("cursorPosition"),
         }
 
-        if event.get("key") == "__PASTE_EVENT__":
+        if event.get("key") == "__PASTE_EVENT__" or event.get("type") == "paste":
+            cleaned_event["key"] = "__PASTE_EVENT__"
+            cleaned_event["type"] = "paste"
             cleaned_event["pastedLength"] = event.get("pastedLength", 0)
 
         cleaned_events.append(cleaned_event)
@@ -420,11 +428,14 @@ async def analyze_session(
             detail="Valid keystroke evidence is insufficient.",
         )
 
-    classification, confidence, kill_triggered, kill_reason, features = run_inference(
-        cleaned_events,
-        data.stats,
-        data.text_content,
-    )
+    try:
+        inference = inference_engine.analyze(
+            events=cleaned_events,
+            stats=data.stats,
+            text_content=data.text_content,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
     cert_id = f"TT26-{_secrets.token_hex(4).upper()}"
     doc_hash = hashlib.sha256(data.text_content.encode("utf-8")).hexdigest()
@@ -455,8 +466,6 @@ async def analyze_session(
                         status_code=403,
                         detail="You are not enrolled in the selected course.",
                     )
-
-            risk_level = _compute_risk_level(classification, float(confidence))
 
             result = conn.execute(
                 text("""
@@ -501,19 +510,19 @@ async def analyze_session(
                     "user_id": user_id,
                     "title": data.title.strip() or "Untitled Document",
                     "text_content": data.text_content,
-                    "wpm": round(features.get("net_wpm", data.stats.wpm)),
+                    "wpm": round(inference.features.get("net_wpm", data.stats.wpm)),
                     "total_keystrokes": data.stats.keystrokes,
                     "deletions": data.stats.deletions,
                     "pauses": data.stats.pauses,
-                    "avg_iki": round(features.get("ft_mean", data.stats.avgIki)),
+                    "avg_iki": round(inference.features.get("ft_mean", data.stats.avgIki)),
                     "duration_seconds": data.stats.sessionSeconds,
-                    "classification_result": classification,
-                    "ml_confidence_score": float(confidence),
+                    "classification_result": inference.classification,
+                    "ml_confidence_score": float(inference.confidence_score),
                     "raw_keystroke_data": json.dumps(cleaned_events),
                     "certificate_id": cert_id,
                     "document_hash": doc_hash,
                     "course_id": data.course_id,
-                    "risk_level": risk_level,
+                    "risk_level": inference.risk_level,
                 },
             )
 
@@ -530,21 +539,11 @@ async def analyze_session(
         )
 
     return AnalysisResult(
-        classification=classification,
-        confidence_score=confidence,
-        kill_switch_triggered=kill_triggered,
-        kill_switch_reason=kill_reason,
-        advanced_stats={
-            "ht_mean": round(features.get("ht_mean", 0), 1),
-            "ht_std": round(features.get("ht_std", 0), 1),
-            "ft_mean": round(features.get("ft_mean", 0), 1),
-            "ft_std": round(features.get("ft_std", 0), 1),
-            "ft_entropy": round(features.get("ft_entropy", 0), 3),
-            "ft_autocorr": round(features.get("ft_autocorr", 0), 3),
-            "burst_ratio": round(features.get("burst_ratio", 0), 3),
-            "pause_ratio": round(features.get("pause_ratio", 0), 3),
-            "net_wpm": round(features.get("net_wpm", 0), 1),
-        },
+        classification=inference.classification,
+        confidence_score=inference.confidence_score,
+        kill_switch_triggered=inference.kill_switch_triggered,
+        kill_switch_reason=inference.kill_switch_reason,
+        advanced_stats=inference.advanced_stats,
         session_id=session_id,
         certificate_id=cert_id,
         document_hash=doc_hash,

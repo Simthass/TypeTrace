@@ -219,6 +219,44 @@ function AnalysisScreen({
   onNewSession,
 }: AnalysisScreenProps) {
   const classificationStyle = getClassificationStyles(result.classification);
+  const advancedStats = result.advanced_stats;
+  const riskSignals = advancedStats?.risk_signals || [];
+  const humanSignals = advancedStats?.human_signals || [];
+  const classProbabilities = advancedStats?.class_probabilities || {};
+
+  const behavioralMetrics = [
+    [
+      "Risk Score",
+      advancedStats?.risk_score !== undefined
+        ? `${advancedStats.risk_score}/100`
+        : "—",
+    ],
+    ["Risk Level", advancedStats?.risk_level || "—"],
+    ["Decision Source", advancedStats?.decision_source || "model"],
+    ["Paste Events", advancedStats?.paste_count ?? 0],
+    [
+      "Deletion Ratio",
+      advancedStats?.deletion_ratio !== undefined
+        ? `${Math.round(advancedStats.deletion_ratio * 100)}%`
+        : "—",
+    ],
+    [
+      "Pause Ratio",
+      advancedStats?.pause_ratio !== undefined
+        ? `${Math.round(advancedStats.pause_ratio * 100)}%`
+        : "—",
+    ],
+    [
+      "Flight Entropy",
+      advancedStats?.ft_entropy !== undefined ? advancedStats.ft_entropy : "—",
+    ],
+    [
+      "Longest Pause",
+      advancedStats?.longest_pause_ms !== undefined
+        ? `${Math.round(advancedStats.longest_pause_ms)}ms`
+        : "—",
+    ],
+  ];
 
   return (
     <div
@@ -248,9 +286,9 @@ function AnalysisScreen({
                 className="mt-2 max-w-2xl text-[14px]"
                 style={{ color: colors.text.secondary }}
               >
-                This result is based on keystroke timing, writing rhythm,
-                deletion behavior, pauses, paste events, and machine learning
-                inference.
+                This result combines ML classification with behavioral evidence:
+                keystroke rhythm, dwell time, paste behavior, deletion ratio,
+                pause patterns, and writing speed.
               </p>
             </div>
 
@@ -283,7 +321,7 @@ function AnalysisScreen({
                 color: brand.aiText,
               }}
             >
-              Strong rule-based signal triggered:{" "}
+              Strong behavioral rule triggered:{" "}
               {result.kill_switch_reason ||
                 "High-risk typing behavior detected."}
             </div>
@@ -319,6 +357,168 @@ function AnalysisScreen({
                 </p>
               </div>
             ))}
+          </div>
+
+          <div
+            className="mt-6 rounded-md border bg-white p-5"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
+              <div>
+                <h2
+                  className="text-[15px] font-semibold"
+                  style={{ color: colors.text.primary }}
+                >
+                  Behavioral ML signals
+                </h2>
+                <p
+                  className="mt-1 text-[13px]"
+                  style={{ color: colors.text.secondary }}
+                >
+                  These values explain why the classifier reached this decision.
+                </p>
+              </div>
+
+              {advancedStats?.model_version && (
+                <span
+                  className="rounded-md border px-3 py-1 text-[11px] font-semibold"
+                  style={{
+                    borderColor: colors.surface[200],
+                    color: colors.text.secondary,
+                    background: colors.surface[50],
+                  }}
+                >
+                  Model {advancedStats.model_version}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {behavioralMetrics.map(([label, value]) => (
+                <div
+                  key={label}
+                  className="rounded-md border px-3 py-2"
+                  style={{ borderColor: colors.surface[200] }}
+                >
+                  <p
+                    className="text-[10px] font-semibold uppercase tracking-[0.12em]"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    {label}
+                  </p>
+                  <p
+                    className="mt-1 text-[14px] font-semibold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {value}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <div
+                className="rounded-md border p-4"
+                style={{
+                  borderColor: brand.humanAccent,
+                  background: brand.humanBg,
+                }}
+              >
+                <h3
+                  className="text-[13px] font-semibold"
+                  style={{ color: brand.humanText }}
+                >
+                  Human-supporting signals
+                </h3>
+                <div className="mt-3 space-y-2">
+                  {humanSignals.length > 0 ? (
+                    humanSignals.map((signal) => (
+                      <p
+                        key={signal}
+                        className="text-[12px]"
+                        style={{ color: brand.humanText }}
+                      >
+                        {signal}
+                      </p>
+                    ))
+                  ) : (
+                    <p
+                      className="text-[12px]"
+                      style={{ color: brand.humanText }}
+                    >
+                      No strong human-supporting behavioral signals were found.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div
+                className="rounded-md border p-4"
+                style={{
+                  borderColor: brand.aiAccent,
+                  background: brand.aiBg,
+                }}
+              >
+                <h3
+                  className="text-[13px] font-semibold"
+                  style={{ color: brand.aiText }}
+                >
+                  Risk signals
+                </h3>
+                <div className="mt-3 space-y-2">
+                  {riskSignals.length > 0 ? (
+                    riskSignals.map((signal) => (
+                      <p
+                        key={signal}
+                        className="text-[12px]"
+                        style={{ color: brand.aiText }}
+                      >
+                        {signal}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-[12px]" style={{ color: brand.aiText }}>
+                      No major behavioral risk signal was detected.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {Object.keys(classProbabilities).length > 0 && (
+              <div className="mt-5">
+                <h3
+                  className="text-[13px] font-semibold"
+                  style={{ color: colors.text.primary }}
+                >
+                  Model probability breakdown
+                </h3>
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  {Object.entries(classProbabilities).map(
+                    ([label, probability]) => (
+                      <div
+                        key={label}
+                        className="rounded-md border px-3 py-2"
+                        style={{ borderColor: colors.surface[200] }}
+                      >
+                        <p
+                          className="text-[11px] font-semibold uppercase tracking-[0.12em]"
+                          style={{ color: colors.text.secondary }}
+                        >
+                          {label}
+                        </p>
+                        <p
+                          className="mt-1 text-[15px] font-semibold"
+                          style={{ color: colors.text.primary }}
+                        >
+                          {probability}%
+                        </p>
+                      </div>
+                    ),
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {result.document_hash && (
