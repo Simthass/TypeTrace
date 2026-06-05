@@ -83,13 +83,13 @@ export default function App() {
         <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
           <Route element={<DashboardLayout />}>
             <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
-            <Route path={ROUTES.EDITOR} element={<SessionsPage />} />
-            <Route path="/certificates" element={<CertificatesPage />} />
-            <Route path="/analytics" element={<AnalyticsPage />} />
-            <Route path="/join-course" element={<JoinCoursePage />} />
+            <Route path={ROUTES.EDITOR} element={<EditorPage />} />
+            <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
+            <Route path={ROUTES.CERTIFICATES} element={<CertificatesPage />} />
+            <Route path={ROUTES.ANALYTICS} element={<AnalyticsPage />} />
+            <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
+            <Route path={ROUTES.JOIN_COURSE} element={<JoinCoursePage />} />
           </Route>
-          <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
-          <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
         </Route>
         {/* ── TEACHER ───────────────────────────────────────────────────────── */}
         <Route element={<RoleGuard allowedRoles={["TEACHER"]} />}>
@@ -103,17 +103,22 @@ export default function App() {
               element={<TeacherCoursesPage />}
             />
             <Route
-              path="/teacher/courses/:courseId"
+              path={ROUTES.TEACHER_COURSE_DETAIL}
               element={<TeacherCoursePage />}
             />
             <Route
-              path="/teacher/submissions"
+              path={ROUTES.TEACHER_SUBMISSIONS}
               element={<TeacherSubmissionsPage />}
             />
-            <Route path="/teacher/students" element={<TeacherStudentsPage />} />{" "}
-            {/* ← Part 4 */}
+            <Route
+              path={ROUTES.TEACHER_STUDENTS}
+              element={<TeacherStudentsPage />}
+            />
+            <Route
+              path={ROUTES.TEACHER_REVIEW}
+              element={<TeacherReviewPage />}
+            />
           </Route>
-          <Route path={ROUTES.TEACHER_REVIEW} element={<TeacherReviewPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

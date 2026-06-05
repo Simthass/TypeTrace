@@ -34,13 +34,12 @@ async def get_current_user(
     Returns the authenticated database user from the JWT bearer token.
     """
 
-    token = credentials.credentials
-
     try:
-        payload = decode_access_token(token)
+        payload = decode_access_token(credentials.credentials)
         email = payload.get("sub")
+        user_id = payload.get("id")
 
-        if not email:
+        if not email or not user_id:
             raise credentials_exception()
 
     except JWTError:
@@ -51,6 +50,15 @@ async def get_current_user(
 
     if user is None:
         raise credentials_exception()
+
+    if str(user.id) != str(user_id):
+        raise credentials_exception()
+
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is not verified.",
+        )
 
     return user
 
@@ -89,7 +97,7 @@ async def require_teacher(
 
 def require_role(user: User, role: UserRole) -> None:
     """
-    Utility role checker for service-layer logic.
+    Service-layer role checker.
     """
 
     if user.role != role:

@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
 import { useAuthStore } from "../store/authStore";
-import { api } from "../lib/api";
+import { api, getApiErrorMessage } from "../lib/api";
 
 function MailIcon() {
   return (
@@ -44,6 +44,8 @@ export default function VerifyOtpPage() {
 
   const pendingEmail = useAuthStore((state) => state.pendingEmail);
   const setPendingEmail = useAuthStore((state) => state.setPendingEmail);
+  const login = useAuthStore((state) => state.login);
+
   const navigate = useNavigate();
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -55,75 +57,96 @@ export default function VerifyOtpPage() {
   }, [pendingEmail, navigate]);
 
   const handleChange = (index: number, value: string) => {
-    if (isNaN(Number(value))) return;
+    if (!/^\d?$/.test(value)) return;
+
     const newOtp = [...otp];
-    newOtp[index] = value.substring(value.length - 1);
+    newOtp[index] = value;
     setOtp(newOtp);
-    if (value !== "" && index < 5) {
+
+    if (value && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyDown = (
     index: number,
-    e: React.KeyboardEvent<HTMLInputElement>,
+    event: React.KeyboardEvent<HTMLInputElement>,
   ) => {
-    if (e.key === "Backspace" && otp[index] === "" && index > 0) {
+    if (event.key === "Backspace" && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   };
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    const pastedData = e.clipboardData.getData("text/plain").trim();
-    if (/^\d{6}$/.test(pastedData)) {
-      setOtp(pastedData.split(""));
-      inputRefs.current[5]?.focus();
-    }
-  };
+  const handleSubmit = async () => {
+    const finalOtp = otp.join("");
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const fullOtp = otp.join("");
-    if (fullOtp.length < 6) {
-      setErrorMsg("Please enter all 6 digits.");
+    if (!pendingEmail) {
+      setErrorMsg("Registration email not found. Please register again.");
+      navigate(ROUTES.REGISTER);
+      return;
+    }
+
+    if (finalOtp.length !== 6) {
+      setErrorMsg("Please enter the complete 6-digit OTP.");
       return;
     }
 
     setIsLoading(true);
+    setLoadingText("Verifying...");
     setErrorMsg("");
-    setLoadingText("Validating token...");
 
     try {
-      await api.post("/auth/verify-otp", {
+      const response = await api.post("/auth/verify-otp", {
         email: pendingEmail,
-        otp: fullOtp,
+        otp: finalOtp,
       });
 
-      // Labor illusion sequence — then go to login
-      setLoadingText("Verifying cryptographic seal...");
-      setTimeout(() => {
-        setLoadingText("Account created successfully...");
-        setTimeout(() => {
-          setPendingEmail(null);
-          navigate(ROUTES.LOGIN);
-        }, 1000);
-      }, 1000);
-    } catch (error: unknown) {
-      const axiosErr = error as { response?: { data?: { detail?: string } } };
-      setErrorMsg(
-        axiosErr.response?.data?.detail ||
-          "Invalid OTP code. Please try again.",
-      );
-      setOtp(["", "", "", "", "", ""]);
-      inputRefs.current[0]?.focus();
+      const { user, access_token } = response.data;
+
+      login(user, access_token);
+      setPendingEmail(null);
+
+      if (user.role === "TEACHER") {
+        navigate(ROUTES.TEACHER_DASHBOARD);
+      } else {
+        navigate(ROUTES.DASHBOARD);
+      }
+    } catch (error) {
+      setErrorMsg(getApiErrorMessage(error));
+    } finally {
       setIsLoading(false);
       setLoadingText("Verify Account");
     }
   };
 
-  const handleResend = () => {
-    alert("New OTP sent! Check your university email.");
+  const handleResendOtp = async () => {
+    if (!pendingEmail) {
+      setErrorMsg("Registration email not found. Please register again.");
+      navigate(ROUTES.REGISTER);
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadingText("Sending OTP...");
+    setErrorMsg("");
+
+    try {
+      await api.post("/auth/resend-otp", {
+        email: pendingEmail,
+      });
+
+      setOtp(["", "", "", "", "", ""]);
+      setLoadingText("OTP Sent");
+      inputRefs.current[0]?.focus();
+    } catch (error) {
+      setErrorMsg(getApiErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+
+      setTimeout(() => {
+        setLoadingText("Verify Account");
+      }, 1200);
+    }
   };
 
   return (
@@ -198,7 +221,10 @@ export default function VerifyOtpPage() {
 
         {/* OTP form */}
         <form
-          onSubmit={onSubmit}
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit();
+          }}
           style={{ display: "flex", flexDirection: "column", gap: "24px" }}
         >
           <div
@@ -211,14 +237,15 @@ export default function VerifyOtpPage() {
             {otp.map((digit, index) => (
               <input
                 key={index}
-                ref={(el) => (inputRefs.current[index] = el)}
+                ref={(element) => {
+                  inputRefs.current[index] = element;
+                }}
                 type="text"
                 inputMode="numeric"
                 maxLength={1}
-                value={digit}
-                onChange={(e) => handleChange(index, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(index, e)}
-                onPaste={handlePaste}
+                value={otp[index]}
+                onChange={(event) => handleChange(index, event.target.value)}
+                onKeyDown={(event) => handleKeyDown(index, event)}
                 disabled={isLoading}
                 style={{
                   width: "50px",
@@ -302,7 +329,7 @@ export default function VerifyOtpPage() {
           Didn't receive the email?{" "}
           <button
             type="button"
-            onClick={handleResend}
+            onClick={handleResendOtp}
             disabled={isLoading}
             style={{
               color: colors.text.primary,

@@ -6,24 +6,37 @@ import * as z from "zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
-import { api } from "../lib/api";
+import { api, getApiErrorMessage } from "../lib/api";
 
 // --- Validations ---
 const emailSchema = z.object({
   email: z.string().min(1, "Email is required").email("Invalid email format"),
 });
 
+const otpSchema = z.object({
+  otp: z
+    .string()
+    .min(6, "Enter the 6-digit code")
+    .max(6, "Enter the 6-digit code")
+    .regex(/^\d+$/, "OTP must contain only numbers"),
+});
+
 const passwordSchema = z
   .object({
-    password: z.string().min(8, "Password must be at least 8 characters"),
+    password: z
+      .string()
+      .min(8, "Minimum 8 characters")
+      .regex(/\d/, "Must contain at least one number")
+      .regex(/[^a-zA-Z0-9]/, "Must contain at least one special character"),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don't match",
     path: ["confirmPassword"],
+    message: "Passwords do not match",
   });
 
 type EmailFormValues = z.infer<typeof emailSchema>;
+type OtpFormValues = z.infer<typeof otpSchema>;
 type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 // --- Icons ---
@@ -45,19 +58,16 @@ function KeyIcon() {
 }
 
 export default function ForgotPasswordPage() {
-  // state machine: 1 = email, 2 = otp, 3 = new password
-  // professor said keeping this in one component prevents URL jumping attacks
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<"email" | "otp" | "password">("email");
+  const [email, setEmail] = useState("");
+  const [resetToken, setResetToken] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
-
-  // Data carried between steps
-  const [targetEmail, setTargetEmail] = useState("");
-  const [resetToken, setResetToken] = useState(""); // backend gives this after OTP is verified
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // OTP State
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [otpError, setOtpError] = useState("");
+  const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const navigate = useNavigate();
@@ -69,22 +79,27 @@ export default function ForgotPasswordPage() {
   const emailForm = useForm<EmailFormValues>({
     resolver: zodResolver(emailSchema),
   });
+
   const passwordForm = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordSchema),
   });
 
   // ─── STEP 1: Request Reset ───────────────────────────────────────────────
-  const onEmailSubmit = async (data: EmailFormValues) => {
+  const handleEmailSubmit = async (data: EmailFormValues) => {
     setIsLoading(true);
+    setApiError(null);
+    setSuccessMessage(null);
+
     try {
-      // TODO: build this in FastAPI next
-      await api.post("/auth/password-reset/request", { email: data.email });
-      setTargetEmail(data.email);
-      setStep(2);
-    } catch (error: any) {
-      // For security, even if email doesn't exist, we often pretend it worked to prevent enumeration
-      // but for this dissertation, showing the error is fine.
-      alert(error.response?.data?.detail || "Failed to request reset.");
+      await api.post("/auth/password-reset/request", {
+        email: data.email,
+      });
+
+      setEmail(data.email);
+      setStep("otp");
+      setSuccessMessage("If that email exists, a reset code has been sent.");
+    } catch (error) {
+      setApiError(getApiErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
@@ -92,42 +107,50 @@ export default function ForgotPasswordPage() {
 
   // ─── STEP 2: Verify OTP ──────────────────────────────────────────────────
   const handleOtpChange = (index: number, value: string) => {
-    if (isNaN(Number(value))) return;
-    const newOtp = [...otp];
-    newOtp[index] = value.substring(value.length - 1);
-    setOtp(newOtp);
-    if (value !== "" && index < 5) inputRefs.current[index + 1]?.focus();
+    if (!/^\d?$/.test(value)) return;
+
+    const newOtp = [...otpDigits];
+    newOtp[index] = value;
+    setOtpDigits(newOtp);
+
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
   };
 
   const handleOtpKeyDown = (
     index: number,
     e: React.KeyboardEvent<HTMLInputElement>,
   ) => {
-    if (e.key === "Backspace" && otp[index] === "" && index > 0) {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   };
 
-  const verifyOtp = async () => {
-    const fullOtp = otp.join("");
+  const handleOtpSubmit = async () => {
+    const fullOtp = otpDigits.join("");
+
     if (fullOtp.length < 6) {
-      setOtpError("Enter all 6 digits.");
+      setApiError("Enter all 6 digits.");
       return;
     }
+
     setIsLoading(true);
-    setOtpError("");
+    setApiError(null);
+    setSuccessMessage(null);
+
     try {
-      // TODO: build this in FastAPI
-      // This should return a temporary reset_token so we can authorize the password change
       const response = await api.post("/auth/password-reset/verify", {
-        email: targetEmail,
+        email,
         otp: fullOtp,
       });
+
       setResetToken(response.data.reset_token);
-      setStep(3);
-    } catch (error: any) {
-      setOtpError(error.response?.data?.detail || "Invalid code.");
-      setOtp(["", "", "", "", "", ""]);
+      setStep("password");
+      setSuccessMessage("Code verified. Please set your new password.");
+    } catch (error) {
+      setApiError(getApiErrorMessage(error));
+      setOtpDigits(["", "", "", "", "", ""]);
       inputRefs.current[0]?.focus();
     } finally {
       setIsLoading(false);
@@ -135,19 +158,22 @@ export default function ForgotPasswordPage() {
   };
 
   // ─── STEP 3: Submit New Password ─────────────────────────────────────────
-  const onPasswordSubmit = async (data: PasswordFormValues) => {
+  const handlePasswordSubmit = async (data: PasswordFormValues) => {
     setIsLoading(true);
+    setApiError(null);
+    setSuccessMessage(null);
+
     try {
-      // TODO: build this in FastAPI
       await api.post("/auth/password-reset/confirm", {
-        email: targetEmail,
+        email,
         reset_token: resetToken,
         new_password: data.password,
       });
-      alert("Password reset successfully. Please log in.");
-      navigate(ROUTES.LOGIN);
-    } catch (error: any) {
-      alert(error.response?.data?.detail || "Failed to reset password.");
+
+      setSuccessMessage("Password updated successfully. You can now log in.");
+      setStep("email");
+    } catch (error) {
+      setApiError(getApiErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
@@ -185,7 +211,7 @@ export default function ForgotPasswordPage() {
         <div className="relative">
           <AnimatePresence mode="wait">
             {/* ─── RENDER STEP 1: EMAIL ─── */}
-            {step === 1 && (
+            {step === "email" && (
               <motion.div
                 key="step1"
                 initial={{ opacity: 0, x: -20 }}
@@ -201,8 +227,34 @@ export default function ForgotPasswordPage() {
                   code.
                 </p>
 
+                {apiError && (
+                  <div
+                    className="mb-4 px-4 py-3 rounded-lg text-[13px] font-medium"
+                    style={{
+                      backgroundColor: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      color: "#b91c1c",
+                    }}
+                  >
+                    {apiError}
+                  </div>
+                )}
+
+                {successMessage && (
+                  <div
+                    className="mb-4 px-4 py-3 rounded-lg text-[13px] font-medium"
+                    style={{
+                      backgroundColor: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      color: "#166534",
+                    }}
+                  >
+                    {successMessage}
+                  </div>
+                )}
+
                 <form
-                  onSubmit={emailForm.handleSubmit(onEmailSubmit)}
+                  onSubmit={emailForm.handleSubmit(handleEmailSubmit)}
                   className="flex flex-col gap-4"
                 >
                   <div className="flex flex-col gap-2">
@@ -247,7 +299,7 @@ export default function ForgotPasswordPage() {
             )}
 
             {/* ─── RENDER STEP 2: OTP ─── */}
-            {step === 2 && (
+            {step === "otp" && (
               <motion.div
                 key="step2"
                 initial={{ opacity: 0, x: -20 }}
@@ -261,13 +313,39 @@ export default function ForgotPasswordPage() {
                 <p className="text-[15px] text-[var(--text-secondary)] text-center mb-8">
                   We sent a 6-digit code to{" "}
                   <strong className="text-[var(--text-primary)]">
-                    {targetEmail}
+                    {email}
                   </strong>
                 </p>
 
+                {apiError && (
+                  <div
+                    className="mb-4 px-4 py-3 rounded-lg text-[13px] font-medium"
+                    style={{
+                      backgroundColor: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      color: "#b91c1c",
+                    }}
+                  >
+                    {apiError}
+                  </div>
+                )}
+
+                {successMessage && (
+                  <div
+                    className="mb-4 px-4 py-3 rounded-lg text-[13px] font-medium"
+                    style={{
+                      backgroundColor: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      color: "#166534",
+                    }}
+                  >
+                    {successMessage}
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-6">
                   <div className="flex justify-between gap-2">
-                    {otp.map((digit, index) => (
+                    {otpDigits.map((digit, index) => (
                       <input
                         key={index}
                         ref={(el) => (inputRefs.current[index] = el)}
@@ -280,24 +358,20 @@ export default function ForgotPasswordPage() {
                         disabled={isLoading}
                         className="w-[50px] h-[56px] text-center text-xl font-bold bg-[var(--surface-50)] rounded-lg text-[var(--text-primary)] outline-none transition-all"
                         style={{
-                          border: `1px solid ${otpError ? "var(--error-color)" : digit ? "var(--brand-action)" : "var(--surface-200)"}`,
+                          border: `1px solid ${apiError ? "var(--error-color)" : digit ? "var(--brand-action)" : "var(--surface-200)"}`,
                         }}
                       />
                     ))}
                   </div>
-                  {otpError && (
-                    <p className="text-[13px] text-[var(--error-color)] text-center font-medium mt-[-8px]">
-                      {otpError}
-                    </p>
-                  )}
 
                   <button
-                    onClick={verifyOtp}
-                    disabled={isLoading || otp.join("").length < 6}
+                    onClick={handleOtpSubmit}
+                    disabled={isLoading || otpDigits.join("").length < 6}
                     className="w-full p-3 text-white rounded-lg text-sm font-medium transition-all"
                     style={{
                       backgroundColor: "var(--brand-action)",
-                      opacity: isLoading || otp.join("").length < 6 ? 0.6 : 1,
+                      opacity:
+                        isLoading || otpDigits.join("").length < 6 ? 0.6 : 1,
                     }}
                   >
                     {isLoading ? "Verifying..." : "Verify Code"}
@@ -307,7 +381,7 @@ export default function ForgotPasswordPage() {
             )}
 
             {/* ─── RENDER STEP 3: NEW PASSWORD ─── */}
-            {step === 3 && (
+            {step === "password" && (
               <motion.div
                 key="step3"
                 initial={{ opacity: 0, x: -20 }}
@@ -322,8 +396,34 @@ export default function ForgotPasswordPage() {
                   Your new password must be at least 8 characters.
                 </p>
 
+                {apiError && (
+                  <div
+                    className="mb-4 px-4 py-3 rounded-lg text-[13px] font-medium"
+                    style={{
+                      backgroundColor: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      color: "#b91c1c",
+                    }}
+                  >
+                    {apiError}
+                  </div>
+                )}
+
+                {successMessage && (
+                  <div
+                    className="mb-4 px-4 py-3 rounded-lg text-[13px] font-medium"
+                    style={{
+                      backgroundColor: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      color: "#166534",
+                    }}
+                  >
+                    {successMessage}
+                  </div>
+                )}
+
                 <form
-                  onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}
+                  onSubmit={passwordForm.handleSubmit(handlePasswordSubmit)}
                   className="flex flex-col gap-4"
                 >
                   <div className="flex flex-col gap-2">

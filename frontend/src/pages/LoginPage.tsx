@@ -7,7 +7,7 @@ import * as z from "zod";
 import { motion } from "framer-motion";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
-import { api } from "../lib/api";
+import { getApiErrorMessage, api } from "../lib/api";
 import { useAuthStore, type AuthUser } from "../store/authStore";
 
 // =============================================================================
@@ -82,6 +82,8 @@ export default function LoginPage() {
   const [apiError, setApiError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  const login = useAuthStore((state) => state.login);
+
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
@@ -97,6 +99,7 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
     setApiError(null);
+
     try {
       const response = await api.post("/auth/login", {
         email: data.email,
@@ -108,25 +111,15 @@ export default function LoginPage() {
         access_token: string;
       };
 
-      // Guarantee role is always a valid value before storing
-      const safeUser: AuthUser = {
-        ...user,
-        role: (user.role as string) === "TEACHER" ? "TEACHER" : "STUDENT",
-      };
+      login(user, access_token);
 
-      useAuthStore.getState().login(safeUser, access_token);
-
-      if (safeUser.role === "TEACHER") {
+      if (user.role === "TEACHER") {
         navigate(ROUTES.TEACHER_DASHBOARD);
       } else {
         navigate(ROUTES.DASHBOARD);
       }
-    } catch (error: unknown) {
-      const axiosErr = error as { response?: { data?: { detail?: string } } };
-      setApiError(
-        axiosErr.response?.data?.detail ??
-          "Invalid credentials. Please try again.",
-      );
+    } catch (error) {
+      setApiError(getApiErrorMessage(error));
     } finally {
       setIsLoading(false);
     }

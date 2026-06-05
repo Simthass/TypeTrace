@@ -1,26 +1,30 @@
-import { Navigate, Outlet } from "react-router-dom";
-import { useAuthStore, type UserRole } from "../../store/authStore";
+// frontend/src/components/guards/RoleGuard.tsx
+
+import { Navigate, Outlet, useLocation } from "react-router-dom";
+
 import { ROUTES } from "../../constants/routes";
+import { useAuthStore, type UserRole } from "../../store/authStore";
 
 interface RoleGuardProps {
   allowedRoles: UserRole[];
 }
 
 export default function RoleGuard({ allowedRoles }: RoleGuardProps) {
+  const location = useLocation();
   const { isAuthenticated, user } = useAuthStore();
 
-  // Not logged in at all
   if (!isAuthenticated || !user) {
-    return <Navigate to={ROUTES.LOGIN} replace />;
+    return (
+      <Navigate to={ROUTES.LOGIN} replace state={{ from: location.pathname }} />
+    );
   }
 
-  // Role may be undefined in old persisted state — treat as STUDENT
-  const role: UserRole = user.role ?? "STUDENT";
+  const role = user.role;
 
-  // Wrong role for this section
   if (!allowedRoles.includes(role)) {
     const redirectTo =
       role === "TEACHER" ? ROUTES.TEACHER_DASHBOARD : ROUTES.DASHBOARD;
+
     return <Navigate to={redirectTo} replace />;
   }
 

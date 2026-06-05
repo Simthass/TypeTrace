@@ -6,7 +6,7 @@ import * as z from "zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
-import { api } from "../lib/api";
+import { api, getApiErrorMessage } from "../lib/api";
 import { useAuthStore, type UserRole } from "../store/authStore";
 
 // =============================================================================
@@ -337,25 +337,25 @@ function StudentForm({ onBack }: { onBack: () => void }) {
   const onSubmit = async (data: StudentFormValues) => {
     setIsLoading(true);
     setApiError(null);
+
     try {
-      await api.post("/auth/register", {
+      const payload = {
         role: "STUDENT",
         first_name: data.firstName,
         last_name: data.lastName,
         student_id: data.studentId,
         email: data.email,
-        university_name: data.universityName ?? null,
+        university_name: data.universityName || null,
         password: data.password,
         consent: data.consent,
-      });
-      setPendingEmail(data.email);
+      };
+
+      const response = await api.post("/auth/register", payload);
+
+      setPendingEmail(response.data.email);
       navigate(ROUTES.VERIFY_OTP);
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setApiError(
-        axiosErr.response?.data?.detail ??
-          "Registration failed. Please try again.",
-      );
+    } catch (error) {
+      setApiError(getApiErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
@@ -586,8 +586,9 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
   const onSubmit = async (data: TeacherFormValues) => {
     setIsLoading(true);
     setApiError(null);
+
     try {
-      await api.post("/auth/register", {
+      const payload = {
         role: "TEACHER",
         first_name: data.firstName,
         last_name: data.lastName,
@@ -596,15 +597,14 @@ function TeacherForm({ onBack }: { onBack: () => void }) {
         department: data.department,
         password: data.password,
         consent: data.consent,
-      });
-      setPendingEmail(data.email);
+      };
+
+      const response = await api.post("/auth/register", payload);
+
+      setPendingEmail(response.data.email);
       navigate(ROUTES.VERIFY_OTP);
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setApiError(
-        axiosErr.response?.data?.detail ??
-          "Registration failed. Please try again.",
-      );
+    } catch (error) {
+      setApiError(getApiErrorMessage(error));
     } finally {
       setIsLoading(false);
     }

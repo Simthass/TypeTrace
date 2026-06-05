@@ -1,13 +1,38 @@
 # backend/app/schemas/user.py
-from pydantic import BaseModel, EmailStr, field_validator
-from typing import Optional, Literal
+
 import re
+from typing import Literal, Optional
+
+from pydantic import BaseModel, EmailStr, field_validator
+
+
+UserRole = Literal["STUDENT", "TEACHER"]
+
+
+# =============================================================================
+# SHARED VALIDATORS
+# =============================================================================
+
+def _clean_text(value: str) -> str:
+    clean = re.sub(r"<[^>]*>", "", value or "")
+    clean = clean.strip()
+    if not clean:
+        raise ValueError("This field cannot be empty.")
+    return clean
+
+
+def _validate_password_strength(value: str) -> str:
+    if len(value) < 8:
+        raise ValueError("Password must be at least 8 characters.")
+    if not any(char.isdigit() for char in value):
+        raise ValueError("Password must contain at least one number.")
+    if not any(not char.isalnum() for char in value):
+        raise ValueError("Password must contain at least one special character.")
+    return value
+
 
 # =============================================================================
 # REGISTRATION SCHEMAS
-# Two distinct payloads — one for students, one for teachers.
-# The frontend sends `role` at the top level so the backend knows which
-# validator to apply. We use a Union in the endpoint.
 # =============================================================================
 
 class StudentRegister(BaseModel):
@@ -22,36 +47,36 @@ class StudentRegister(BaseModel):
 
     @field_validator("first_name", "last_name")
     @classmethod
-    def sanitize_name(cls, v: str) -> str:
-        clean = re.sub(r"<[^>]*>", "", v)
-        if not clean.strip():
-            raise ValueError("Name cannot be empty or just symbols")
-        return clean.strip()
+    def sanitize_name(cls, value: str) -> str:
+        return _clean_text(value)
 
     @field_validator("student_id")
     @classmethod
-    def validate_student_id(cls, v: str) -> str:
-        if not v.isdigit() or len(v) < 5:
-            raise ValueError("Student ID must be numeric and at least 5 digits")
-        return v
+    def validate_student_id(cls, value: str) -> str:
+        clean = value.strip()
+        if not clean.isdigit() or len(clean) < 5:
+            raise ValueError("Student ID must be numeric and at least 5 digits.")
+        return clean
+
+    @field_validator("university_name")
+    @classmethod
+    def sanitize_optional_university(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        clean = re.sub(r"<[^>]*>", "", value).strip()
+        return clean or None
 
     @field_validator("password")
     @classmethod
-    def validate_password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one number")
-        if not any(not c.isalnum() for c in v):
-            raise ValueError("Password must contain at least one special character")
-        return v
+    def validate_password(cls, value: str) -> str:
+        return _validate_password_strength(value)
 
     @field_validator("consent")
     @classmethod
-    def validate_consent(cls, v: bool) -> bool:
-        if not v:
-            raise ValueError("Biometric consent is legally required")
-        return v
+    def validate_consent(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("Biometric data processing consent is required.")
+        return value
 
 
 class TeacherRegister(BaseModel):
@@ -62,38 +87,28 @@ class TeacherRegister(BaseModel):
     university_name: str
     department: str
     password: str
-    # Teachers consent to processing student data, not biometric capture of themselves
     consent: bool
 
-    @field_validator("first_name", "last_name")
+    @field_validator("first_name", "last_name", "university_name", "department")
     @classmethod
-    def sanitize_name(cls, v: str) -> str:
-        clean = re.sub(r"<[^>]*>", "", v)
-        if not clean.strip():
-            raise ValueError("Name cannot be empty or just symbols")
-        return clean.strip()
+    def sanitize_required_text(cls, value: str) -> str:
+        return _clean_text(value)
 
     @field_validator("password")
     @classmethod
-    def validate_password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one number")
-        if not any(not c.isalnum() for c in v):
-            raise ValueError("Password must contain at least one special character")
-        return v
+    def validate_password(cls, value: str) -> str:
+        return _validate_password_strength(value)
 
     @field_validator("consent")
     @classmethod
-    def validate_consent(cls, v: bool) -> bool:
-        if not v:
-            raise ValueError("You must accept the data processing agreement")
-        return v
+    def validate_consent(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("Data processing agreement must be accepted.")
+        return value
 
 
 # =============================================================================
-# AUTH SCHEMAS (unchanged)
+# AUTH REQUEST SCHEMAS
 # =============================================================================
 
 class OTPVerify(BaseModel):
@@ -102,37 +117,21 @@ class OTPVerify(BaseModel):
 
     @field_validator("otp")
     @classmethod
-    def validate_otp(cls, v: str) -> str:
-        if not v.isdigit() or len(v) != 6:
-            raise ValueError("OTP must be exactly 6 digits")
-        return v
+    def validate_otp(cls, value: str) -> str:
+        clean = value.strip()
+        if not clean.isdigit() or len(clean) != 6:
+            raise ValueError("OTP must be exactly 6 digits.")
+        return clean
+
+
+class ResendOTPRequest(BaseModel):
+    email: EmailStr
 
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
-
-# =============================================================================
-# RESPONSE SCHEMAS
-# =============================================================================
-
-class UserResponse(BaseModel):
-    id: str
-    first_name: str
-    last_name: str
-    student_id: Optional[str]
-    email: EmailStr
-    role: str
-    is_verified: bool
-
-    class Config:
-        from_attributes = True
-
-
-# =============================================================================
-# PASSWORD RESET SCHEMAS (unchanged from original)
-# =============================================================================
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
@@ -144,10 +143,11 @@ class PasswordResetVerify(BaseModel):
 
     @field_validator("otp")
     @classmethod
-    def validate_otp(cls, v: str) -> str:
-        if not v.isdigit() or len(v) != 6:
-            raise ValueError("OTP must be exactly 6 digits")
-        return v
+    def validate_otp(cls, value: str) -> str:
+        clean = value.strip()
+        if not clean.isdigit() or len(clean) != 6:
+            raise ValueError("OTP must be exactly 6 digits.")
+        return clean
 
 
 class PasswordResetConfirm(BaseModel):
@@ -157,11 +157,51 @@ class PasswordResetConfirm(BaseModel):
 
     @field_validator("new_password")
     @classmethod
-    def validate_password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one number")
-        if not any(not c.isalnum() for c in v):
-            raise ValueError("Password must contain at least one special character")
-        return v
+    def validate_password(cls, value: str) -> str:
+        return _validate_password_strength(value)
+
+
+# =============================================================================
+# RESPONSE SCHEMAS
+# =============================================================================
+
+class UserResponse(BaseModel):
+    id: str
+    first_name: str
+    last_name: Optional[str] = None
+    email: EmailStr
+    role: UserRole
+    student_id: Optional[str] = None
+    university_name: Optional[str] = None
+    department: Optional[str] = None
+    is_verified: bool
+
+    class Config:
+        from_attributes = True
+
+
+class AuthTokenResponse(BaseModel):
+    message: str
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    user: UserResponse
+
+
+class RegisterResponse(BaseModel):
+    message: str
+    email: EmailStr
+    role: UserRole
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
+class PasswordResetVerifyResponse(BaseModel):
+    message: str
+    reset_token: str
+
+
+class TokenVerifyResponse(BaseModel):
+    valid: bool
+    user: UserResponse
