@@ -1,33 +1,37 @@
 # backend/app/db/database.py
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import declarative_base, sessionmaker
-import os
-from dotenv import load_dotenv
 
-# Explicitly load the .env file from the backend folder
-# honestly i always forget this line and spend 20 minutes wondering why my db won't connect.
-load_dotenv()
+from collections.abc import AsyncGenerator
 
-# We use the environment variable, but the fallback now matches our Docker setup
-SQLALCHEMY_DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql+asyncpg://typetrace_admin:secure_password_123@localhost:5432/typetracedb"
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
+
+from app.core.config import settings
+
+
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
 )
 
-# echo=False in production so we dont leak sql queries to the terminal
-engine = create_async_engine(SQLALCHEMY_DATABASE_URL, echo=False)
-
-# creating the session factory
-AsyncSessionLocal = sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autoflush=False,
+    autocommit=False,
 )
 
 Base = declarative_base()
 
-async def get_db():
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
-    Dependency injection for FastAPI. Creates a new database session 
-    for each request and closes it safely after.
+    FastAPI dependency that provides one async database session per request.
     """
+
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+        finally:
+            await session.close()

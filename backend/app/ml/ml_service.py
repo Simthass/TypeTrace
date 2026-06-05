@@ -9,22 +9,22 @@ import io
 from typing import Any, Optional, List, Dict
 from pathlib import Path
 
+from app.core.config import settings
+
 import numpy as np
 import joblib
 import qrcode
 from PIL import Image
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, HTTPException, Depends, status, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from jose import jwt, JWTError
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -61,16 +61,16 @@ META_PATH     = BASE_DIR / "model_metadata.json"
 LOGO_FULL_PATH = BASE_DIR / "assets" / "Logo.png"
 LOGO_ICON_PATH = BASE_DIR / "assets" / "Logo_S.png"
 
-SECRET_KEY   = os.getenv("SECRET_KEY")
-ALGORITHM    = "HS256"
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+SECRET_KEY = settings.SECRET_KEY
+ALGORITHM = settings.ALGORITHM
+FRONTEND_URL = settings.FRONTEND_URL
 
 ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS",
     "http://localhost:5173,https://typetrace.app,https://www.typetrace.app"
 ).split(",")
 
-DB_URL = os.getenv("DATABASE_URL", "").replace("+asyncpg", "")
+DB_URL = settings.sync_database_url
 
 # ─────────────────────────────────────────────────────────────────────────────
 # KILL-SWITCH THRESHOLDS
@@ -92,22 +92,7 @@ KILL_ENTROPY_THRESHOLD = 0.5
 
 limiter = Limiter(key_func=get_remote_address)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2. STARTUP & DB AUTO-PATCH
-# ─────────────────────────────────────────────────────────────────────────────
-
-app = FastAPI(title="TypeTrace Inference API", version="5.4.0")
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH"],
-    allow_headers=["Authorization", "Content-Type"],
-)
-
+router = APIRouter()
 rf_model, scaler, label_encoder = None, None, None
 feature_cols = FEATURE_COLUMNS
 model_metadata = {}
@@ -401,7 +386,7 @@ def _fetch_certificate_row(conn, cert_id: str):
 # 6. CORE ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
 
-@app.post("/api/v1/sessions/analyze", response_model=AnalysisResult)
+@router.post("/api/v1/sessions/analyze", response_model=AnalysisResult)
 @limiter.limit("10/minute")
 async def analyze_session(
     request: Request,
@@ -479,7 +464,7 @@ async def analyze_session(
     )
 
 
-@app.get("/api/v1/sessions/history")
+@router.get("/api/v1/sessions/history")
 @limiter.limit("30/minute")
 async def get_session_history(
     request: Request,
@@ -528,7 +513,7 @@ async def get_session_history(
     }
 
 
-@app.get("/api/v1/sessions/{session_id}/replay")
+@router.get("/api/v1/sessions/{session_id}/replay")
 @limiter.limit("20/minute")
 async def get_session_replay(
     request: Request,
@@ -604,7 +589,7 @@ async def get_session_replay(
     }
 
 
-@app.get("/api/v1/student/analytics")
+@router.get("/api/v1/student/analytics")
 @limiter.limit("30/minute")
 async def get_student_analytics(
     request: Request,
@@ -700,7 +685,7 @@ async def get_student_analytics(
     }
 
 
-@app.get("/api/v1/user/profile")
+@router.get("/api/v1/user/profile")
 @limiter.limit("30/minute")
 async def get_user_profile(
     request: Request,
@@ -735,7 +720,7 @@ async def get_user_profile(
     }
 
 
-@app.patch("/api/v1/user/profile")
+@router.patch("/api/v1/user/profile")
 @limiter.limit("10/minute")
 async def update_user_profile(
     request: Request,
@@ -766,7 +751,7 @@ async def update_user_profile(
     return {"message": "Profile updated successfully."}
 
 
-@app.post("/api/v1/user/change-password")
+@router.post("/api/v1/user/change-password")
 @limiter.limit("5/minute")
 async def change_password(
     request: Request,
@@ -814,19 +799,19 @@ async def change_password(
 # ✅ FIX 1: Duplicate endpoint consolidated.
 #
 # BEFORE (broken):
-#   @app.get("/api/v1/verify/{cert_id}")        ← public verify, basic fields
-#   @app.get("/api/v1/certificates/{cert_id}")  ← also verifies, richer fields
+#   @router.get("/api/v1/verify/{cert_id}")        ← public verify, basic fields
+#   @router.get("/api/v1/certificates/{cert_id}")  ← also verifies, richer fields
 #   Both did separate SQL queries with different field selections.
 #   FastAPI registered both; the first could shadow the second on some routes.
 #
 # AFTER (fixed):
 #   _fetch_certificate_row()  ← single SQL query, shared helper
-#   @app.get("/api/v1/verify/{cert_id}")        ← public endpoint, safe display fields
-#   @app.get("/api/v1/certificates/{cert_id}")  ← authenticated, full audit fields for PDF
+#   @router.get("/api/v1/verify/{cert_id}")        ← public endpoint, safe display fields
+#   @router.get("/api/v1/certificates/{cert_id}")  ← authenticated, full audit fields for PDF
 #   Both call the same helper — no duplicated SQL, no divergent logic.
 # ─────────────────────────────────────────────────────────────────────────────
 
-@app.get("/api/v1/verify/{cert_id}")
+@router.get("/api/v1/verify/{cert_id}")
 @limiter.limit("30/minute")
 async def verify_certificate_public(
     request: Request,
@@ -880,7 +865,7 @@ async def verify_certificate_public(
     }
 
 
-@app.get("/api/v1/certificates/{cert_id}")
+@router.get("/api/v1/certificates/{cert_id}")
 @limiter.limit("20/minute")
 async def get_certificate_audit(
     request: Request,
@@ -931,7 +916,7 @@ async def get_certificate_audit(
     }
 
 
-@app.get("/api/v1/sessions/{session_id}/certificate-data")
+@router.get("/api/v1/sessions/{session_id}/certificate-data")
 @limiter.limit("20/minute")
 async def get_certificate_data(
     request: Request,
@@ -999,7 +984,7 @@ async def get_certificate_data(
 # 8. COURSE MANAGEMENT ENDPOINTS (unchanged from original)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@app.post("/api/v1/courses")
+@router.post("/api/v1/courses")
 @limiter.limit("10/minute")
 async def create_course(
     request: Request,
@@ -1036,7 +1021,7 @@ async def create_course(
     }
 
 
-@app.get("/api/v1/courses")
+@router.get("/api/v1/courses")
 @limiter.limit("30/minute")
 async def get_my_courses(
     request: Request,
@@ -1081,7 +1066,7 @@ async def get_my_courses(
     }
 
 
-@app.post("/api/v1/courses/join")
+@router.post("/api/v1/courses/join")
 @limiter.limit("10/minute")
 async def join_course(
     request: Request,
@@ -1121,7 +1106,7 @@ async def join_course(
     }
 
 
-@app.get("/api/v1/courses/enrolled")
+@router.get("/api/v1/courses/enrolled")
 @limiter.limit("30/minute")
 async def get_enrolled_courses(
     request: Request,
@@ -1165,7 +1150,7 @@ async def get_enrolled_courses(
 # ✅ FIX 5 applied in submit_review_decision below
 # ─────────────────────────────────────────────────────────────────────────────
 
-@app.get("/api/v1/teacher/students")
+@router.get("/api/v1/teacher/students")
 @limiter.limit("30/minute")
 async def get_teacher_students(
     request: Request,
@@ -1214,7 +1199,7 @@ async def get_teacher_students(
     }
 
 
-@app.get("/api/v1/teacher/sessions")
+@router.get("/api/v1/teacher/sessions")
 @limiter.limit("30/minute")
 async def get_teacher_sessions(
     request: Request,
@@ -1268,7 +1253,7 @@ async def get_teacher_sessions(
     }
 
 
-@app.get("/api/v1/teacher/sessions/{session_id}")
+@router.get("/api/v1/teacher/sessions/{session_id}")
 @limiter.limit("20/minute")
 async def get_teacher_session_detail(
     request: Request,
@@ -1335,7 +1320,7 @@ async def get_teacher_session_detail(
     }
 
 
-@app.patch("/api/v1/teacher/sessions/{session_id}/review")
+@router.patch("/api/v1/teacher/sessions/{session_id}/review")
 @limiter.limit("20/minute")
 async def submit_review_decision(
     request: Request,
@@ -1413,7 +1398,7 @@ async def submit_review_decision(
     }
 
 
-@app.get("/api/v1/teacher/stats")
+@router.get("/api/v1/teacher/stats")
 @limiter.limit("30/minute")
 async def get_teacher_stats(
     request: Request,
@@ -1456,7 +1441,7 @@ async def get_teacher_stats(
     }
 
 
-@app.get("/api/v1/courses/{course_id}/students")
+@router.get("/api/v1/courses/{course_id}/students")
 @limiter.limit("30/minute")
 async def get_course_students(
     request: Request,
@@ -1558,7 +1543,7 @@ def _generate_custom_qr(data_url: str, icon_path: Path) -> io.BytesIO:
     return buffer
 
 
-@app.get("/api/v1/certificates/{cert_id}/pdf")
+@router.get("/api/v1/certificates/{cert_id}/pdf")
 @limiter.limit("10/minute")
 async def download_certificate_pdf(request: Request, cert_id: str):
     """Generates a high-fidelity compliance certificate PDF."""

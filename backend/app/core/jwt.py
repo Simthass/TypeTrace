@@ -1,36 +1,83 @@
 # backend/app/core/jwt.py
-from datetime import datetime, timedelta
-from jose import jwt
-import os
 
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
+
+from jose import JWTError, jwt
+
+from app.core.config import settings
 
 
-def create_access_token(data: dict) -> str:
+SECRET_KEY = settings.SECRET_KEY
+ALGORITHM = settings.ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+
+
+def create_access_token(
+    data: Dict[str, Any],
+    expires_delta: Optional[timedelta] = None,
+) -> str:
     """
-    Mints a JWT for an authenticated user.
-    Expected `data` keys: "sub" (email), "id" (uuid), "role" ("STUDENT"|"TEACHER")
-    The "role" claim is what every RBAC check will read on the backend.
+    Create a signed JWT access token.
+
+    Expected data:
+    - sub: user email
+    - id: user id
+    - role: STUDENT or TEACHER
     """
+
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    expire = datetime.now(timezone.utc) + (
+        expires_delta
+        if expires_delta is not None
+        else timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def create_reset_token(email: str) -> str:
-    expire = datetime.utcnow() + timedelta(minutes=15)
-    to_encode = {"sub": email, "exp": expire, "type": "password_reset"}
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    """
+    Create a short-lived password reset token.
+    """
+
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.RESET_TOKEN_EXPIRE_MINUTES
+    )
+
+    payload = {
+        "sub": email,
+        "exp": expire,
+        "type": "password_reset",
+    }
+
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def verify_reset_token(token: str, email: str) -> bool:
+    """
+    Verify password reset token validity.
+    """
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if payload.get("type") != "password_reset" or payload.get("sub") != email:
-            return False
-        return True
-    except Exception:
+
+        return (
+            payload.get("type") == "password_reset"
+            and payload.get("sub") == email
+        )
+
+    except JWTError:
         return False
+
+
+def decode_access_token(token: str) -> Dict[str, Any]:
+    """
+    Decode a JWT access token.
+
+    Raises JWTError if invalid or expired.
+    """
+
+    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
