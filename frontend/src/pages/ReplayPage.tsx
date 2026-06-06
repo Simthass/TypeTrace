@@ -1,684 +1,1041 @@
-// src/pages/ReplayPage.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// TypeTrace — Behavioral Replay Engine
-// Now with real pasted text reconstruction instead of [█ PASTED CHUNK █]
-// ─────────────────────────────────────────────────────────────────────────────
+// frontend/src/pages/ReplayPage.tsx
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
-import {
-  Play,
-  Pause,
-  RotateCcw,
-  Activity,
-  Clock,
-  ShieldCheck,
-  AlertTriangle,
-  Clipboard,
-} from "lucide-react";
-import clsx from "clsx";
-import { api } from "../lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+
+import { api, getApiErrorMessage } from "../lib/api";
 import { ROUTES } from "../constants/routes";
+import { colors, brand } from "../styles/colors";
+import type {
+  ReplayEvent,
+  ReplayResponse,
+  ReplaySegment,
+  ReplayTimelineMarker,
+} from "../types/replay";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface KeystrokeEvent {
-  key: string;
-  keyCode: number;
-  type: string;
-  timestamp: number;
-  relative_time_ms?: number;
-  down_time: number;
-  up_time: number | null;
-  dwell_time: number | null;
-  flight_time: number | null;
-  documentLength: number;
-  pastedText?: string; // ← Present on paste events from updated editor
-}
-
-interface SessionMetadata {
-  title: string;
-  classification: "HUMAN" | "SUSPICIOUS" | "AI-GENERATED" | "UNKNOWN";
-  confidence: number;
-  duration_ms: number;
-  word_count: number;
-  student_id: string;
-}
-
-interface BehavioralMetrics {
-  avg_iki: number;
-  dwell_time: number;
-  deletion_ratio: number;
-  paste_count: number;
-  longest_pause_ms: number;
-  burst_count: number;
-  wpm: number;
-  active_time_pct: number;
-}
-
-// Represents a segment of the reconstructed document.
-// Typed text is one segment; each paste is a separate segment so we can
-// style it differently — amber background to visually distinguish it.
-interface TextSegment {
-  text: string;
-  isPaste: boolean;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB-COMPONENTS
-// ─────────────────────────────────────────────────────────────────────────────
-
-type BadgeVariant = "default" | "success" | "warning" | "danger";
-
-const Badge: React.FC<{
-  children: React.ReactNode;
-  variant?: BadgeVariant;
-}> = ({ children, variant = "default" }) => {
-  const styles: Record<BadgeVariant, string> = {
-    default: "bg-gray-100 text-gray-700 border-gray-200",
-    success: "bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]",
-    warning: "bg-[#fefce8] text-[#a16207] border-[#fef08a]",
-    danger: "bg-[#fef2f2] text-[#b91c1c] border-[#fecaca]",
-  };
+function PlayIcon() {
   return (
-    <span
-      className={clsx(
-        "px-2 py-0.5 text-[11px] font-bold tracking-widest uppercase rounded-md border",
-        styles[variant],
-      )}
-    >
-      {children}
-    </span>
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M8 5v14l11-7z" />
+    </svg>
   );
-};
+}
 
-const MetricBlock: React.FC<{
+function PauseIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M6 5h4v14H6z" />
+      <path d="M14 5h4v14h-4z" />
+    </svg>
+  );
+}
+
+function ResetIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <path d="M3 3v6h6" />
+    </svg>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
+
+function ClipboardIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+function formatTime(ms: number): string {
+  const safe = Math.max(0, Math.round(ms));
+  const totalSeconds = Math.floor(safe / 1000);
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
+function formatLongTime(ms: number): string {
+  const safe = Math.max(0, Math.round(ms));
+  const totalSeconds = Math.floor(safe / 1000);
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+
+  if (mins > 0) return `${mins}m ${secs}s`;
+  return `${secs}s`;
+}
+
+function classificationStyle(bucket: string) {
+  if (bucket === "HUMAN") {
+    return {
+      label: "Human",
+      bg: brand.humanBg,
+      text: brand.humanText,
+      border: brand.humanAccent,
+    };
+  }
+
+  if (bucket === "SUSPICIOUS") {
+    return {
+      label: "Review",
+      bg: brand.suspiciousBg,
+      text: brand.suspiciousText,
+      border: brand.suspiciousAccent,
+    };
+  }
+
+  if (bucket === "SYNTHETIC") {
+    return {
+      label: "High Risk",
+      bg: brand.aiBg,
+      text: brand.aiText,
+      border: brand.aiAccent,
+    };
+  }
+
+  return {
+    label: "Unknown",
+    bg: colors.surface[100],
+    text: colors.text.secondary,
+    border: colors.surface[200],
+  };
+}
+
+function markerColor(type: ReplayTimelineMarker["type"]) {
+  if (type === "paste") return brand.suspiciousAccent;
+  if (type === "deletion") return brand.aiAccent;
+  if (type === "cognitive_pause") return colors.text.primary;
+  return colors.steel;
+}
+
+function metricValue(value: number | string | null | undefined) {
+  if (value === null || value === undefined || value === "") return "—";
+  return value;
+}
+
+function buildSegments(
+  events: ReplayEvent[],
+  currentTimeMs: number,
+): ReplaySegment[] {
+  const activeEvents = events.filter(
+    (event) => event.relative_time_ms <= currentTimeMs,
+  );
+  const segments: ReplaySegment[] = [];
+  let buffer = "";
+
+  const flushTyped = () => {
+    if (buffer.length > 0) {
+      segments.push({
+        text: buffer,
+        type: "typed",
+      });
+      buffer = "";
+    }
+  };
+
+  activeEvents.forEach((event) => {
+    if (event.type !== "keydown" && event.type !== "paste") return;
+
+    if (event.is_paste) {
+      flushTyped();
+
+      const label =
+        event.pastedLength > 0
+          ? `[pasted ${event.pastedLength} characters]`
+          : "[pasted content]";
+
+      segments.push({
+        text: label,
+        type: "paste",
+      });
+
+      return;
+    }
+
+    if (event.is_deletion) {
+      if (buffer.length > 0) {
+        buffer = buffer.slice(0, -1);
+      } else if (segments.length > 0) {
+        const last = segments[segments.length - 1];
+
+        if (last.text.length > 1) {
+          segments[segments.length - 1] = {
+            ...last,
+            text: last.text.slice(0, -1),
+          };
+        } else {
+          segments.pop();
+        }
+      }
+
+      return;
+    }
+
+    if (event.key === "Enter") {
+      buffer += "\n";
+      return;
+    }
+
+    if (event.key === "Tab") {
+      buffer += "    ";
+      return;
+    }
+
+    if (event.key === " ") {
+      buffer += " ";
+      return;
+    }
+
+    if (event.key.length === 1) {
+      buffer += event.key;
+    }
+  });
+
+  flushTyped();
+  return segments;
+}
+
+function MetricCard({
+  label,
+  value,
+  sub,
+}: {
   label: string;
   value: string | number;
-  unit?: string;
-}> = ({ label, value, unit = "" }) => (
-  <div className="flex flex-col py-3 border-b border-gray-100 last:border-0">
-    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">
-      {label}
-    </span>
-    <div className="flex items-baseline gap-1">
-      <span className="text-[16px] font-mono font-medium text-gray-900">
+  sub?: string;
+}) {
+  return (
+    <div
+      className="rounded-md border bg-white px-4 py-3"
+      style={{ borderColor: colors.surface[200] }}
+    >
+      <p
+        className="text-[10px] font-semibold uppercase tracking-[0.12em]"
+        style={{ color: colors.text.secondary }}
+      >
+        {label}
+      </p>
+      <p
+        className="mt-1 text-[17px] font-semibold"
+        style={{ color: colors.text.primary }}
+      >
         {value}
-      </span>
-      {unit && (
-        <span className="text-[12px] font-mono text-gray-400">{unit}</span>
+      </p>
+      {sub && (
+        <p
+          className="mt-1 text-[12px]"
+          style={{ color: colors.text.secondary }}
+        >
+          {sub}
+        </p>
       )}
     </div>
-  </div>
-);
+  );
+}
 
-// Renders the reconstructed document as a series of segments.
-// Typed text renders normally; pasted chunks get an amber highlight with a
-// clipboard icon so examiners can immediately spot what was pasted.
-const ReconstructedDocument: React.FC<{
-  segments: TextSegment[];
+function SegmentRenderer({
+  segments,
+  isPlaying,
+}: {
+  segments: ReplaySegment[];
   isPlaying: boolean;
-}> = ({ segments, isPlaying }) => {
+}) {
   if (segments.length === 0) {
     return (
-      <span className="text-gray-300 select-none">
-        {isPlaying
-          ? "Replaying keystrokes..."
-          : "Press play to begin the reconstruction."}
+      <span style={{ color: colors.text.secondary }}>
+        Press play to reconstruct the writing session.
       </span>
     );
   }
 
   return (
     <>
-      {segments.map((seg, i) =>
-        seg.isPaste ? (
-          // Pasted chunk — amber highlight, clipboard icon, slightly different font
-          <span key={i} className="inline relative" title="Pasted content">
+      {segments.map((segment, index) => {
+        if (segment.type === "paste") {
+          return (
             <span
-              className="inline-flex items-baseline gap-0.5 px-[3px] py-[1px] rounded mx-[1px]"
+              key={`${segment.type}-${index}`}
+              className="mx-1 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-semibold"
               style={{
-                backgroundColor: "#fef9c3", // amber-100
-                borderBottom: "2px solid #f59e0b", // amber-400 underline
-                color: "#92400e", // amber-800
+                background: brand.suspiciousBg,
+                color: brand.suspiciousText,
+                border: `1px solid ${brand.suspiciousAccent}`,
               }}
+              title="Clipboard paste event. Original pasted text is intentionally not replayed for privacy."
             >
-              {/* Tiny clipboard icon sits at the start of each paste block */}
-              <Clipboard
-                size={10}
-                className="inline shrink-0 relative top-[-1px]"
-                style={{ color: "#f59e0b" }}
-              />
-              {seg.text}
+              <ClipboardIcon />
+              {segment.text}
             </span>
-          </span>
-        ) : (
-          // Normal typed text
-          <span key={i}>{seg.text}</span>
-        ),
-      )}
-      {/* Blinking cursor when playing */}
+          );
+        }
+
+        return <span key={`${segment.type}-${index}`}>{segment.text}</span>;
+      })}
+
       {isPlaying && (
-        <span className="inline-block w-[2px] h-[1em] bg-gray-900 ml-[1px] animate-pulse" />
+        <span
+          className="ml-0.5 inline-block h-[1em] w-[2px] animate-pulse align-middle"
+          style={{ background: colors.text.primary }}
+        />
       )}
     </>
   );
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN REPLAY ENGINE
-// ─────────────────────────────────────────────────────────────────────────────
+}
 
 export default function ReplayPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
 
-  // ── API State ───────────────────────────────────────────────────────────────
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<ReplayResponse | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // ── Replay Data State ───────────────────────────────────────────────────────
-  const [metadata, setMetadata] = useState<SessionMetadata | null>(null);
-  const [metrics, setMetrics] = useState<BehavioralMetrics | null>(null);
-  const [events, setEvents] = useState<KeystrokeEvent[]>([]);
-  const [maxTime, setMaxTime] = useState<number>(1000);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTimeMs, setCurrentTimeMs] = useState(0);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [viewMode, setViewMode] = useState<"document" | "events">("document");
 
-  // ── Playback Engine State ───────────────────────────────────────────────────
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
-  const [currentTimeMs, setCurrentTimeMs] = useState<number>(0);
-  const [segments, setSegments] = useState<TextSegment[]>([]);
-  const [isPausedEvent, setIsPausedEvent] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"live" | "stream">("live");
+  const animationRef = useRef<number | null>(null);
+  const lastTickRef = useRef<number>(0);
 
-  const animationRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(
-    null,
-  );
-  const lastUpdateRef = useRef<number>(0);
-
-  // ── FETCH FROM BACKEND ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!sessionId) return;
+    let mounted = true;
 
-    const fetchReplayData = async (): Promise<void> => {
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        const response = await api.get<{
-          session: SessionMetadata;
-          metrics: BehavioralMetrics;
-          events: KeystrokeEvent[];
-        }>(`/sessions/${sessionId}/replay`);
-
-        const data = response.data;
-        setMetadata(data.session);
-        setMetrics(data.metrics);
-
-        const rawEvents: KeystrokeEvent[] = data.events || [];
-        if (rawEvents.length > 0) {
-          const startTime = rawEvents[0].timestamp;
-          const normalizedEvents: KeystrokeEvent[] = rawEvents.map((e) => ({
-            ...e,
-            relative_time_ms: e.timestamp - startTime,
-          }));
-          setEvents(normalizedEvents);
-
-          const lastEventTime =
-            normalizedEvents[normalizedEvents.length - 1].relative_time_ms ??
-            1000;
-          setMaxTime(Math.max(data.session.duration_ms, lastEventTime, 1000));
-        } else {
-          setMaxTime(data.session.duration_ms || 1000);
-        }
-      } catch (err: unknown) {
-        const axiosErr = err as { response?: { data?: { detail?: string } } };
-        console.error("Failed to load replay data:", err);
-        setError(
-          axiosErr.response?.data?.detail ??
-            "Failed to load replay. Access denied or session not found.",
-        );
-      } finally {
+    async function loadReplay() {
+      if (!sessionId) {
+        setApiError("Session ID is missing.");
         setIsLoading(false);
+        return;
       }
-    };
 
-    fetchReplayData();
+      setIsLoading(true);
+      setApiError(null);
+
+      try {
+        const response = await api.get<ReplayResponse>(`/replay/${sessionId}`);
+
+        if (!mounted) return;
+
+        setData(response.data);
+        setCurrentTimeMs(0);
+        setIsPlaying(false);
+      } catch (error) {
+        if (!mounted) return;
+        setApiError(getApiErrorMessage(error));
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+
+    loadReplay();
+
+    return () => {
+      mounted = false;
+    };
   }, [sessionId]);
 
-  // ── FORMATTING HELPERS ──────────────────────────────────────────────────────
-  const formatTime = (ms: number): string => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins}m ${String(secs).padStart(2, "0")}s`;
-  };
+  const maxTimeMs = useMemo(() => {
+    if (!data) return 1000;
 
-  // ── PLAYBACK LOOP ───────────────────────────────────────────────────────────
-  const playLoop = useCallback(
-    (timestamp: number): void => {
-      if (lastUpdateRef.current === 0) lastUpdateRef.current = timestamp;
-      const delta = timestamp - lastUpdateRef.current;
-      lastUpdateRef.current = timestamp;
+    const lastEventTime =
+      data.events.length > 0
+        ? data.events[data.events.length - 1].relative_time_ms
+        : 0;
 
-      setCurrentTimeMs((prev) => {
-        const nextTime = prev + delta * playbackSpeed;
-        if (nextTime >= maxTime) {
+    return Math.max(data.session.duration_ms, lastEventTime, 1000);
+  }, [data]);
+
+  const activeEventIndex = useMemo(() => {
+    if (!data) return 0;
+    return data.events.filter(
+      (event) => event.relative_time_ms <= currentTimeMs,
+    ).length;
+  }, [data, currentTimeMs]);
+
+  const activeEvent = useMemo(() => {
+    if (!data || activeEventIndex === 0) return null;
+    return data.events[Math.min(activeEventIndex - 1, data.events.length - 1)];
+  }, [data, activeEventIndex]);
+
+  const visibleSegments = useMemo(() => {
+    if (!data) return [];
+    return buildSegments(data.events, currentTimeMs);
+  }, [data, currentTimeMs]);
+
+  const visibleEvents = useMemo(() => {
+    if (!data) return [];
+    return data.events.filter(
+      (event) => event.relative_time_ms <= currentTimeMs,
+    );
+  }, [data, currentTimeMs]);
+
+  const replayLoop = useCallback(
+    (timestamp: number) => {
+      if (lastTickRef.current === 0) {
+        lastTickRef.current = timestamp;
+      }
+
+      const delta = timestamp - lastTickRef.current;
+      lastTickRef.current = timestamp;
+
+      setCurrentTimeMs((previous) => {
+        const next = previous + delta * playbackSpeed;
+
+        if (next >= maxTimeMs) {
           setIsPlaying(false);
-          return maxTime;
+          return maxTimeMs;
         }
-        return nextTime;
+
+        return next;
       });
 
-      animationRef.current = requestAnimationFrame(playLoop);
+      animationRef.current = window.requestAnimationFrame(replayLoop);
     },
-    [playbackSpeed, maxTime],
+    [maxTimeMs, playbackSpeed],
   );
 
   useEffect(() => {
     if (isPlaying) {
-      lastUpdateRef.current = 0;
-      animationRef.current = requestAnimationFrame(playLoop);
-    } else {
-      if (animationRef.current !== null) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
+      lastTickRef.current = 0;
+      animationRef.current = window.requestAnimationFrame(replayLoop);
+    } else if (animationRef.current !== null) {
+      window.cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
     }
+
     return () => {
-      if (animationRef.current !== null)
-        cancelAnimationFrame(animationRef.current);
-    };
-  }, [isPlaying, playLoop]);
-
-  // ── BEHAVIORAL TEXT RECONSTRUCTION ENGINE ───────────────────────────────────
-  // Rebuilds the document as an array of TextSegments so typed and pasted
-  // content can be styled differently in the render phase.
-  useEffect(() => {
-    if (!events.length) return;
-
-    const currentEventIndex = events.findIndex(
-      (e) => (e.relative_time_ms ?? 0) > currentTimeMs,
-    );
-    const activeEvents =
-      currentEventIndex === -1 ? events : events.slice(0, currentEventIndex);
-
-    // Build segments incrementally.
-    // We maintain a running "typed" buffer; when we encounter a paste event
-    // we flush that buffer as a typed segment, then push the paste as its own
-    // segment.  This preserves correct ordering of typed + pasted content.
-    const newSegments: TextSegment[] = [];
-    let currentTypedBuffer = "";
-    let pauseDetected: string | null = null;
-
-    const flushTyped = (): void => {
-      if (currentTypedBuffer.length > 0) {
-        newSegments.push({ text: currentTypedBuffer, isPaste: false });
-        currentTypedBuffer = "";
+      if (animationRef.current !== null) {
+        window.cancelAnimationFrame(animationRef.current);
       }
     };
+  }, [isPlaying, replayLoop]);
 
-    activeEvents.forEach((evt) => {
-      if (evt.type === "keydown") {
-        if (evt.key === "__PASTE_EVENT__") {
-          // Flush anything typed before this paste
-          flushTyped();
-
-          if (evt.pastedText) {
-            // New behavior: show the actual pasted text
-            newSegments.push({ text: evt.pastedText, isPaste: true });
-          } else {
-            // Fallback for old sessions recorded before this fix was applied
-            // (they won't have pastedText stored)
-            newSegments.push({ text: "[pasted content]", isPaste: true });
-          }
-        } else if (evt.key === "Backspace") {
-          // Backspace removes from the current typed buffer if it has content,
-          // otherwise it removes from the last segment.
-          if (currentTypedBuffer.length > 0) {
-            currentTypedBuffer = currentTypedBuffer.slice(0, -1);
-          } else if (newSegments.length > 0) {
-            const lastSeg = newSegments[newSegments.length - 1];
-            if (lastSeg.text.length > 1) {
-              newSegments[newSegments.length - 1] = {
-                ...lastSeg,
-                text: lastSeg.text.slice(0, -1),
-              };
-            } else {
-              // Segment is now empty — remove it entirely
-              newSegments.pop();
-            }
-          }
-        } else if (evt.key === "Enter") {
-          currentTypedBuffer += "\n";
-        } else if (evt.key.length === 1) {
-          currentTypedBuffer += evt.key;
-        }
-      }
-
-      // Cognitive pause detection (flight_time > 5s)
-      if (evt.flight_time !== null && evt.flight_time > 5000) {
-        pauseDetected = (evt.flight_time / 1000).toFixed(1);
-      }
-    });
-
-    // Flush whatever is left in the typed buffer
-    flushTyped();
-
-    setSegments(newSegments);
-    setIsPausedEvent(isPlaying ? pauseDetected : null);
-  }, [currentTimeMs, events, isPlaying]);
-
-  // ── BADGE VARIANT ───────────────────────────────────────────────────────────
-  const getVariant = (status: string): BadgeVariant => {
-    if (status === "HUMAN") return "success";
-    if (status === "SUSPICIOUS") return "warning";
-    return "danger";
+  const handleScrub = (event: React.MouseEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const percentage = (event.clientX - rect.left) / rect.width;
+    const nextTime = Math.max(0, Math.min(maxTimeMs, percentage * maxTimeMs));
+    setCurrentTimeMs(nextTime);
   };
 
-  // Derive paste count from actual events for the legend
-  const pasteEventCount = events.filter(
-    (e) => e.key === "__PASTE_EVENT__",
-  ).length;
+  const handleReset = () => {
+    setIsPlaying(false);
+    setCurrentTimeMs(0);
+  };
 
-  // ── LOADING STATE ───────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#fafafa]">
-        <div className="flex flex-col items-center gap-4 text-gray-400">
-          <Activity className="animate-pulse" size={32} />
-          <p className="text-[13px] font-mono tracking-widest uppercase">
-            Initializing Reconstruction Engine...
+      <div
+        className="flex min-h-screen items-center justify-center"
+        style={{ background: colors.surface[50] }}
+      >
+        <div
+          className="rounded-md border bg-white px-6 py-5 text-center shadow-sm"
+          style={{ borderColor: colors.surface[200] }}
+        >
+          <p
+            className="text-[13px] font-semibold"
+            style={{ color: colors.text.primary }}
+          >
+            Loading replay audit...
+          </p>
+          <p
+            className="mt-1 text-[12px]"
+            style={{ color: colors.text.secondary }}
+          >
+            Reconstructing keystroke evidence.
           </p>
         </div>
       </div>
     );
   }
 
-  // ── ERROR STATE ─────────────────────────────────────────────────────────────
-  if (error || !metadata || !metrics) {
+  if (apiError || !data) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#fafafa]">
-        <div className="bg-white p-8 border border-red-200 rounded-xl max-w-md w-full shadow-sm text-center">
-          <AlertTriangle className="text-red-500 mx-auto mb-4" size={32} />
-          <h2 className="text-lg font-bold text-gray-900 mb-2">
-            Access Denied
-          </h2>
-          <p className="text-[13px] text-gray-500 mb-6">
-            {error ??
-              "Session not found or you do not have permission to view it."}
-          </p>
-          <Link
-            to={ROUTES.DASHBOARD}
-            className="px-4 py-2 bg-gray-900 text-white rounded-md text-[13px] font-semibold"
+      <div
+        className="flex min-h-screen items-center justify-center px-6"
+        style={{ background: colors.surface[50] }}
+      >
+        <div
+          className="w-full max-w-md rounded-md border bg-white p-6 text-center shadow-sm"
+          style={{ borderColor: colors.surface[200] }}
+        >
+          <div
+            className="mx-auto flex h-10 w-10 items-center justify-center rounded-md"
+            style={{ background: brand.aiBg, color: brand.aiText }}
           >
-            Return to Dashboard
-          </Link>
+            <AlertIcon />
+          </div>
+          <h1
+            className="mt-4 text-lg font-semibold"
+            style={{ color: colors.text.primary }}
+          >
+            Replay unavailable
+          </h1>
+          <p
+            className="mt-2 text-[13px]"
+            style={{ color: colors.text.secondary }}
+          >
+            {apiError || "This replay could not be loaded."}
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="mt-5 rounded-md px-4 py-2 text-[13px] font-semibold text-white"
+            style={{ background: colors.brand }}
+          >
+            Go back
+          </button>
         </div>
       </div>
     );
   }
 
-  // ── RENDER ──────────────────────────────────────────────────────────────────
+  const badge = classificationStyle(data.session.classification_bucket);
+  const progress = Math.min(
+    100,
+    Math.max(0, (currentTimeMs / maxTimeMs) * 100),
+  );
+
   return (
-    <div className="flex flex-col h-screen bg-[#fafafa] font-sans text-gray-900">
-      {/* ── TOP HEADER ── */}
-      <header className="shrink-0 flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 z-20">
-        <div className="flex items-center gap-4">
-          <Link
-            to={ROUTES.EDITOR}
-            className="p-1.5 text-gray-400 hover:text-gray-900 transition-colors border border-gray-200 rounded-lg"
-            title="Back to Sessions"
-          >
-            <RotateCcw size={16} />
-          </Link>
-          <div className="flex flex-col">
-            <h1 className="text-[14px] font-semibold flex items-center gap-2">
-              Behavioral Replay: {metadata.title}
-              <Badge variant={getVariant(metadata.classification)}>
-                {metadata.classification}
-              </Badge>
-            </h1>
-            <div className="flex gap-3 text-[12px] text-gray-500 font-mono mt-0.5">
-              <span>Conf: {metadata.confidence}%</span>
-              <span>·</span>
-              <span>{metadata.word_count} words</span>
-              <span>·</span>
-              <span>Student: {metadata.student_id}</span>
+    <div className="min-h-screen" style={{ background: colors.surface[50] }}>
+      <header
+        className="sticky top-0 z-20 border-b bg-white px-6 py-4"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="mt-1 rounded-md border p-2"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.primary,
+              }}
+              aria-label="Go back"
+            >
+              <BackIcon />
+            </button>
+
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1
+                  className="text-[17px] font-semibold"
+                  style={{ color: colors.text.primary }}
+                >
+                  Replay Audit: {data.session.title}
+                </h1>
+                <span
+                  className="rounded-md border px-2.5 py-1 text-[11px] font-semibold"
+                  style={{
+                    background: badge.bg,
+                    color: badge.text,
+                    borderColor: badge.border,
+                  }}
+                >
+                  {badge.label}
+                </span>
+              </div>
+
+              <p
+                className="mt-1 text-[12px]"
+                style={{ color: colors.text.secondary }}
+              >
+                {data.session.student_name || data.session.student_id} ·{" "}
+                {data.session.course_name || "Personal session"} ·{" "}
+                {data.session.created_at}
+              </p>
             </div>
           </div>
-        </div>
 
-        {/* Legend + view toggle */}
-        <div className="flex items-center gap-4">
-          {/* Paste legend — only shown when session has paste events */}
-          {pasteEventCount > 0 && (
-            <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
-              <span
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded"
+          <div className="flex flex-wrap items-center gap-2">
+            {data.session.certificate_id && (
+              <Link
+                to={`/verify/${data.session.certificate_id}`}
+                className="rounded-md border px-3 py-2 text-[12px] font-semibold"
                 style={{
-                  backgroundColor: "#fef9c3",
-                  borderBottom: "2px solid #f59e0b",
-                  color: "#92400e",
+                  borderColor: colors.surface[200],
+                  color: colors.text.primary,
                 }}
               >
-                <Clipboard size={9} style={{ color: "#f59e0b" }} />
-                pasted
-              </span>
-              <span>
-                = {pasteEventCount} paste event
-                {pasteEventCount !== 1 ? "s" : ""}
-              </span>
-            </div>
-          )}
+                Verify Certificate
+              </Link>
+            )}
 
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden bg-white text-[12px] font-semibold">
-            {(["live", "stream"] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className={clsx(
-                  "px-3 py-1.5 transition-colors border-r last:border-r-0",
-                  viewMode === mode
-                    ? "bg-gray-900 text-white"
-                    : "text-gray-500 hover:text-gray-800",
-                )}
-              >
-                {mode === "live" ? "Live View" : "Stream"}
-              </button>
-            ))}
+            <button
+              type="button"
+              onClick={handleReset}
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-[12px] font-semibold"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.primary,
+              }}
+            >
+              <ResetIcon />
+              Reset
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (currentTimeMs >= maxTimeMs) setCurrentTimeMs(0);
+                setIsPlaying((previous) => !previous);
+              }}
+              className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-[12px] font-semibold text-white"
+              style={{ background: colors.brand }}
+            >
+              {isPlaying ? <PauseIcon /> : <PlayIcon />}
+              {isPlaying ? "Pause" : "Play"}
+            </button>
           </div>
         </div>
       </header>
 
-      {/* ── MAIN CONTENT ── */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* ── LEFT: DOCUMENT RECONSTRUCTION ── */}
-        <main className="flex-1 flex flex-col overflow-hidden">
-          {/* Pause banner */}
-          {isPausedEvent && (
-            <div className="shrink-0 bg-yellow-50 border-b border-yellow-200 px-6 py-2 flex items-center gap-2">
-              <Clock size={14} className="text-yellow-600" />
-              <span className="text-[12px] text-yellow-800 font-medium">
-                Cognitive pause detected — {isPausedEvent}s gap between
-                keystrokes
-              </span>
+      <main className="mx-auto grid max-w-7xl gap-5 px-6 py-6 lg:grid-cols-[1fr_340px]">
+        <section className="space-y-5">
+          {activeEvent?.is_cognitive_pause && (
+            <div
+              className="rounded-md border px-4 py-3 text-[13px]"
+              style={{
+                borderColor: brand.suspiciousAccent,
+                background: brand.suspiciousBg,
+                color: brand.suspiciousText,
+              }}
+            >
+              Cognitive pause detected:{" "}
+              {formatLongTime(activeEvent.flight_time || 0)} gap before this
+              event.
             </div>
           )}
 
-          {/* Document area */}
-          <div className="flex-1 overflow-auto p-8">
+          <div
+            className="rounded-md border bg-white p-5 shadow-sm"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+              <div>
+                <h2
+                  className="text-[15px] font-semibold"
+                  style={{ color: colors.text.primary }}
+                >
+                  Writing reconstruction
+                </h2>
+                <p
+                  className="mt-1 text-[12px]"
+                  style={{ color: colors.text.secondary }}
+                >
+                  Replays the writing process from captured keystroke evidence.
+                  Paste contents are intentionally summarized for privacy.
+                </p>
+              </div>
+
+              <div
+                className="flex rounded-md border bg-white p-1"
+                style={{ borderColor: colors.surface[200] }}
+              >
+                {(["document", "events"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setViewMode(mode)}
+                    className="rounded-md px-3 py-1.5 text-[12px] font-semibold"
+                    style={{
+                      background:
+                        viewMode === mode ? brand.bgNavActive : "#FFFFFF",
+                      color:
+                        viewMode === mode
+                          ? colors.brand
+                          : colors.text.secondary,
+                    }}
+                  >
+                    {mode === "document" ? "Document" : "Event Stream"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {viewMode === "document" ? (
+              <div
+                className="min-h-[440px] whitespace-pre-wrap rounded-md border p-5 font-mono text-[14px] leading-7"
+                style={{
+                  borderColor: colors.surface[200],
+                  background: colors.surface[50],
+                  color: colors.text.primary,
+                }}
+              >
+                <SegmentRenderer
+                  segments={visibleSegments}
+                  isPlaying={isPlaying}
+                />
+              </div>
+            ) : (
+              <div
+                className="max-h-[520px] overflow-auto rounded-md border"
+                style={{ borderColor: colors.surface[200] }}
+              >
+                {visibleEvents.length === 0 ? (
+                  <p
+                    className="px-4 py-6 text-[13px]"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    Press play to see the event stream.
+                  </p>
+                ) : (
+                  visibleEvents
+                    .slice()
+                    .reverse()
+                    .slice(0, 120)
+                    .map((event) => (
+                      <div
+                        key={`${event.event_index}-${event.relative_time_ms}`}
+                        className="grid grid-cols-[80px_1fr_90px] gap-3 border-b px-4 py-2 text-[12px] last:border-b-0"
+                        style={{ borderColor: colors.surface[200] }}
+                      >
+                        <span style={{ color: colors.text.secondary }}>
+                          {formatTime(event.relative_time_ms)}
+                        </span>
+                        <span style={{ color: colors.text.primary }}>
+                          {event.display_key}
+                          {event.is_paste
+                            ? ` · ${event.pastedLength} chars pasted`
+                            : ""}
+                          {event.is_deletion ? " · deletion" : ""}
+                          {event.is_cognitive_pause
+                            ? ` · ${formatLongTime(event.flight_time || 0)} pause`
+                            : ""}
+                        </span>
+                        <span
+                          className="text-right"
+                          style={{ color: colors.text.secondary }}
+                        >
+                          {event.type}
+                        </span>
+                      </div>
+                    ))
+                )}
+              </div>
+            )}
+          </div>
+
+          <div
+            className="rounded-md border bg-white p-5 shadow-sm"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <div className="flex items-center justify-between text-[12px] font-semibold">
+              <span style={{ color: colors.text.secondary }}>
+                {formatTime(currentTimeMs)}
+              </span>
+              <span style={{ color: colors.text.secondary }}>
+                {formatTime(maxTimeMs)}
+              </span>
+            </div>
+
             <div
-              className={clsx(
-                "max-w-3xl mx-auto bg-white border rounded-xl p-8 shadow-sm min-h-[400px]",
-                "font-mono text-[14px] leading-relaxed text-gray-800 whitespace-pre-wrap break-words",
-              )}
+              className="relative mt-3 h-8 cursor-pointer"
+              onClick={handleScrub}
             >
-              <ReconstructedDocument
-                segments={segments}
-                isPlaying={isPlaying}
+              <div
+                className="absolute top-3 h-2 w-full overflow-hidden rounded-full border"
+                style={{
+                  background: colors.surface[100],
+                  borderColor: colors.surface[200],
+                }}
+              >
+                {data.timeline_markers.map((marker) => (
+                  <span
+                    key={`${marker.type}-${marker.event_index}-${marker.relative_time_ms}`}
+                    className="absolute top-0 h-full"
+                    title={marker.label}
+                    style={{
+                      left: `${Math.min(100, Math.max(0, (marker.relative_time_ms / maxTimeMs) * 100))}%`,
+                      width: marker.type === "paste" ? 5 : 2,
+                      background: markerColor(marker.type),
+                    }}
+                  />
+                ))}
+
+                <div
+                  className="h-full"
+                  style={{
+                    width: `${progress}%`,
+                    background: colors.brand,
+                  }}
+                />
+              </div>
+
+              <div
+                className="absolute top-[9px] h-4 w-4 rounded-full shadow-sm"
+                style={{
+                  left: `calc(${progress}% - 8px)`,
+                  background: colors.text.primary,
+                }}
               />
             </div>
 
-            {/* Paste legend note at bottom of document area */}
-            {pasteEventCount > 0 && (
-              <p className="max-w-3xl mx-auto mt-3 text-[11px] text-gray-400 flex items-center gap-1.5">
-                <Clipboard size={10} className="text-amber-400" />
-                Amber-highlighted text was pasted from clipboard. Typed content
-                is shown normally.
-              </p>
-            )}
-          </div>
-        </main>
+            <div className="mt-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+              <div className="flex flex-wrap gap-2">
+                {[0.5, 1, 2, 4].map((speed) => (
+                  <button
+                    key={speed}
+                    type="button"
+                    onClick={() => setPlaybackSpeed(speed)}
+                    className="rounded-md border px-3 py-1.5 text-[12px] font-semibold"
+                    style={{
+                      borderColor:
+                        playbackSpeed === speed
+                          ? colors.brand
+                          : colors.surface[200],
+                      background:
+                        playbackSpeed === speed ? brand.bgNavActive : "#FFFFFF",
+                      color:
+                        playbackSpeed === speed
+                          ? colors.brand
+                          : colors.text.secondary,
+                    }}
+                  >
+                    {speed}x
+                  </button>
+                ))}
+              </div>
 
-        {/* ── RIGHT: BIOMETRIC METRICS SIDEBAR ── */}
-        <aside className="shrink-0 w-[260px] border-l border-gray-200 bg-white overflow-y-auto flex flex-col">
-          <div className="p-4 border-b border-gray-100">
-            <div className="flex items-center gap-2 mb-1">
-              <ShieldCheck size={14} className="text-gray-400" />
-              <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
-                Biometric Audit
-              </span>
+              <div
+                className="flex flex-wrap gap-3 text-[11px]"
+                style={{ color: colors.text.secondary }}
+              >
+                <span>Paste</span>
+                <span>Deletion</span>
+                <span>Pause</span>
+                <span>Cognitive pause</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside className="space-y-5">
+          <div
+            className="rounded-md border bg-white p-5 shadow-sm"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <h2
+              className="text-[15px] font-semibold"
+              style={{ color: colors.text.primary }}
+            >
+              Audit summary
+            </h2>
+
+            <div className="mt-4 grid gap-3">
+              <MetricCard
+                label="Confidence"
+                value={`${data.session.confidence}%`}
+                sub={data.session.risk_level}
+              />
+              <MetricCard
+                label="Progress"
+                value={`${activeEventIndex}/${data.events.length}`}
+                sub="events replayed"
+              />
+              <MetricCard
+                label="WPM"
+                value={data.metrics.wpm}
+                sub={`${data.session.word_count} words`}
+              />
+              <MetricCard
+                label="Duration"
+                value={formatLongTime(data.session.duration_ms)}
+                sub={`${data.metrics.active_time_pct}% active intervals`}
+              />
             </div>
           </div>
 
-          <div className="flex-1 px-4">
-            <MetricBlock label="Avg IKI" value={metrics.avg_iki} unit="ms" />
-            <MetricBlock
-              label="Mean Dwell Time"
-              value={metrics.dwell_time}
-              unit="ms"
-            />
-            <MetricBlock
-              label="Deletion Ratio"
-              value={`${(metrics.deletion_ratio * 100).toFixed(1)}%`}
-            />
-            <MetricBlock label="Paste Events" value={metrics.paste_count} />
-            <MetricBlock
-              label="Longest Pause"
-              value={(metrics.longest_pause_ms / 1000).toFixed(1)}
-              unit="s"
-            />
-            <MetricBlock label="Typing Bursts" value={metrics.burst_count} />
-            <MetricBlock label="Net WPM" value={metrics.wpm} unit="wpm" />
-            <MetricBlock
-              label="Active Time"
-              value={`${metrics.active_time_pct}%`}
-            />
+          <div
+            className="rounded-md border bg-white p-5 shadow-sm"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <h2
+              className="text-[15px] font-semibold"
+              style={{ color: colors.text.primary }}
+            >
+              Behavioral metrics
+            </h2>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              {[
+                ["Avg IKI", `${metricValue(data.metrics.avg_iki)}ms`],
+                ["Mean Dwell", `${metricValue(data.metrics.dwell_time)}ms`],
+                [
+                  "Mean Flight",
+                  `${metricValue(data.metrics.mean_flight_ms)}ms`,
+                ],
+                [
+                  "Longest Pause",
+                  formatLongTime(data.metrics.longest_pause_ms),
+                ],
+                ["Paste Events", data.metrics.paste_count],
+                ["Deletion Count", data.metrics.deletion_count],
+                [
+                  "Deletion Ratio",
+                  `${Math.round(data.metrics.deletion_ratio * 100)}%`,
+                ],
+                ["Cognitive Pauses", data.metrics.cognitive_pause_count],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="flex items-center justify-between border-b py-2 last:border-b-0"
+                  style={{ borderColor: colors.surface[200] }}
+                >
+                  <span
+                    className="text-[12px]"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    {label}
+                  </span>
+                  <span
+                    className="text-[12px] font-semibold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {value}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="p-4 border-t border-gray-100">
-            <MetricBlock
-              label="Session Duration"
-              value={formatTime(metadata.duration_ms)}
-            />
+          <div
+            className="rounded-md border bg-white p-5 shadow-sm"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <h2
+              className="text-[15px] font-semibold"
+              style={{ color: colors.text.primary }}
+            >
+              Timeline markers
+            </h2>
+
+            <div className="mt-4 max-h-[300px] space-y-2 overflow-auto">
+              {data.timeline_markers.length ? (
+                data.timeline_markers.map((marker) => (
+                  <div
+                    key={`${marker.type}-${marker.event_index}`}
+                    className="rounded-md border px-3 py-2"
+                    style={{ borderColor: colors.surface[200] }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span
+                        className="text-[12px] font-semibold"
+                        style={{ color: colors.text.primary }}
+                      >
+                        {marker.label}
+                      </span>
+                      <span
+                        className="text-[11px]"
+                        style={{ color: colors.text.secondary }}
+                      >
+                        {formatTime(marker.relative_time_ms)}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p
+                  className="text-[13px]"
+                  style={{ color: colors.text.secondary }}
+                >
+                  No paste, deletion, or pause markers detected.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div
+            className="rounded-md border bg-white p-5 shadow-sm"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <h2
+              className="text-[15px] font-semibold"
+              style={{ color: colors.text.primary }}
+            >
+              Integrity
+            </h2>
+
+            <p
+              className="mt-3 break-all font-mono text-[11px]"
+              style={{ color: colors.text.secondary }}
+            >
+              {data.session.document_hash || "No document hash available."}
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {data.session.certificate_id && (
+                <Link
+                  to={`/verify/${data.session.certificate_id}`}
+                  className="rounded-md px-3 py-2 text-[12px] font-semibold text-white"
+                  style={{ background: colors.brand }}
+                >
+                  Verify
+                </Link>
+              )}
+
+              <Link
+                to={ROUTES.SESSIONS}
+                className="rounded-md border px-3 py-2 text-[12px] font-semibold"
+                style={{
+                  borderColor: colors.surface[200],
+                  color: colors.text.primary,
+                }}
+              >
+                Sessions
+              </Link>
+            </div>
           </div>
         </aside>
-      </div>
-
-      {/* ── PLAYBACK CONTROLS FOOTER ── */}
-      <footer className="shrink-0 flex flex-col gap-3 px-6 py-4 bg-white border-t border-gray-200 z-20">
-        {/* Time display */}
-        <div className="flex items-center justify-between text-[11px] font-mono text-gray-500">
-          <span>{formatTime(currentTimeMs)}</span>
-          <span>{formatTime(maxTime)}</span>
-        </div>
-
-        {/* Scrubber */}
-        <div
-          className="relative h-6 flex items-center cursor-pointer"
-          onClick={(e: React.MouseEvent<HTMLDivElement>) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const percent = (e.clientX - rect.left) / rect.width;
-            setCurrentTimeMs(Math.max(0, Math.min(percent * maxTime, maxTime)));
-          }}
-        >
-          <div className="absolute w-full h-2 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
-            {/* Deletion blips — red */}
-            {events
-              .filter((e) => e.key === "Backspace")
-              .map((e, i) => (
-                <div
-                  key={`del-${i}`}
-                  className="absolute w-[1px] h-full bg-red-400 opacity-70"
-                  style={{
-                    left: `${((e.relative_time_ms ?? 0) / maxTime) * 100}%`,
-                  }}
-                />
-              ))}
-            {/* Paste event blips — amber */}
-            {events
-              .filter((e) => e.key === "__PASTE_EVENT__")
-              .map((e, i) => (
-                <div
-                  key={`paste-${i}`}
-                  className="absolute w-[4px] h-full bg-amber-400 opacity-80"
-                  style={{
-                    left: `${((e.relative_time_ms ?? 0) / maxTime) * 100}%`,
-                  }}
-                />
-              ))}
-            {/* Progress fill */}
-            <div
-              className="h-full bg-gray-400/50 mix-blend-multiply"
-              style={{ width: `${(currentTimeMs / maxTime) * 100}%` }}
-            />
-          </div>
-          {/* Playhead */}
-          <div
-            className="absolute w-3 h-3 bg-gray-900 rounded-full shadow-sm pointer-events-none"
-            style={{
-              left: `calc(${Math.min(100, Math.max(0, (currentTimeMs / maxTime) * 100))}% - 6px)`,
-            }}
-          />
-        </div>
-
-        {/* Controls row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                setIsPlaying(false);
-                setCurrentTimeMs(0);
-              }}
-              className="p-2 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-              title="Rewind to start"
-            >
-              <RotateCcw size={16} />
-            </button>
-
-            <button
-              onClick={() => {
-                if (currentTimeMs >= maxTime) setCurrentTimeMs(0);
-                setIsPlaying((prev) => !prev);
-              }}
-              className="flex items-center justify-center w-9 h-9 rounded-lg bg-gray-900 text-white hover:bg-gray-700 transition-colors shadow-sm"
-              title={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-            </button>
-          </div>
-
-          {/* Speed controls */}
-          <div className="flex items-center bg-gray-100 rounded-xl border border-gray-200 p-1">
-            {([0.5, 1, 2, 4] as const).map((speed) => (
-              <button
-                key={speed}
-                onClick={() => setPlaybackSpeed(speed)}
-                className={clsx(
-                  "px-2 py-1 text-[11px] font-mono rounded-lg transition-all",
-                  playbackSpeed === speed
-                    ? "bg-white shadow-sm text-gray-900"
-                    : "text-gray-500 hover:text-gray-700",
-                )}
-              >
-                {speed}x
-              </button>
-            ))}
-          </div>
-        </div>
-      </footer>
+      </main>
     </div>
   );
 }

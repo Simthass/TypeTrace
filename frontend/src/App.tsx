@@ -80,21 +80,20 @@ export default function App() {
           />
         </Route>
 
+        {/* Shared authenticated replay route for students and teachers */}
+        <Route element={<RoleGuard allowedRoles={["STUDENT", "TEACHER"]} />}>
+          <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
+        </Route>
+
         {/* Student routes */}
         <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
           <Route element={<DashboardLayout />}>
             <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
-
-            {/* Important bug fix: dashboard New Session uses /editor/new */}
             <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
-
-            {/* Keep /editor working too */}
             <Route path={ROUTES.EDITOR} element={<EditorPage />} />
-
             <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
             <Route path={ROUTES.CERTIFICATES} element={<CertificatesPage />} />
             <Route path={ROUTES.ANALYTICS} element={<AnalyticsPage />} />
-            <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
             <Route path={ROUTES.JOIN_COURSE} element={<JoinCoursePage />} />
           </Route>
         </Route>
