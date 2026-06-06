@@ -63,6 +63,7 @@ def create_application() -> FastAPI:
     from app.api.routes.student import router as student_router
     from app.api.routes.teacher import router as teacher_router
     from app.api.routes.replay import router as replay_router
+    from app.api.routes.user import router as user_router
 
     app.include_router(
         health_router,
@@ -76,9 +77,6 @@ def create_application() -> FastAPI:
         tags=["Authentication"],
     )
 
-    # Register the final replay router before the older sessions router.
-    # This gives /api/v1/replay/{session_id} and /api/v1/sessions/{session_id}/replay
-    # the clean Part 9 authorization and audit payload.
     app.include_router(
         replay_router,
         prefix=settings.API_V1_PREFIX,
@@ -101,6 +99,13 @@ def create_application() -> FastAPI:
         teacher_router,
         prefix=settings.API_V1_PREFIX,
         tags=["Teacher"],
+    )
+
+    # Register clean user/account settings router before legacy ML router.
+    app.include_router(
+        user_router,
+        prefix=settings.API_V1_PREFIX,
+        tags=["User Account"],
     )
 
     app.include_router(

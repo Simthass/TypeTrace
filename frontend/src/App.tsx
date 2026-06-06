@@ -18,7 +18,6 @@ import FeaturesPage from "./pages/FeaturesPage";
 import AboutPage from "./pages/AboutPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import HelpDocsPage from "./pages/HelpDocsPage";
-import SettingsPage from "./pages/SettingsPage";
 
 // Auth pages
 import LoginPage from "./pages/LoginPage";
@@ -43,6 +42,9 @@ import TeacherSubmissionsPage from "./pages/teacher/TeacherSubmissionsPage";
 import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage";
 import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
 
+// Account / settings
+import SettingsPage from "./pages/SettingsPage";
+
 // Verification pages
 import VerifyCertificatePage from "./pages/VerifyCertificatePage";
 import VerifyLookupPage from "./pages/VerifyLookupPage";
@@ -59,7 +61,6 @@ export default function App() {
           <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
           <Route path={ROUTES.FEATURES} element={<FeaturesPage />} />
           <Route path={ROUTES.ABOUT} element={<AboutPage />} />
-          <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
           <Route path={ROUTES.HELP_DOCS} element={<HelpDocsPage />} />
           <Route
             path={ROUTES.PRICING}
@@ -80,9 +81,10 @@ export default function App() {
           />
         </Route>
 
-        {/* Shared authenticated replay route for students and teachers */}
+        {/* Shared authenticated routes for students and teachers */}
         <Route element={<RoleGuard allowedRoles={["STUDENT", "TEACHER"]} />}>
           <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
+          <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
         </Route>
 
         {/* Student routes */}
