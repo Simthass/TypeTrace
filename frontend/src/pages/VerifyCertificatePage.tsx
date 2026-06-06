@@ -1,537 +1,285 @@
-import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { api } from "../lib/api";
-import { colors, brand } from "../styles/colors";
+// frontend/src/pages/VerifyCertificatePage.tsx
+
+import { useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+
+import { api, getApiErrorMessage } from "../lib/api";
 import { ROUTES } from "../constants/routes";
+import { colors, brand } from "../styles/colors";
+import type { PublicCertificateVerification } from "../types/certificate";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────────────────────────────────────
+function statusStyle(status: string | undefined) {
+  if (status === "VALID") {
+    return {
+      background: brand.humanBg,
+      color: brand.humanText,
+      borderColor: brand.humanAccent,
+      label: "Valid Certificate",
+    };
+  }
 
-interface VerifyResult {
-  valid: boolean;
-  certificate_id: string;
-  reason?: string; // Present when valid=false
-  document_hash?: string;
-  issued_at?: string;
-  session?: {
-    title: string;
-    classification: string;
-    confidence: number;
-    wpm: number;
-    duration: string;
-    total_keystrokes: number;
-    deletion_rate: number;
-    avg_iki_ms: number;
-    course: string | null;
+  if (status === "REVIEW_REQUIRED") {
+    return {
+      background: brand.suspiciousBg,
+      color: brand.suspiciousText,
+      borderColor: brand.suspiciousAccent,
+      label: "Review Required",
+    };
+  }
+
+  return {
+    background: brand.aiBg,
+    color: brand.aiText,
+    borderColor: brand.aiAccent,
+    label: "High Risk / Invalid",
   };
-  student?: {
-    display_name: string;
-    student_id: string;
-    institution: string;
-  };
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ICONS
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ShieldCheckIcon({ size = 24 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      <polyline points="9 12 11 14 15 10" />
-    </svg>
-  );
-}
-
-function ShieldXIcon({ size = 24 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      <line x1="9" y1="9" x2="15" y2="15" />
-      <line x1="15" y1="9" x2="9" y2="15" />
-    </svg>
-  );
-}
-
-function CopyIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="9" y="9" width="13" height="13" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// METRIC ROW
-// ─────────────────────────────────────────────────────────────────────────────
-
-function MetricRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <div
-      className="flex justify-between items-center py-2.5 border-b last:border-0"
-      style={{ borderColor: colors.surface[100] }}
-    >
-      <span className="text-[12px]" style={{ color: colors.text.secondary }}>
-        {label}
-      </span>
-      <span
-        className="text-[13px] font-mono font-semibold"
-        style={{ color: colors.text.primary }}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PAGE
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default function VerifyCertificatePage() {
   const { certId } = useParams<{ certId: string }>();
-  const [result, setResult] = useState<VerifyResult | null>(null);
+
+  const [result, setResult] = useState<PublicCertificateVerification | null>(
+    null,
+  );
+  const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!certId) return;
-    // This endpoint is public — no auth header needed
-    api
-      .get<VerifyResult>(`/verify/${certId}`)
-      .then((r) => setResult(r.data))
-      .catch(() =>
-        setResult({
-          valid: false,
-          certificate_id: certId ?? "",
-          reason: "Failed to reach the TypeTrace verification server.",
-        }),
-      )
-      .finally(() => setIsLoading(false));
+    let mounted = true;
+
+    async function verify() {
+      if (!certId) {
+        setApiError("Certificate ID is missing.");
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setApiError(null);
+
+      try {
+        const response = await api.get<PublicCertificateVerification>(
+          `/verify/${encodeURIComponent(certId)}`,
+        );
+
+        if (!mounted) return;
+        setResult(response.data);
+      } catch (error) {
+        if (!mounted) return;
+        setApiError(getApiErrorMessage(error));
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+
+    verify();
+
+    return () => {
+      mounted = false;
+    };
   }, [certId]);
 
-  const handleCopyHash = async () => {
-    if (!result?.document_hash) return;
-    await navigator.clipboard.writeText(result.document_hash);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const classificationColor = (c: string) => {
-    if (c === "HUMAN")
-      return {
-        bg: brand.humanBg,
-        text: brand.humanText,
-        border: `${brand.humanAccent}30`,
-      };
-    if (c === "SUSPICIOUS")
-      return {
-        bg: brand.suspiciousBg,
-        text: brand.suspiciousText,
-        border: `${brand.suspiciousAccent}30`,
-      };
-    return {
-      bg: brand.aiBg,
-      text: brand.aiText,
-      border: `${brand.aiAccent}30`,
-    };
-  };
-
-  // ── Loading ────────────────────────────────────────────────────────────────
-  if (isLoading) {
-    return (
-      <div
-        className="min-h-screen flex flex-col items-center justify-center gap-4 font-sans"
-        style={{ background: colors.surface[50] }}
-      >
-        <div
-          className="flex items-center gap-3 text-[14px] font-mono tracking-widest uppercase"
-          style={{ color: colors.text.secondary }}
-        >
-          <svg
-            className="animate-spin h-5 w-5"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
-          Querying Ledger...
-        </div>
-      </div>
-    );
-  }
-
-  // ── Not found / invalid ────────────────────────────────────────────────────
-  if (!result || !result.valid) {
-    return (
-      <div
-        className="min-h-screen flex flex-col items-center justify-center px-6 py-16 font-sans"
-        style={{ background: colors.surface[50] }}
-      >
-        <div className="w-full max-w-[480px] flex flex-col items-center gap-6">
-          {/* Logo */}
-          <Link to={ROUTES.HOME}>
-            <img
-              src="/Logo.png"
-              alt="TypeTrace"
-              className="h-7 w-auto object-contain opacity-60"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-              }}
-            />
-          </Link>
-
-          {/* Invalid state */}
-          <div
-            className="w-full bg-white border rounded-2xl p-8 shadow-sm text-center flex flex-col items-center gap-5"
-            style={{ borderColor: "#fecaca" }}
-          >
-            <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center"
-              style={{ background: "#fef2f2", color: "#b91c1c" }}
-            >
-              <ShieldXIcon size={28} />
-            </div>
-            <div>
-              <h1
-                className="text-[20px] font-bold mb-2"
-                style={{ color: colors.text.primary }}
-              >
-                Certificate Not Verified
-              </h1>
-              <p
-                className="text-[13px] leading-relaxed"
-                style={{ color: colors.text.secondary }}
-              >
-                {result?.reason ??
-                  "This certificate ID was not found in the TypeTrace ledger. It may be invalid, expired, or the ID may be mistyped."}
-              </p>
-            </div>
-            {certId && (
-              <div
-                className="w-full px-3 py-2 rounded-lg text-[11px] font-mono text-center"
-                style={{
-                  background: colors.surface[50],
-                  color: colors.text.secondary,
-                  border: `1px solid ${colors.surface[200]}`,
-                }}
-              >
-                Queried: {certId}
-              </div>
-            )}
-            <Link
-              to={ROUTES.HOME}
-              className="px-5 py-2.5 rounded-lg text-[13px] font-semibold text-white"
-              style={{ background: colors.text.primary }}
-            >
-              Return to TypeTrace
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Valid certificate ──────────────────────────────────────────────────────
-  const { session, student, certificate_id, document_hash, issued_at } = result;
-  const clsColors = classificationColor(session?.classification ?? "");
+  const style = statusStyle(result?.status);
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-start pt-12 pb-16 px-6 font-sans"
+      className="min-h-screen px-6 py-12"
       style={{ background: colors.surface[50] }}
     >
-      <div className="w-full max-w-[560px] flex flex-col gap-5">
-        {/* Logo */}
-        <div className="flex justify-center mb-2">
-          <Link to={ROUTES.HOME}>
-            <img
-              src="/Logo.png"
-              alt="TypeTrace"
-              className="h-7 w-auto object-contain"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-              }}
-            />
-          </Link>
-        </div>
-
-        {/* ── VERIFICATION RESULT HEADER ── */}
+      <div className="mx-auto max-w-5xl">
         <div
-          className="bg-white border rounded-2xl overflow-hidden shadow-sm"
-          style={{ borderColor: "#bbf7d0" }}
-        >
-          {/* Green header strip */}
-          <div
-            className="px-6 py-5 flex items-center gap-4"
-            style={{
-              background: "linear-gradient(135deg, #f0fdf4 0%, #fff 70%)",
-              borderBottom: `1px solid ${colors.surface[200]}`,
-            }}
-          >
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border-2"
-              style={{
-                background: "#f0fdf4",
-                borderColor: "#86efac",
-                color: "#15803d",
-              }}
-            >
-              <ShieldCheckIcon size={26} />
-            </div>
-            <div>
-              <h1
-                className="text-[18px] font-bold"
-                style={{ color: colors.text.primary }}
-              >
-                Certificate Verified
-              </h1>
-              <p className="text-[13px] mt-0.5" style={{ color: "#15803d" }}>
-                This certificate is authentic and exists in the TypeTrace
-                ledger.
-              </p>
-            </div>
-          </div>
-
-          {/* Certificate ID + Hash */}
-          <div className="px-6 py-4 flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-              <span
-                className="text-[10px] font-bold uppercase tracking-widest"
-                style={{ color: colors.text.secondary }}
-              >
-                Certificate ID
-              </span>
-              <span
-                className="font-mono text-[13px] font-bold"
-                style={{ color: colors.text.primary }}
-              >
-                {certificate_id}
-              </span>
-            </div>
-
-            {document_hash && (
-              <div className="flex flex-col gap-1">
-                <span
-                  className="text-[10px] font-bold uppercase tracking-widest"
-                  style={{ color: colors.text.secondary }}
-                >
-                  SHA-256 Document Hash
-                </span>
-                <div className="flex items-center gap-2">
-                  <span
-                    className="font-mono text-[11px] flex-1 truncate"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {document_hash}
-                  </span>
-                  <button
-                    onClick={handleCopyHash}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold shrink-0 transition-colors"
-                    style={{
-                      background: copied ? "#f0fdf4" : colors.surface[50],
-                      color: copied ? "#15803d" : colors.text.secondary,
-                      border: `1px solid ${copied ? "#bbf7d0" : colors.surface[200]}`,
-                    }}
-                  >
-                    <CopyIcon />
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col gap-0.5">
-              <span
-                className="text-[10px] font-bold uppercase tracking-widest"
-                style={{ color: colors.text.secondary }}
-              >
-                Issued At
-              </span>
-              <span
-                className="text-[13px] font-mono"
-                style={{ color: colors.text.primary }}
-              >
-                {issued_at}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* ── STUDENT INFO ── */}
-        {student && (
-          <div
-            className="bg-white border rounded-xl shadow-sm p-5"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <h2
-              className="text-[13px] font-semibold mb-3"
-              style={{ color: colors.text.primary }}
-            >
-              Student
-            </h2>
-            <MetricRow label="Name" value={student.display_name} />
-            <MetricRow label="Student ID" value={student.student_id} />
-            <MetricRow label="Institution" value={student.institution} />
-          </div>
-        )}
-
-        {/* ── SESSION DATA ── */}
-        {session && (
-          <div
-            className="bg-white border rounded-xl shadow-sm overflow-hidden"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <div
-              className="px-5 py-4 border-b flex items-center justify-between"
-              style={{ borderColor: colors.surface[200] }}
-            >
-              <h2
-                className="text-[13px] font-semibold"
-                style={{ color: colors.text.primary }}
-              >
-                Session Metadata
-              </h2>
-              {/* Classification badge */}
-              <span
-                className="px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider border"
-                style={{
-                  background: clsColors.bg,
-                  color: clsColors.text,
-                  borderColor: clsColors.border,
-                }}
-              >
-                {session.classification === "AI-GENERATED"
-                  ? "AI"
-                  : session.classification}{" "}
-                · {session.confidence}%
-              </span>
-            </div>
-            <div className="px-5 py-1">
-              <MetricRow label="Document Title" value={session.title} />
-              {session.course && (
-                <MetricRow label="Course" value={session.course} />
-              )}
-              <MetricRow label="Typing Duration" value={session.duration} />
-              <MetricRow label="Net WPM" value={session.wpm} />
-              <MetricRow
-                label="Total Keystrokes"
-                value={session.total_keystrokes.toLocaleString()}
-              />
-              <MetricRow
-                label="Deletion Rate"
-                value={`${session.deletion_rate}%`}
-              />
-              <MetricRow label="Mean IKI" value={`${session.avg_iki_ms}ms`} />
-            </div>
-          </div>
-        )}
-
-        {/* ── WHAT THIS MEANS ── */}
-        <div
-          className="bg-white border rounded-xl shadow-sm p-5"
+          className="rounded-md border bg-white p-6 shadow-sm"
           style={{ borderColor: colors.surface[200] }}
         >
-          <h2
-            className="text-[13px] font-semibold mb-3"
-            style={{ color: colors.text.primary }}
-          >
-            What This Certificate Means
-          </h2>
-          <div
-            className="flex flex-col gap-2.5 text-[12px] leading-relaxed"
-            style={{ color: colors.text.secondary }}
-          >
-            <p>
-              This certificate confirms that TypeTrace recorded the writing
-              session for the document above. The SHA-256 hash cryptographically
-              seals the keystroke data — any tampering changes the hash and
-              would invalidate verification.
-            </p>
-            <p>
-              The behavioral confidence score reflects the ML model's assessment
-              of whether the typing patterns match human authorship. A score
-              above 80% indicates strong human behavioral signatures (variable
-              IKI, natural pauses, edit patterns).
-            </p>
-            <p
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+            <div>
+              <p
+                className="text-[12px] font-semibold uppercase tracking-[0.18em]"
+                style={{ color: colors.text.secondary }}
+              >
+                TypeTrace public verification
+              </p>
+              <h1
+                className="mt-2 text-2xl font-semibold"
+                style={{ color: colors.text.primary }}
+              >
+                Certificate Verification
+              </h1>
+              <p
+                className="mt-2 text-[14px]"
+                style={{ color: colors.text.secondary }}
+              >
+                This page verifies that a TypeTrace certificate exists and
+                matches a recorded writing session.
+              </p>
+            </div>
+
+            {result && (
+              <div
+                className="rounded-md border px-4 py-3 text-right"
+                style={{
+                  background: style.background,
+                  color: style.color,
+                  borderColor: style.borderColor,
+                }}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.15em]">
+                  Status
+                </p>
+                <p className="mt-1 text-lg font-bold">{style.label}</p>
+              </div>
+            )}
+          </div>
+
+          {isLoading && (
+            <div
+              className="mt-8 text-[13px]"
+              style={{ color: colors.text.secondary }}
+            >
+              Verifying certificate...
+            </div>
+          )}
+
+          {apiError && (
+            <div
+              className="mt-6 rounded-md border px-4 py-3 text-[13px]"
               style={{
-                color: colors.text.secondary,
-                opacity: 0.7,
-                fontSize: 11,
+                borderColor: brand.aiAccent,
+                background: brand.aiBg,
+                color: brand.aiText,
               }}
             >
-              TypeTrace provides behavioral evidence, not absolute proof. For
-              formal academic disputes, this certificate should be used
-              alongside other evidence.
-            </p>
-          </div>
-        </div>
+              {apiError}
+            </div>
+          )}
 
-        {/* Footer link */}
-        <p
-          className="text-center text-[12px]"
-          style={{ color: colors.text.secondary }}
-        >
-          Powered by{" "}
-          <Link
-            to={ROUTES.HOME}
-            className="font-semibold hover:underline"
-            style={{ color: colors.text.primary }}
-          >
-            TypeTrace
-          </Link>{" "}
-          — Behavioral Authorship Verification Platform
-        </p>
+          {result && !result.valid && (
+            <div
+              className="mt-6 rounded-md border px-4 py-4"
+              style={{
+                borderColor: brand.aiAccent,
+                background: brand.aiBg,
+              }}
+            >
+              <h2
+                className="text-[15px] font-semibold"
+                style={{ color: brand.aiText }}
+              >
+                Certificate not found
+              </h2>
+              <p className="mt-2 text-[13px]" style={{ color: brand.aiText }}>
+                {result.reason ||
+                  "This certificate ID is not recorded in the TypeTrace ledger."}
+              </p>
+            </div>
+          )}
+
+          {result && result.valid && (
+            <>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  ["Certificate ID", result.certificate_id],
+                  ["Student", result.student_name],
+                  ["Student ID", result.student_id || "Not provided"],
+                  ["Institution", result.university_name || "Not provided"],
+                  ["Course", result.course_name || "Personal"],
+                  ["Classification", result.classification_label],
+                  ["Confidence", `${result.confidence}%`],
+                  ["Risk Level", result.risk_level],
+                  ["Word Count", result.word_count],
+                  ["WPM", result.wpm],
+                  ["Duration", `${result.duration_seconds}s`],
+                  ["Generated", result.generated_at],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="rounded-md border px-3 py-2"
+                    style={{ borderColor: colors.surface[200] }}
+                  >
+                    <p
+                      className="text-[10px] font-semibold uppercase tracking-[0.12em]"
+                      style={{ color: colors.text.secondary }}
+                    >
+                      {label}
+                    </p>
+                    <p
+                      className="mt-1 break-words text-[13px] font-semibold"
+                      style={{ color: colors.text.primary }}
+                    >
+                      {value || "—"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div
+                className="mt-6 rounded-md border px-4 py-3"
+                style={{ borderColor: colors.surface[200] }}
+              >
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-[0.12em]"
+                  style={{ color: colors.text.secondary }}
+                >
+                  Document Integrity Hash
+                </p>
+                <p
+                  className="mt-1 break-all font-mono text-[11px]"
+                  style={{ color: colors.text.primary }}
+                >
+                  {result.document_hash}
+                </p>
+              </div>
+
+              <div
+                className="mt-6 rounded-md border px-4 py-3"
+                style={{
+                  borderColor: colors.surface[200],
+                  background: colors.surface[50],
+                }}
+              >
+                <p
+                  className="text-[13px]"
+                  style={{ color: colors.text.secondary }}
+                >
+                  Ledger status:{" "}
+                  <span
+                    className="font-semibold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {result.ledger_status}
+                  </span>
+                </p>
+                <p
+                  className="mt-1 text-[12px]"
+                  style={{ color: colors.text.secondary }}
+                >
+                  Review status: {result.review_status}
+                </p>
+              </div>
+
+              <div className="mt-6 flex flex-wrap gap-2">
+                <a
+                  href={`/api/v1/certificates/${result.certificate_id}/pdf`}
+                  className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
+                  style={{ background: colors.brand }}
+                >
+                  Download PDF
+                </a>
+
+                <Link
+                  to={ROUTES.VERIFY_LOOKUP}
+                  className="rounded-md border px-4 py-2 text-[13px] font-semibold"
+                  style={{
+                    borderColor: colors.surface[200],
+                    color: colors.text.primary,
+                  }}
+                >
+                  Verify another certificate
+                </Link>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

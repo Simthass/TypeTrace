@@ -1,40 +1,16 @@
-// src/pages/CertificatesPage.tsx
-// =============================================================================
-// Part 6 update: PDF download button wired to useCertificateDownload hook.
-// The rest of the page is unchanged from Part 5.
-// Only the CertificateCard component is updated.
-// =============================================================================
+// frontend/src/pages/CertificatesPage.tsx
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../lib/api";
-import { colors, brand } from "../styles/colors";
+
+import { api, getApiErrorMessage } from "../lib/api";
 import { ROUTES } from "../constants/routes";
-import { useAuthStore } from "../store/authStore";
+import { colors, brand } from "../styles/colors";
 import { useCertificateDownload } from "../hooks/useCertificateDownload";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TYPES (unchanged from Part 5)
-// ─────────────────────────────────────────────────────────────────────────────
-
-type Classification = "HUMAN" | "SUSPICIOUS" | "AI-GENERATED";
-
-interface Session {
-  id: number;
-  title: string;
-  wpm: number;
-  duration: number;
-  classification: Classification;
-  confidence: number;
-  date: string;
-  certificate_id: string | null;
-  review_status: string;
-  course_name: string | null;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ICONS
-// ─────────────────────────────────────────────────────────────────────────────
+import type {
+  CertificateListItem,
+  CertificateListResponse,
+} from "../types/certificate";
 
 function ShieldCheckIcon() {
   return (
@@ -45,492 +21,486 @@ function ShieldCheckIcon() {
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
     >
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      <polyline points="9 12 11 14 15 10" />
+      <path d="m9 12 2 2 4-4" />
     </svg>
   );
 }
-function CopyIcon() {
+
+function DownloadIcon() {
   return (
     <svg
-      width="12"
-      height="12"
+      width="15"
+      height="15"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M7 10l5 5 5-5" />
+      <path d="M12 15V3" />
+    </svg>
+  );
+}
+
+function ExternalIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
     >
       <rect x="9" y="9" width="13" height="13" rx="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </svg>
   );
 }
-function ExternalLinkIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-      <polyline points="15 3 21 3 21 9" />
-      <line x1="10" y1="14" x2="21" y2="3" />
-    </svg>
-  );
-}
-function PlayIcon() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-      <polygon points="5 3 19 12 5 21 5 3" />
-    </svg>
-  );
-}
-function DownloadIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  );
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CERTIFICATE CARD — Part 6: adds PDF download button
-// ─────────────────────────────────────────────────────────────────────────────
+function classificationStyles(classification: string) {
+  const normalized = classification.toUpperCase();
+
+  if (normalized === "HUMAN") {
+    return {
+      background: brand.humanBg,
+      color: brand.humanText,
+      borderColor: brand.humanAccent,
+      label: "Human",
+    };
+  }
+
+  if (normalized === "SUSPICIOUS") {
+    return {
+      background: brand.suspiciousBg,
+      color: brand.suspiciousText,
+      borderColor: brand.suspiciousAccent,
+      label: "Review",
+    };
+  }
+
+  return {
+    background: brand.aiBg,
+    color: brand.aiText,
+    borderColor: brand.aiAccent,
+    label: "High Risk",
+  };
+}
 
 function CertificateCard({
-  session,
-  studentName,
+  certificate,
 }: {
-  session: Session;
-  studentName: string;
+  certificate: CertificateListItem;
 }) {
-  const [copied, setCopied] = useState(false);
   const { downloadCertificate, isDownloading } = useCertificateDownload();
-  const certId = session.certificate_id!;
-  const isHuman = session.classification === "HUMAN";
-  const verifyUrl = `/verify/${certId}`;
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">(
+    "idle",
+  );
+
+  const style = classificationStyles(certificate.classification);
+  const verifyPath = `/verify/${certificate.certificate_id}`;
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(certId);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(
+        `${window.location.origin}${verifyPath}`,
+      );
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 1500);
+    } catch {
+      setCopyState("error");
+      window.setTimeout(() => setCopyState("idle"), 1500);
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      await downloadCertificate(certificate.certificate_id);
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to download certificate.",
+      );
+    }
   };
 
   return (
     <div
-      className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col"
+      className="rounded-md border bg-white shadow-sm"
       style={{ borderColor: colors.surface[200] }}
     >
-      {/* Certificate header strip */}
       <div
-        className="px-6 py-5 flex items-start justify-between gap-3"
-        style={{
-          background: isHuman
-            ? `linear-gradient(135deg, ${brand.humanBg} 0%, #fff 60%)`
-            : `linear-gradient(135deg, ${brand.aiBg} 0%, #fff 60%)`,
-          borderBottom: `1px solid ${colors.surface[200]}`,
-        }}
+        className="flex items-start justify-between gap-4 border-b px-5 py-4"
+        style={{ borderColor: colors.surface[200] }}
       >
-        <div className="flex items-center gap-3">
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 border-2"
-            style={{
-              background: isHuman ? brand.humanBg : brand.aiBg,
-              borderColor: isHuman ? brand.humanAccent : brand.aiAccent,
-              color: isHuman ? brand.humanText : brand.aiText,
-            }}
-          >
-            <ShieldCheckIcon />
-          </div>
-          <div>
-            <p
-              className="text-[15px] font-semibold leading-snug"
-              style={{ color: colors.text.primary }}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span
+              className="flex h-8 w-8 items-center justify-center rounded-md"
+              style={{ background: brand.bgNavActive, color: colors.brand }}
             >
-              {session.title}
-            </p>
-            <p
-              className="text-[12px] mt-0.5"
-              style={{ color: colors.text.secondary }}
-            >
-              Issued to {studentName} · {session.date}
-            </p>
-          </div>
-        </div>
-        <div
-          className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider border"
-          style={{
-            background: isHuman ? brand.humanBg : brand.aiBg,
-            color: isHuman ? brand.humanText : brand.aiText,
-            borderColor: isHuman
-              ? `${brand.humanAccent}40`
-              : `${brand.aiAccent}40`,
-          }}
-        >
-          {session.classification === "AI-GENERATED"
-            ? "AI"
-            : session.classification}
-        </div>
-      </div>
-
-      {/* Body */}
-      <div className="px-6 py-4 flex flex-col gap-4 flex-1">
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: "Confidence", value: `${session.confidence}%` },
-            { label: "WPM", value: session.wpm },
-            { label: "Course", value: session.course_name ?? "Personal" },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex flex-col gap-0.5">
-              <span
-                className="text-[9px] font-bold uppercase tracking-widest"
-                style={{ color: colors.text.secondary }}
-              >
-                {label}
-              </span>
-              <span
-                className="text-[13px] font-semibold font-mono truncate"
+              <ShieldCheckIcon />
+            </span>
+            <div className="min-w-0">
+              <h3
+                className="truncate text-[14px] font-semibold"
                 style={{ color: colors.text.primary }}
               >
-                {value}
-              </span>
+                {certificate.title}
+              </h3>
+              <p
+                className="mt-0.5 text-[12px]"
+                style={{ color: colors.text.secondary }}
+              >
+                {certificate.created_at}
+                {certificate.course_name ? ` · ${certificate.course_name}` : ""}
+              </p>
             </div>
-          ))}
+          </div>
         </div>
 
-        {/* Certificate ID */}
-        <div
-          className="flex items-center gap-2 px-3 py-2 rounded-lg"
+        <span
+          className="rounded-md border px-2.5 py-1 text-[11px] font-semibold"
           style={{
-            background: colors.surface[50],
-            border: `1px solid ${colors.surface[200]}`,
+            background: style.background,
+            color: style.color,
+            borderColor: style.borderColor,
           }}
         >
-          <span
-            className="text-[10px] font-bold uppercase tracking-wider shrink-0"
-            style={{ color: colors.text.secondary }}
-          >
-            CERT ID
-          </span>
-          <span
-            className="flex-1 font-mono text-[11px] truncate"
-            style={{ color: colors.text.primary }}
-          >
-            {certId}
-          </span>
-          <button
-            onClick={handleCopy}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold transition-colors shrink-0"
-            style={{
-              background: copied ? "#f0fdf4" : "white",
-              color: copied ? "#15803d" : colors.text.secondary,
-              border: `1px solid ${copied ? "#bbf7d0" : colors.surface[200]}`,
-            }}
-          >
-            <CopyIcon />
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
+          {style.label}
+        </span>
       </div>
 
-      {/* Footer — Part 6: PDF download added */}
+      <div className="grid gap-3 px-5 py-4 sm:grid-cols-4">
+        {[
+          ["Confidence", `${certificate.confidence}%`],
+          ["WPM", certificate.wpm],
+          ["Duration", `${certificate.duration_seconds}s`],
+          ["Risk", certificate.risk_level],
+        ].map(([label, value]) => (
+          <div key={label}>
+            <p
+              className="text-[10px] font-semibold uppercase tracking-[0.12em]"
+              style={{ color: colors.text.secondary }}
+            >
+              {label}
+            </p>
+            <p
+              className="mt-1 text-[13px] font-semibold"
+              style={{ color: colors.text.primary }}
+            >
+              {value}
+            </p>
+          </div>
+        ))}
+      </div>
+
       <div
-        className="px-6 py-3 flex items-center gap-3 border-t flex-wrap"
-        style={{
-          borderColor: colors.surface[200],
-          background: colors.surface[50],
-        }}
+        className="border-t px-5 py-3"
+        style={{ borderColor: colors.surface[200] }}
       >
-        {/* ← PART 6: Download PDF */}
-        <button
-          onClick={() => downloadCertificate(session.id)}
-          disabled={isDownloading}
-          className="flex items-center gap-1.5 text-[12px] font-semibold transition-opacity"
-          style={{
-            color: colors.text.primary,
-            opacity: isDownloading ? 0.6 : 1,
-          }}
-        >
-          <DownloadIcon />
-          {isDownloading ? "Generating..." : "Download PDF"}
-        </button>
-
-        <span style={{ color: colors.surface[200] }}>·</span>
-
-        {/* Verify publicly */}
-        <a
-          href={verifyUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-[12px] font-semibold transition-opacity hover:opacity-80"
-          style={{ color: brand.action }}
-        >
-          <ExternalLinkIcon />
-          Verify
-        </a>
-
-        <span style={{ color: colors.surface[200] }}>·</span>
-
-        {/* Replay */}
-        <Link
-          to={`/session/${session.id}/replay`}
-          className="flex items-center gap-1.5 text-[12px] font-semibold transition-opacity hover:opacity-70"
+        <p
+          className="text-[10px] font-semibold uppercase tracking-[0.12em]"
           style={{ color: colors.text.secondary }}
         >
-          <PlayIcon /> Replay
+          Certificate ID
+        </p>
+        <p
+          className="mt-1 break-all font-mono text-[12px]"
+          style={{ color: colors.text.primary }}
+        >
+          {certificate.certificate_id}
+        </p>
+
+        <p
+          className="mt-3 text-[10px] font-semibold uppercase tracking-[0.12em]"
+          style={{ color: colors.text.secondary }}
+        >
+          Document Hash
+        </p>
+        <p
+          className="mt-1 break-all font-mono text-[11px]"
+          style={{ color: colors.text.secondary }}
+        >
+          {certificate.document_hash}
+        </p>
+      </div>
+
+      <div
+        className="flex flex-wrap gap-2 border-t px-5 py-4"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={isDownloading}
+          className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+          style={{ background: colors.brand }}
+        >
+          <DownloadIcon />
+          {isDownloading ? "Downloading..." : "Download PDF"}
+        </button>
+
+        <Link
+          to={verifyPath}
+          className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-[12px] font-semibold"
+          style={{
+            borderColor: colors.surface[200],
+            color: colors.text.primary,
+          }}
+        >
+          <ExternalIcon />
+          Verify
         </Link>
 
-        {/* Review status */}
-        {session.review_status &&
-          session.review_status !== "PENDING" &&
-          session.course_name && (
-            <span
-              className="text-[11px] font-semibold ml-auto"
-              style={{
-                color:
-                  session.review_status === "APPROVED"
-                    ? "#15803d"
-                    : session.review_status === "FLAGGED"
-                      ? "#b91c1c"
-                      : "#a16207",
-              }}
-            >
-              {session.review_status === "APPROVED"
-                ? "✓ Approved"
-                : session.review_status === "FLAGGED"
-                  ? "⚑ Flagged"
-                  : "◎ Under Review"}
-            </span>
-          )}
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-[12px] font-semibold"
+          style={{
+            borderColor: colors.surface[200],
+            color: colors.text.primary,
+          }}
+        >
+          <CopyIcon />
+          {copyState === "copied"
+            ? "Copied"
+            : copyState === "error"
+              ? "Failed"
+              : "Copy Link"}
+        </button>
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PAGE (unchanged from Part 5 except CertificateCard now downloads PDFs)
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function CertificatesPage() {
-  const { user } = useAuthStore();
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [certificates, setCertificates] = useState<CertificateListItem[]>([]);
+  const [filter, setFilter] = useState<
+    "ALL" | "HUMAN" | "SUSPICIOUS" | "SYNTHETIC"
+  >("ALL");
   const [isLoading, setIsLoading] = useState(true);
-  const [filter, setFilter] = useState<"ALL" | "HUMAN" | "OTHER">("ALL");
-
-  const studentName = user
-    ? `${user.first_name} ${user.last_name ?? ""}`.trim()
-    : "Student";
+  const [apiError, setApiError] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .get<{ status: string; sessions: Session[] }>("/sessions/history")
-      .then((r) => {
-        if (r.data.status === "success") {
-          setSessions(r.data.sessions.filter((s) => !!s.certificate_id));
-        }
-      })
-      .catch(console.error)
-      .finally(() => setIsLoading(false));
+    let mounted = true;
+
+    async function loadCertificates() {
+      setIsLoading(true);
+      setApiError(null);
+
+      try {
+        const response =
+          await api.get<CertificateListResponse>("/certificates");
+
+        if (!mounted) return;
+        setCertificates(response.data.certificates || []);
+      } catch (error) {
+        if (!mounted) return;
+        setApiError(getApiErrorMessage(error));
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+
+    loadCertificates();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const filtered = sessions.filter((s) => {
-    if (filter === "HUMAN") return s.classification === "HUMAN";
-    if (filter === "OTHER") return s.classification !== "HUMAN";
-    return true;
-  });
+  const filteredCertificates = useMemo(() => {
+    if (filter === "ALL") return certificates;
 
-  const humanCount = sessions.filter(
-    (s) => s.classification === "HUMAN",
-  ).length;
-  const avgConf =
-    sessions.length > 0
-      ? (
-          sessions.reduce((a, s) => a + s.confidence, 0) / sessions.length
-        ).toFixed(1)
-      : "—";
+    return certificates.filter((certificate) => {
+      const normalized = certificate.classification.toUpperCase();
+
+      if (filter === "SYNTHETIC") {
+        return normalized === "SYNTHETIC" || normalized === "AI-GENERATED";
+      }
+
+      return normalized === filter;
+    });
+  }, [certificates, filter]);
 
   return (
     <div
-      className="p-6 md:p-8 max-w-[1200px] mx-auto flex flex-col gap-6 font-sans min-h-screen"
+      className="min-h-screen px-6 py-8"
       style={{ background: colors.surface[50] }}
     >
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1
-            className="text-[20px] font-semibold"
-            style={{ color: colors.text.primary }}
-          >
-            Certificates
-          </h1>
-          <p
-            className="text-[13px] mt-0.5"
-            style={{ color: colors.text.secondary }}
-          >
-            Cryptographic proof of authorship. Download PDFs to submit with your
-            assignments.
-          </p>
-        </div>
-        <Link
-          to={ROUTES.EDITOR_NEW}
-          className="flex items-center gap-1.5 h-9 px-4 rounded-lg text-[13px] font-semibold text-white shadow-sm"
-          style={{ background: colors.text.primary }}
-        >
-          + New Session
-        </Link>
-      </div>
+      <div className="mx-auto max-w-6xl">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div>
+            <p
+              className="text-[12px] font-semibold uppercase tracking-[0.18em]"
+              style={{ color: colors.text.secondary }}
+            >
+              TypeTrace certificates
+            </p>
+            <h1
+              className="mt-2 text-2xl font-semibold"
+              style={{ color: colors.text.primary }}
+            >
+              Authorship Certificates
+            </h1>
+            <p
+              className="mt-2 max-w-2xl text-[14px]"
+              style={{ color: colors.text.secondary }}
+            >
+              Download cryptographic PDF certificates and share public
+              verification links with teachers or institutions.
+            </p>
+          </div>
 
-      {sessions.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+          <Link
+            to={ROUTES.EDITOR_NEW}
+            className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
+            style={{ background: colors.brand }}
+          >
+            Create new certificate
+          </Link>
+        </div>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-4">
           {[
-            { label: "Total Certificates", value: sessions.length },
-            {
-              label: "Human Verified",
-              value: humanCount,
-              accent: brand.humanText,
-            },
-            {
-              label: "Avg Confidence",
-              value: `${avgConf}%`,
-              accent: brand.action,
-            },
-          ].map(({ label, value, accent }) => (
+            ["Total", certificates.length],
+            [
+              "Human",
+              certificates.filter((c) => c.classification === "HUMAN").length,
+            ],
+            [
+              "Review",
+              certificates.filter((c) => c.classification === "SUSPICIOUS")
+                .length,
+            ],
+            [
+              "High Risk",
+              certificates.filter((c) =>
+                ["SYNTHETIC", "AI-GENERATED", "AI"].includes(c.classification),
+              ).length,
+            ],
+          ].map(([label, value]) => (
             <div
               key={label}
-              className="bg-white border rounded-xl p-4 shadow-sm"
+              className="rounded-md border bg-white px-4 py-3"
               style={{ borderColor: colors.surface[200] }}
             >
               <p
-                className="text-[10px] font-bold uppercase tracking-widest mb-1.5"
+                className="text-[11px] font-semibold uppercase tracking-[0.12em]"
                 style={{ color: colors.text.secondary }}
               >
                 {label}
               </p>
               <p
-                className="text-[22px] font-extrabold font-mono"
-                style={{ color: accent ?? colors.text.primary }}
+                className="mt-1 text-xl font-semibold"
+                style={{ color: colors.text.primary }}
               >
                 {value}
               </p>
             </div>
           ))}
         </div>
-      )}
 
-      {sessions.length > 0 && (
-        <div className="flex items-center gap-2">
-          {(["ALL", "HUMAN", "OTHER"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors"
-              style={{
-                background: filter === f ? colors.text.primary : "white",
-                color: filter === f ? "white" : colors.text.secondary,
-                borderColor:
-                  filter === f ? colors.text.primary : colors.surface[200],
-              }}
-            >
-              {f === "OTHER" ? "Suspicious / AI" : f}
-            </button>
-          ))}
-          <span
-            className="text-[12px] ml-2"
-            style={{ color: colors.text.secondary }}
-          >
-            {filtered.length} certificate{filtered.length !== 1 ? "s" : ""}
-          </span>
+        <div className="mt-6 flex flex-wrap gap-2">
+          {(["ALL", "HUMAN", "SUSPICIOUS", "SYNTHETIC"] as const).map(
+            (item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setFilter(item)}
+                className="rounded-md border px-3 py-2 text-[12px] font-semibold"
+                style={{
+                  borderColor:
+                    filter === item ? colors.brand : colors.surface[200],
+                  background: filter === item ? brand.bgNavActive : "#FFFFFF",
+                  color: filter === item ? colors.brand : colors.text.secondary,
+                }}
+              >
+                {item === "ALL"
+                  ? "All"
+                  : item === "SYNTHETIC"
+                    ? "High Risk"
+                    : item}
+              </button>
+            ),
+          )}
         </div>
-      )}
 
-      {isLoading ? (
-        <div className="flex items-center justify-center h-40">
-          <span
-            className="text-[13px] font-mono tracking-widest uppercase"
-            style={{ color: colors.text.secondary }}
-          >
-            Loading...
-          </span>
-        </div>
-      ) : sessions.length === 0 ? (
-        <div
-          className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border gap-4"
-          style={{ borderColor: colors.surface[200] }}
-        >
+        {apiError && (
           <div
-            className="w-14 h-14 rounded-full flex items-center justify-center"
+            className="mt-6 rounded-md border px-4 py-3 text-[13px]"
             style={{
-              background: colors.surface[50],
+              borderColor: brand.aiAccent,
+              background: brand.aiBg,
+              color: brand.aiText,
+            }}
+          >
+            {apiError}
+          </div>
+        )}
+
+        {isLoading ? (
+          <div
+            className="mt-6 rounded-md border bg-white px-5 py-10 text-center text-[13px]"
+            style={{
+              borderColor: colors.surface[200],
               color: colors.text.secondary,
             }}
           >
-            <ShieldCheckIcon />
+            Loading certificates...
           </div>
-          <div className="text-center">
-            <p
-              className="text-[15px] font-semibold mb-1"
+        ) : filteredCertificates.length === 0 ? (
+          <div
+            className="mt-6 rounded-md border bg-white px-5 py-10 text-center"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <h2
+              className="text-[15px] font-semibold"
               style={{ color: colors.text.primary }}
             >
-              No certificates yet
-            </p>
-            <p className="text-[13px]" style={{ color: colors.text.secondary }}>
-              Complete a typing session to generate your first cryptographic
+              No certificates found
+            </h2>
+            <p
+              className="mt-2 text-[13px]"
+              style={{ color: colors.text.secondary }}
+            >
+              Complete a writing session to generate your first TypeTrace
               certificate.
             </p>
           </div>
-          <Link
-            to={ROUTES.EDITOR_NEW}
-            className="px-5 py-2.5 rounded-lg text-[13px] font-semibold text-white"
-            style={{ background: colors.text.primary }}
-          >
-            Start First Session
-          </Link>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div
-          className="flex items-center justify-center py-12 bg-white rounded-xl border"
-          style={{ borderColor: colors.surface[200] }}
-        >
-          <p className="text-[13px]" style={{ color: colors.text.secondary }}>
-            No certificates match this filter.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filtered.map((s) => (
-            <CertificateCard key={s.id} session={s} studentName={studentName} />
-          ))}
-        </div>
-      )}
-
-      <p
-        className="text-[11px] text-center pb-4"
-        style={{ color: colors.text.secondary }}
-      >
-        Certificates are cryptographically sealed with SHA-256 and immutably
-        stored in the TypeTrace ledger. Share the verify link or download the
-        PDF to prove authorship to your institution.
-      </p>
+        ) : (
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            {filteredCertificates.map((certificate) => (
+              <CertificateCard
+                key={certificate.certificate_id}
+                certificate={certificate}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
