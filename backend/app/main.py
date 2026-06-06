@@ -1,3 +1,4 @@
+# backend/app/main.py
 
 import logging
 import sys
@@ -6,7 +7,6 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -60,6 +60,7 @@ def create_application() -> FastAPI:
     from app.api.routes.auth import router as auth_router
     from app.api.routes.sessions import router as sessions_router
     from app.api.routes.certificates import router as certificates_router
+    from app.api.routes.student import router as student_router
 
     app.include_router(
         health_router,
@@ -79,10 +80,12 @@ def create_application() -> FastAPI:
         tags=["Sessions"],
     )
 
-    # Important Part 6 fix:
-    # Register the clean certificate router BEFORE the legacy ML router.
-    # This makes /api/v1/verify/{cert_id}, /api/v1/certificates, and PDF download
-    # resolve through the final certificate implementation.
+    app.include_router(
+        student_router,
+        prefix=settings.API_V1_PREFIX,
+        tags=["Student"],
+    )
+
     app.include_router(
         certificates_router,
         prefix=settings.API_V1_PREFIX,

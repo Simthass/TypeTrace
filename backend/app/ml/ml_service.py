@@ -529,6 +529,35 @@ async def analyze_session(
             row = result.fetchone()
             session_id = row[0] if row else None
 
+            # ─────────────────────────────────────────────────────────────────
+            # PART 6 UPDATE: Insert certificate ledger record
+            # This makes Part 6 use the real certificates ledger table
+            # instead of only storing the ID on typing_sessions.
+            # ─────────────────────────────────────────────────────────────────
+            if session_id is not None:
+                conn.execute(
+                    text("""
+                        INSERT INTO certificates (
+                            session_id,
+                            certificate_id,
+                            document_hash,
+                            verification_notes
+                        ) VALUES (
+                            :session_id,
+                            :certificate_id,
+                            :document_hash,
+                            :verification_notes
+                        )
+                        ON CONFLICT DO NOTHING
+                    """),
+                    {
+                        "session_id": session_id,
+                        "certificate_id": cert_id,
+                        "document_hash": doc_hash,
+                        "verification_notes": "Certificate generated from TypeTrace behavioral authorship analysis.",
+                    },
+                )
+
     except HTTPException:
         raise
     except Exception as exc:
