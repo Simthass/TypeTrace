@@ -61,6 +61,7 @@ def create_application() -> FastAPI:
     from app.api.routes.sessions import router as sessions_router
     from app.api.routes.certificates import router as certificates_router
     from app.api.routes.student import router as student_router
+    from app.api.routes.teacher import router as teacher_router
 
     app.include_router(
         health_router,
@@ -84,6 +85,12 @@ def create_application() -> FastAPI:
         student_router,
         prefix=settings.API_V1_PREFIX,
         tags=["Student"],
+    )
+
+    app.include_router(
+        teacher_router,
+        prefix=settings.API_V1_PREFIX,
+        tags=["Teacher"],
     )
 
     app.include_router(

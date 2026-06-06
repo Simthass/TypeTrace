@@ -1,351 +1,503 @@
-// src/pages/teacher/TeacherDashboard.tsx
-import React, { useEffect, useState } from "react";
+// frontend/src/pages/teacher/TeacherDashboard.tsx
+
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import clsx from "clsx";
-import { api } from "../../lib/api";
-import { colors } from "../../styles/colors";
+
+import { api, getApiErrorMessage } from "../../lib/api";
 import { ROUTES } from "../../constants/routes";
+import { colors, brand } from "../../styles/colors";
+import type {
+  TeacherDashboardResponse,
+  TeacherSubmission,
+} from "../../types/teacher";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface TeacherStats {
-  total_students: number;
-  total_submissions: number;
-  avg_confidence: number;
-  suspicious_pct: number;
-  pending_reviews: number;
-  total_courses: number;
+function ArrowIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </svg>
+  );
 }
 
-interface RecentSession {
-  id: number;
-  title: string;
-  student_name: string;
-  student_id: string;
-  course_name: string;
-  classification: string;
-  confidence: number;
-  risk_level: string;
-  review_status: string;
-  date: string;
+function PlusIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
+function badgeStyle(submission: TeacherSubmission) {
+  if (submission.classification_bucket === "HUMAN") {
+    return {
+      label: "Human",
+      bg: brand.humanBg,
+      text: brand.humanText,
+      border: brand.humanAccent,
+    };
+  }
 
-type RiskLevel = "LOW" | "MEDIUM" | "HIGH";
-type ReviewStatus = "PENDING" | "APPROVED" | "FLAGGED" | "UNDER_REVIEW";
+  if (submission.classification_bucket === "SUSPICIOUS") {
+    return {
+      label: "Review",
+      bg: brand.suspiciousBg,
+      text: brand.suspiciousText,
+      border: brand.suspiciousAccent,
+    };
+  }
 
-const RISK_STYLES: Record<
-  RiskLevel,
-  { bg: string; text: string; border: string }
-> = {
-  LOW: { bg: "#f0fdf4", text: "#15803d", border: "#bbf7d0" },
-  MEDIUM: { bg: "#fefce8", text: "#a16207", border: "#fef08a" },
-  HIGH: { bg: "#fef2f2", text: "#b91c1c", border: "#fecaca" },
-};
-
-const REVIEW_STYLES: Record<ReviewStatus, { bg: string; text: string }> = {
-  PENDING: { bg: "#f8fafc", text: "#64748b" },
-  APPROVED: { bg: "#f0fdf4", text: "#15803d" },
-  FLAGGED: { bg: "#fef2f2", text: "#b91c1c" },
-  UNDER_REVIEW: { bg: "#fefce8", text: "#a16207" },
-};
-
-function riskStyle(r: string) {
-  return RISK_STYLES[r as RiskLevel] ?? RISK_STYLES.LOW;
-}
-function reviewStyle(r: string) {
-  return REVIEW_STYLES[r as ReviewStatus] ?? REVIEW_STYLES.PENDING;
+  return {
+    label: "High Risk",
+    bg: brand.aiBg,
+    text: brand.aiText,
+    border: brand.aiAccent,
+  };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB-COMPONENTS
-// ─────────────────────────────────────────────────────────────────────────────
-
-function StatCard({
+function MetricCard({
   label,
   value,
   sub,
-  accent = colors.text.primary,
 }: {
   label: string;
   value: string | number;
   sub?: string;
-  accent?: string;
 }) {
   return (
     <div
-      className="flex flex-col gap-2 p-5 bg-white rounded-xl border"
+      className="rounded-md border bg-white px-4 py-3 shadow-sm"
       style={{ borderColor: colors.surface[200] }}
     >
-      <span
-        className="text-[11px] font-bold uppercase tracking-widest"
+      <p
+        className="text-[11px] font-semibold uppercase tracking-[0.12em]"
         style={{ color: colors.text.secondary }}
       >
         {label}
-      </span>
-      <span
-        className="text-[28px] font-bold tracking-tight"
-        style={{ color: accent }}
+      </p>
+      <p
+        className="mt-2 text-2xl font-semibold"
+        style={{ color: colors.text.primary }}
       >
         {value}
-      </span>
+      </p>
       {sub && (
-        <span className="text-[12px]" style={{ color: colors.text.secondary }}>
+        <p
+          className="mt-1 text-[12px]"
+          style={{ color: colors.text.secondary }}
+        >
           {sub}
-        </span>
+        </p>
       )}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PAGE
-// ─────────────────────────────────────────────────────────────────────────────
+function SubmissionRow({ submission }: { submission: TeacherSubmission }) {
+  const style = badgeStyle(submission);
+
+  return (
+    <div
+      className="flex flex-col gap-3 border-b px-5 py-4 last:border-b-0 md:flex-row md:items-center md:justify-between"
+      style={{ borderColor: colors.surface[200] }}
+    >
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3
+            className="truncate text-[14px] font-semibold"
+            style={{ color: colors.text.primary }}
+          >
+            {submission.title}
+          </h3>
+          <span
+            className="rounded-md border px-2 py-0.5 text-[11px] font-semibold"
+            style={{
+              background: style.bg,
+              color: style.text,
+              borderColor: style.border,
+            }}
+          >
+            {style.label}
+          </span>
+        </div>
+        <p
+          className="mt-1 text-[12px]"
+          style={{ color: colors.text.secondary }}
+        >
+          {submission.student_name} · {submission.course_code} ·{" "}
+          {submission.created_at}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-[12px]">
+        <span style={{ color: colors.text.secondary }}>
+          {submission.confidence}% confidence
+        </span>
+        <span style={{ color: colors.text.secondary }}>
+          {submission.review_status}
+        </span>
+        <Link
+          to={`/teacher/review/${submission.id}`}
+          className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 font-semibold"
+          style={{
+            borderColor: colors.surface[200],
+            color: colors.text.primary,
+          }}
+        >
+          Review <ArrowIcon />
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 export default function TeacherDashboard() {
-  const [stats, setStats] = useState<TeacherStats | null>(null);
-  const [sessions, setSessions] = useState<RecentSession[]>([]);
+  const [data, setData] = useState<TeacherDashboardResponse | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const load = async () => {
+    let mounted = true;
+
+    async function loadDashboard() {
+      setIsLoading(true);
+      setApiError(null);
+
       try {
-        const [statsRes, sessionsRes] = await Promise.all([
-          api.get<TeacherStats>("/teacher/stats"),
-          api.get<{ sessions: RecentSession[] }>("/teacher/sessions"),
-        ]);
-        setStats(statsRes.data);
-        setSessions(sessionsRes.data.sessions.slice(0, 10));
-      } catch (e) {
-        console.error("Failed to load teacher dashboard:", e);
+        const response =
+          await api.get<TeacherDashboardResponse>("/teacher/dashboard");
+        if (!mounted) return;
+        setData(response.data);
+      } catch (error) {
+        if (!mounted) return;
+        setApiError(getApiErrorMessage(error));
       } finally {
-        setIsLoading(false);
+        if (mounted) setIsLoading(false);
       }
+    }
+
+    loadDashboard();
+
+    return () => {
+      mounted = false;
     };
-    load();
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <span
-          className="text-[13px] font-mono tracking-widest uppercase"
-          style={{ color: colors.text.secondary }}
-        >
-          Loading...
-        </span>
-      </div>
+  const summary = data?.summary;
+
+  const reviewCompletionRate = useMemo(() => {
+    if (!summary || summary.total_submissions === 0) return 0;
+    return Math.round(
+      ((summary.approved_reviews + summary.flagged_reviews) /
+        summary.total_submissions) *
+        100,
     );
-  }
+  }, [summary]);
 
   return (
-    <div className="p-6 max-w-[1200px] mx-auto">
-      {/* ── Stat cards ── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-        <StatCard label="Courses" value={stats?.total_courses ?? 0} />
-        <StatCard label="Students" value={stats?.total_students ?? 0} />
-        <StatCard label="Submissions" value={stats?.total_submissions ?? 0} />
-        <StatCard
-          label="Avg Confidence"
-          value={`${stats?.avg_confidence ?? 0}%`}
-          accent="#0369a1"
-        />
-        <StatCard
-          label="Suspicious"
-          value={`${stats?.suspicious_pct ?? 0}%`}
-          accent={stats && stats.suspicious_pct > 20 ? "#b91c1c" : "#a16207"}
-        />
-        <StatCard
-          label="Pending Reviews"
-          value={stats?.pending_reviews ?? 0}
-          accent={
-            stats && stats.pending_reviews > 0 ? "#b91c1c" : colors.text.primary
-          }
-          sub={
-            stats && stats.pending_reviews > 0 ? "Needs attention" : "All clear"
-          }
-        />
-      </div>
+    <div
+      className="min-h-screen px-6 py-8"
+      style={{ background: colors.surface[50] }}
+    >
+      <div className="mx-auto max-w-7xl">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div>
+            <p
+              className="text-[12px] font-semibold uppercase tracking-[0.18em]"
+              style={{ color: colors.text.secondary }}
+            >
+              Teacher workspace
+            </p>
+            <h1
+              className="mt-2 text-2xl font-semibold"
+              style={{ color: colors.text.primary }}
+            >
+              Welcome back
+              {data?.teacher?.first_name ? `, ${data.teacher.first_name}` : ""}
+            </h1>
+            <p
+              className="mt-2 max-w-2xl text-[14px]"
+              style={{ color: colors.text.secondary }}
+            >
+              Manage courses, review student submissions, and verify behavioral
+              authorship evidence.
+            </p>
+          </div>
 
-      {/* ── Recent submissions table ── */}
-      <div
-        className="bg-white rounded-xl border overflow-hidden"
-        style={{ borderColor: colors.surface[200] }}
-      >
-        <div
-          className="flex items-center justify-between px-5 py-4 border-b"
-          style={{ borderColor: colors.surface[200] }}
-        >
-          <h2
-            className="text-[14px] font-semibold"
-            style={{ color: colors.text.primary }}
-          >
-            Recent Submissions
-          </h2>
           <Link
-            to="/teacher/submissions"
-            className="text-[12px] font-medium"
-            style={{ color: "#0369a1" }}
+            to={ROUTES.TEACHER_COURSES}
+            className="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-[13px] font-semibold text-white"
+            style={{ background: colors.brand }}
           >
-            View all →
+            <PlusIcon />
+            Create Course
           </Link>
         </div>
 
-        {sessions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <span
-              className="text-[13px]"
-              style={{ color: colors.text.secondary }}
-            >
-              No submissions yet. Share a course invite code with your students.
-            </span>
-            <Link
-              to={ROUTES.TEACHER_COURSES}
-              className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white"
-              style={{ background: "#0369a1" }}
-            >
-              Manage Courses
-            </Link>
+        {apiError && (
+          <div
+            className="mt-6 rounded-md border px-4 py-3 text-[13px]"
+            style={{
+              borderColor: brand.aiAccent,
+              background: brand.aiBg,
+              color: brand.aiText,
+            }}
+          >
+            {apiError}
+          </div>
+        )}
+
+        {isLoading ? (
+          <div
+            className="mt-6 rounded-md border bg-white px-5 py-10 text-center text-[13px]"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.secondary,
+            }}
+          >
+            Loading teacher dashboard...
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr
-                  style={{
-                    borderBottom: `1px solid ${colors.surface[200]}`,
-                    background: colors.surface[50],
-                  }}
-                >
-                  {[
-                    "Student",
-                    "Course",
-                    "Title",
-                    "Classification",
-                    "Risk",
-                    "Status",
-                    "Date",
-                    "",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-widest"
+          <>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <MetricCard
+                label="Courses"
+                value={summary?.total_courses ?? 0}
+                sub={`${summary?.total_students ?? 0} enrolled students`}
+              />
+              <MetricCard
+                label="Submissions"
+                value={summary?.total_submissions ?? 0}
+                sub={`${summary?.pending_reviews ?? 0} pending reviews`}
+              />
+              <MetricCard
+                label="Review Progress"
+                value={`${reviewCompletionRate}%`}
+                sub={`${summary?.approved_reviews ?? 0} approved · ${summary?.flagged_reviews ?? 0} flagged`}
+              />
+              <MetricCard
+                label="Avg Confidence"
+                value={`${summary?.avg_confidence ?? 0}%`}
+                sub={`${summary?.avg_wpm ?? 0} average WPM`}
+              />
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              <div
+                className="rounded-md border bg-white p-5 shadow-sm lg:col-span-2"
+                style={{ borderColor: colors.surface[200] }}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2
+                      className="text-[15px] font-semibold"
+                      style={{ color: colors.text.primary }}
+                    >
+                      Recent submissions
+                    </h2>
+                    <p
+                      className="mt-1 text-[13px]"
                       style={{ color: colors.text.secondary }}
                     >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.map((s) => {
-                  const rs = riskStyle(s.risk_level);
-                  const rvs = reviewStyle(s.review_status);
-                  return (
-                    <tr
-                      key={s.id}
-                      className="border-b last:border-0 hover:bg-[#fafafa] transition-colors"
-                      style={{ borderColor: colors.surface[100] }}
+                      Latest course-linked writing evidence from your students.
+                    </p>
+                  </div>
+
+                  <Link
+                    to={ROUTES.TEACHER_SUBMISSIONS}
+                    className="text-[13px] font-semibold"
+                    style={{ color: colors.brand }}
+                  >
+                    View all
+                  </Link>
+                </div>
+
+                <div
+                  className="mt-4 overflow-hidden rounded-md border"
+                  style={{ borderColor: colors.surface[200] }}
+                >
+                  {data?.recent_submissions?.length ? (
+                    data.recent_submissions.map((submission) => (
+                      <SubmissionRow
+                        key={submission.id}
+                        submission={submission}
+                      />
+                    ))
+                  ) : (
+                    <div className="px-5 py-8 text-center">
+                      <p
+                        className="text-[14px] font-semibold"
+                        style={{ color: colors.text.primary }}
+                      >
+                        No submissions yet
+                      </p>
+                      <p
+                        className="mt-1 text-[13px]"
+                        style={{ color: colors.text.secondary }}
+                      >
+                        Share a course invite code so students can submit
+                        writing evidence.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div
+                className="rounded-md border bg-white p-5 shadow-sm"
+                style={{ borderColor: colors.surface[200] }}
+              >
+                <h2
+                  className="text-[15px] font-semibold"
+                  style={{ color: colors.text.primary }}
+                >
+                  Classification mix
+                </h2>
+                <p
+                  className="mt-1 text-[13px]"
+                  style={{ color: colors.text.secondary }}
+                >
+                  Distribution of student submission outcomes.
+                </p>
+
+                <div className="mt-4 space-y-3">
+                  {[
+                    [
+                      "Human",
+                      summary?.human_submissions ?? 0,
+                      brand.humanBg,
+                      brand.humanText,
+                    ],
+                    [
+                      "Review",
+                      summary?.suspicious_submissions ?? 0,
+                      brand.suspiciousBg,
+                      brand.suspiciousText,
+                    ],
+                    [
+                      "High Risk",
+                      summary?.synthetic_submissions ?? 0,
+                      brand.aiBg,
+                      brand.aiText,
+                    ],
+                  ].map(([label, value, bg, text]) => (
+                    <div
+                      key={String(label)}
+                      className="flex items-center justify-between rounded-md px-3 py-2"
+                      style={{ background: String(bg), color: String(text) }}
                     >
-                      <td
-                        className="px-4 py-3 font-medium"
+                      <span className="text-[13px] font-semibold">{label}</span>
+                      <span className="text-[13px] font-bold">{value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <Link
+                  to={ROUTES.TEACHER_STUDENTS}
+                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md border px-3 py-2 text-[13px] font-semibold"
+                  style={{
+                    borderColor: colors.surface[200],
+                    color: colors.text.primary,
+                  }}
+                >
+                  View students <ArrowIcon />
+                </Link>
+              </div>
+            </div>
+
+            <div
+              className="mt-6 rounded-md border bg-white p-5 shadow-sm"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2
+                    className="text-[15px] font-semibold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    Active courses
+                  </h2>
+                  <p
+                    className="mt-1 text-[13px]"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    Your most recent courses and invite codes.
+                  </p>
+                </div>
+
+                <Link
+                  to={ROUTES.TEACHER_COURSES}
+                  className="text-[13px] font-semibold"
+                  style={{ color: colors.brand }}
+                >
+                  Manage
+                </Link>
+              </div>
+
+              <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                {data?.courses?.length ? (
+                  data.courses.map((course) => (
+                    <Link
+                      key={course.id}
+                      to={`/teacher/courses/${course.id}`}
+                      className="rounded-md border px-4 py-3"
+                      style={{
+                        borderColor: colors.surface[200],
+                        background: "#FFFFFF",
+                      }}
+                    >
+                      <p
+                        className="text-[14px] font-semibold"
                         style={{ color: colors.text.primary }}
                       >
-                        <div>{s.student_name}</div>
-                        <div
-                          className="text-[11px] font-mono"
-                          style={{ color: colors.text.secondary }}
-                        >
-                          {s.student_id}
-                        </div>
-                      </td>
-                      <td
-                        className="px-4 py-3"
+                        {course.course_name}
+                      </p>
+                      <p
+                        className="mt-1 text-[12px]"
                         style={{ color: colors.text.secondary }}
                       >
-                        {s.course_name}
-                      </td>
-                      <td
-                        className="px-4 py-3 max-w-[180px] truncate"
-                        style={{ color: colors.text.primary }}
-                      >
-                        {s.title}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className="font-mono font-semibold text-[12px]"
-                          style={{ color: colors.text.primary }}
-                        >
-                          {s.classification}
-                        </span>
-                        <span
-                          className="ml-1 text-[11px]"
-                          style={{ color: colors.text.secondary }}
-                        >
-                          {s.confidence}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border"
-                          style={{
-                            background: rs.bg,
-                            color: rs.text,
-                            borderColor: rs.border,
-                          }}
-                        >
-                          {s.risk_level}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className="px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase"
-                          style={{ background: rvs.bg, color: rvs.text }}
-                        >
-                          {s.review_status}
-                        </span>
-                      </td>
-                      <td
-                        className="px-4 py-3 text-[12px]"
+                        {course.course_code} · Invite {course.invite_code}
+                      </p>
+                      <p
+                        className="mt-3 text-[12px]"
                         style={{ color: colors.text.secondary }}
                       >
-                        {s.date}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Link
-                          to={`/teacher/review/${s.id}`}
-                          className="px-3 py-1.5 rounded-md text-[12px] font-semibold border transition-colors"
-                          style={{
-                            borderColor: colors.surface[200],
-                            color: colors.text.primary,
-                          }}
-                          onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLElement).style.borderColor =
-                              "#0369a1";
-                            (e.currentTarget as HTMLElement).style.color =
-                              "#0369a1";
-                          }}
-                          onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLElement).style.borderColor =
-                              colors.surface[200];
-                            (e.currentTarget as HTMLElement).style.color =
-                              colors.text.primary;
-                          }}
-                        >
-                          Review
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        {course.student_count} students ·{" "}
+                        {course.submission_count} submissions
+                      </p>
+                    </Link>
+                  ))
+                ) : (
+                  <div
+                    className="rounded-md border px-4 py-8 text-center lg:col-span-3"
+                    style={{ borderColor: colors.surface[200] }}
+                  >
+                    <p
+                      className="text-[13px]"
+                      style={{ color: colors.text.secondary }}
+                    >
+                      No courses created yet.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

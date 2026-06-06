@@ -1,55 +1,26 @@
-// src/pages/teacher/TeacherCoursePage.tsx
-// =============================================================================
-// Single-course view: shows every enrolled student, their submission count
-// for THIS course, avg confidence, and links to their sessions.
-// =============================================================================
+// frontend/src/pages/teacher/TeacherCoursesPage.tsx
 
-import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { api } from "../../lib/api";
-import { colors } from "../../styles/colors";
+import { FormEvent, useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+
+import { api, getApiErrorMessage } from "../../lib/api";
 import { ROUTES } from "../../constants/routes";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface CourseInfo {
-  id: number;
-  course_name: string;
-  course_code: string;
-  invite_code: string;
-}
-
-interface CourseStudent {
-  user_id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  student_id: string;
-  joined_at: string;
-  submission_count: number;
-  avg_confidence: number;
-  last_submission: string;
-  suspicious_count: number;
-  pending_reviews: number;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ICONS
-// ─────────────────────────────────────────────────────────────────────────────
+import { colors, brand } from "../../styles/colors";
+import type {
+  TeacherCourse,
+  TeacherCourseDetailResponse,
+  TeacherCoursesResponse,
+} from "../../types/teacher";
 
 function CopyIcon() {
   return (
     <svg
-      width="13"
-      height="13"
+      width="14"
+      height="14"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
     >
       <rect x="9" y="9" width="13" height="13" rx="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
@@ -57,400 +28,537 @@ function CopyIcon() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PAGE
-// ─────────────────────────────────────────────────────────────────────────────
-
-const TEACHER_BLUE = "#0369a1";
-
-export default function TeacherCoursePage() {
-  const { courseId } = useParams<{ courseId: string }>();
-  const [course, setCourse] = useState<CourseInfo | null>(null);
-  const [students, setStudents] = useState<CourseStudent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+function CourseCard({ course }: { course: TeacherCourse }) {
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    if (!courseId) return;
-    api
-      .get<{ course: CourseInfo; students: CourseStudent[] }>(
-        `/courses/${courseId}/students`,
-      )
-      .then((r) => {
-        setCourse(r.data.course);
-        setStudents(r.data.students);
-      })
-      .catch((e: unknown) => {
-        const ax = e as { response?: { data?: { detail?: string } } };
-        setError(ax.response?.data?.detail ?? "Failed to load course.");
-      })
-      .finally(() => setIsLoading(false));
-  }, [courseId]);
-
-  const handleCopyInvite = async () => {
-    if (!course) return;
+  const copyInvite = async () => {
     await navigator.clipboard.writeText(course.invite_code);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    window.setTimeout(() => setCopied(false), 1200);
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <span
-          className="text-[13px] font-mono tracking-widest uppercase"
+  return (
+    <div
+      className="rounded-md border bg-white shadow-sm"
+      style={{ borderColor: colors.surface[200] }}
+    >
+      <div
+        className="border-b px-5 py-4"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <h2
+          className="text-[15px] font-semibold"
+          style={{ color: colors.text.primary }}
+        >
+          {course.course_name}
+        </h2>
+        <p
+          className="mt-1 text-[12px]"
           style={{ color: colors.text.secondary }}
         >
-          Loading...
-        </span>
-      </div>
-    );
-  }
-
-  if (error || !course) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <p className="text-[14px]" style={{ color: "#b91c1c" }}>
-          {error ?? "Course not found."}
+          {course.course_code} · Created {course.created_at}
         </p>
-        <Link
-          to={ROUTES.TEACHER_COURSES}
-          className="text-[13px] font-semibold"
-          style={{ color: TEACHER_BLUE }}
-        >
-          ← Back to Courses
-        </Link>
-      </div>
-    );
-  }
-
-  const totalSubmissions = students.reduce(
-    (sum, s) => sum + s.submission_count,
-    0,
-  );
-  const pendingTotal = students.reduce((sum, s) => sum + s.pending_reviews, 0);
-  const suspiciousTotal = students.reduce(
-    (sum, s) => sum + s.suspicious_count,
-    0,
-  );
-  const avgConf =
-    students.length > 0
-      ? (
-          students.reduce((sum, s) => sum + s.avg_confidence, 0) /
-          students.length
-        ).toFixed(1)
-      : "—";
-
-  return (
-    <div className="p-6 max-w-[1100px] mx-auto">
-      {/* Breadcrumb */}
-      <div
-        className="flex items-center gap-2 text-[12px] mb-5"
-        style={{ color: colors.text.secondary }}
-      >
-        <Link to={ROUTES.TEACHER_COURSES} className="hover:underline">
-          Courses
-        </Link>
-        <span>›</span>
-        <span style={{ color: colors.text.primary }}>{course.course_name}</span>
       </div>
 
-      {/* Course header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1
-              className="text-[20px] font-semibold"
-              style={{ color: colors.text.primary }}
-            >
-              {course.course_name}
-            </h1>
-            <span
-              className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono"
-              style={{ background: "#f0f9ff", color: TEACHER_BLUE }}
-            >
-              {course.course_code}
-            </span>
-          </div>
-          <p
-            className="text-[13px] mt-1"
-            style={{ color: colors.text.secondary }}
-          >
-            {students.length} enrolled student{students.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-
-        {/* Invite code */}
-        <div
-          className="flex items-center gap-3 px-4 py-2.5 rounded-xl border shrink-0"
-          style={{ background: "#f0f9ff", borderColor: "#bae6fd" }}
-        >
-          <div>
-            <div
-              className="text-[10px] font-bold uppercase tracking-widest mb-0.5"
-              style={{ color: "#0284c7" }}
-            >
-              Invite Code
-            </div>
-            <div
-              className="font-mono text-[15px] font-bold tracking-widest"
-              style={{ color: TEACHER_BLUE }}
-            >
-              {course.invite_code}
-            </div>
-          </div>
-          <button
-            onClick={handleCopyInvite}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors"
-            style={{
-              background: copied ? "#f0fdf4" : "white",
-              color: copied ? "#15803d" : TEACHER_BLUE,
-              border: `1px solid ${copied ? "#bbf7d0" : "#bae6fd"}`,
-            }}
-          >
-            <CopyIcon />
-            {copied ? "Copied!" : "Copy"}
-          </button>
-        </div>
-      </div>
-
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid gap-3 px-5 py-4 sm:grid-cols-3">
         {[
-          { label: "Total Submissions", value: totalSubmissions },
-          {
-            label: "Avg Confidence",
-            value: `${avgConf}%`,
-            accent: TEACHER_BLUE,
-          },
-          {
-            label: "Suspicious",
-            value: suspiciousTotal,
-            accent: suspiciousTotal > 0 ? "#b91c1c" : colors.text.primary,
-          },
-          {
-            label: "Pending Reviews",
-            value: pendingTotal,
-            accent: pendingTotal > 0 ? "#a16207" : colors.text.primary,
-          },
-        ].map(({ label, value, accent }) => (
-          <div
-            key={label}
-            className="bg-white rounded-xl border p-4"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <div
-              className="text-[10px] font-bold uppercase tracking-widest mb-1"
+          ["Students", course.student_count],
+          ["Submissions", course.submission_count],
+          ["Pending", course.pending_count],
+          ["Avg WPM", course.avg_wpm],
+          ["Confidence", `${course.avg_confidence}%`],
+          ["Flagged", course.flagged_count],
+        ].map(([label, value]) => (
+          <div key={label}>
+            <p
+              className="text-[10px] font-semibold uppercase tracking-[0.12em]"
               style={{ color: colors.text.secondary }}
             >
               {label}
-            </div>
-            <div
-              className="text-[22px] font-bold"
-              style={{ color: accent ?? colors.text.primary }}
+            </p>
+            <p
+              className="mt-1 text-[13px] font-semibold"
+              style={{ color: colors.text.primary }}
             >
               {value}
-            </div>
+            </p>
           </div>
         ))}
       </div>
 
-      {/* Students table */}
       <div
-        className="bg-white rounded-xl border overflow-hidden"
+        className="border-t px-5 py-4"
         style={{ borderColor: colors.surface[200] }}
       >
-        <div
-          className="px-5 py-4 border-b flex items-center justify-between"
+        <p
+          className="text-[10px] font-semibold uppercase tracking-[0.12em]"
+          style={{ color: colors.text.secondary }}
+        >
+          Invite Code
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span
+            className="rounded-md border px-3 py-2 font-mono text-[13px] font-semibold"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.primary,
+            }}
+          >
+            {course.invite_code}
+          </span>
+          <button
+            type="button"
+            onClick={copyInvite}
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-[12px] font-semibold"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.primary,
+            }}
+          >
+            <CopyIcon />
+            {copied ? "Copied" : "Copy"}
+          </button>
+          <Link
+            to={`/teacher/courses/${course.id}`}
+            className="rounded-md px-3 py-2 text-[12px] font-semibold text-white"
+            style={{ background: colors.brand }}
+          >
+            Open Course
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CourseDetail() {
+  const { courseId } = useParams<{ courseId: string }>();
+  const [data, setData] = useState<TeacherCourseDetailResponse | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadCourse() {
+      setIsLoading(true);
+      setApiError(null);
+
+      try {
+        const response = await api.get<TeacherCourseDetailResponse>(
+          `/teacher/courses/${courseId}`,
+        );
+        if (!mounted) return;
+        setData(response.data);
+      } catch (error) {
+        if (!mounted) return;
+        setApiError(getApiErrorMessage(error));
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+
+    loadCourse();
+
+    return () => {
+      mounted = false;
+    };
+  }, [courseId]);
+
+  return (
+    <div
+      className="min-h-screen px-6 py-8"
+      style={{ background: colors.surface[50] }}
+    >
+      <div className="mx-auto max-w-7xl">
+        <Link
+          to={ROUTES.TEACHER_COURSES}
+          className="text-[13px] font-semibold"
+          style={{ color: colors.brand }}
+        >
+          Back to courses
+        </Link>
+
+        {apiError && (
+          <div
+            className="mt-6 rounded-md border px-4 py-3 text-[13px]"
+            style={{
+              borderColor: brand.aiAccent,
+              background: brand.aiBg,
+              color: brand.aiText,
+            }}
+          >
+            {apiError}
+          </div>
+        )}
+
+        {isLoading ? (
+          <div
+            className="mt-6 rounded-md border bg-white px-5 py-10 text-center text-[13px]"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.secondary,
+            }}
+          >
+            Loading course...
+          </div>
+        ) : data ? (
+          <>
+            <div
+              className="mt-4 rounded-md border bg-white p-5 shadow-sm"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <h1
+                className="text-2xl font-semibold"
+                style={{ color: colors.text.primary }}
+              >
+                {data.course.course_name}
+              </h1>
+              <p
+                className="mt-2 text-[14px]"
+                style={{ color: colors.text.secondary }}
+              >
+                {data.course.course_code} · Invite code{" "}
+                {data.course.invite_code}
+              </p>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-4">
+                {[
+                  ["Students", data.course.student_count],
+                  ["Submissions", data.course.submission_count],
+                  ["Pending Reviews", data.course.pending_count],
+                  ["Avg Confidence", `${data.course.avg_confidence}%`],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="rounded-md border px-3 py-2"
+                    style={{ borderColor: colors.surface[200] }}
+                  >
+                    <p
+                      className="text-[10px] font-semibold uppercase tracking-[0.12em]"
+                      style={{ color: colors.text.secondary }}
+                    >
+                      {label}
+                    </p>
+                    <p
+                      className="mt-1 text-[14px] font-semibold"
+                      style={{ color: colors.text.primary }}
+                    >
+                      {value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              <div
+                className="rounded-md border bg-white p-5 shadow-sm"
+                style={{ borderColor: colors.surface[200] }}
+              >
+                <h2
+                  className="text-[15px] font-semibold"
+                  style={{ color: colors.text.primary }}
+                >
+                  Enrolled students
+                </h2>
+
+                <div className="mt-4 space-y-3">
+                  {data.students.length ? (
+                    data.students.map((student) => (
+                      <div
+                        key={student.id}
+                        className="rounded-md border px-3 py-3"
+                        style={{ borderColor: colors.surface[200] }}
+                      >
+                        <p
+                          className="text-[13px] font-semibold"
+                          style={{ color: colors.text.primary }}
+                        >
+                          {student.student_name}
+                        </p>
+                        <p
+                          className="mt-1 text-[12px]"
+                          style={{ color: colors.text.secondary }}
+                        >
+                          {student.student_id} · {student.email}
+                        </p>
+                        <p
+                          className="mt-2 text-[12px]"
+                          style={{ color: colors.text.secondary }}
+                        >
+                          {student.submission_count} submissions ·{" "}
+                          {student.avg_confidence}% avg confidence
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p
+                      className="text-[13px]"
+                      style={{ color: colors.text.secondary }}
+                    >
+                      No students joined yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div
+                className="rounded-md border bg-white p-5 shadow-sm"
+                style={{ borderColor: colors.surface[200] }}
+              >
+                <h2
+                  className="text-[15px] font-semibold"
+                  style={{ color: colors.text.primary }}
+                >
+                  Latest submissions
+                </h2>
+
+                <div className="mt-4 space-y-3">
+                  {data.submissions.length ? (
+                    data.submissions.map((submission) => (
+                      <div
+                        key={submission.id}
+                        className="rounded-md border px-3 py-3"
+                        style={{ borderColor: colors.surface[200] }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p
+                              className="text-[13px] font-semibold"
+                              style={{ color: colors.text.primary }}
+                            >
+                              {submission.title}
+                            </p>
+                            <p
+                              className="mt-1 text-[12px]"
+                              style={{ color: colors.text.secondary }}
+                            >
+                              {submission.student_name} ·{" "}
+                              {submission.created_at}
+                            </p>
+                          </div>
+                          <Link
+                            to={`/teacher/review/${submission.id}`}
+                            className="text-[12px] font-semibold"
+                            style={{ color: colors.brand }}
+                          >
+                            Review
+                          </Link>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p
+                      className="text-[13px]"
+                      style={{ color: colors.text.secondary }}
+                    >
+                      No submissions yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export default function TeacherCoursesPage() {
+  const { courseId } = useParams<{ courseId?: string }>();
+
+  const [courses, setCourses] = useState<TeacherCourse[]>([]);
+  const [courseName, setCourseName] = useState("");
+  const [courseCode, setCourseCode] = useState("");
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+
+  const loadCourses = async () => {
+    setIsLoading(true);
+    setApiError(null);
+
+    try {
+      const response =
+        await api.get<TeacherCoursesResponse>("/teacher/courses");
+      setCourses(response.data.courses || []);
+    } catch (error) {
+      setApiError(getApiErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!courseId) loadCourses();
+  }, [courseId]);
+
+  if (courseId) {
+    return <CourseDetail />;
+  }
+
+  const handleCreateCourse = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!courseName.trim() || !courseCode.trim()) {
+      setApiError("Course name and course code are required.");
+      return;
+    }
+
+    setIsCreating(true);
+    setApiError(null);
+    setSuccessMsg(null);
+
+    try {
+      await api.post("/teacher/courses", {
+        course_name: courseName.trim(),
+        course_code: courseCode.trim(),
+      });
+
+      setCourseName("");
+      setCourseCode("");
+      setSuccessMsg("Course created successfully.");
+      await loadCourses();
+    } catch (error) {
+      setApiError(getApiErrorMessage(error));
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <div
+      className="min-h-screen px-6 py-8"
+      style={{ background: colors.surface[50] }}
+    >
+      <div className="mx-auto max-w-7xl">
+        <div>
+          <p
+            className="text-[12px] font-semibold uppercase tracking-[0.18em]"
+            style={{ color: colors.text.secondary }}
+          >
+            Course management
+          </p>
+          <h1
+            className="mt-2 text-2xl font-semibold"
+            style={{ color: colors.text.primary }}
+          >
+            Courses
+          </h1>
+          <p
+            className="mt-2 max-w-2xl text-[14px]"
+            style={{ color: colors.text.secondary }}
+          >
+            Create courses, share invite codes, and monitor student submissions.
+          </p>
+        </div>
+
+        <form
+          onSubmit={handleCreateCourse}
+          className="mt-6 rounded-md border bg-white p-5 shadow-sm"
           style={{ borderColor: colors.surface[200] }}
         >
           <h2
-            className="text-[14px] font-semibold"
+            className="text-[15px] font-semibold"
             style={{ color: colors.text.primary }}
           >
-            Enrolled Students
+            Create new course
           </h2>
-          <Link
-            to={`/teacher/submissions?course=${course.id}`}
-            className="text-[12px] font-semibold"
-            style={{ color: TEACHER_BLUE }}
-          >
-            View all submissions →
-          </Link>
-        </div>
 
-        {students.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-2">
-            <p
-              className="text-[14px] font-semibold"
+          <div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px_auto]">
+            <input
+              value={courseName}
+              onChange={(event) => setCourseName(event.target.value)}
+              placeholder="Course name"
+              className="rounded-md border px-3 py-2 text-[13px] outline-none"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.primary,
+              }}
+            />
+            <input
+              value={courseCode}
+              onChange={(event) => setCourseCode(event.target.value)}
+              placeholder="Course code"
+              className="rounded-md border px-3 py-2 text-[13px] outline-none"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.primary,
+              }}
+            />
+            <button
+              type="submit"
+              disabled={isCreating}
+              className="rounded-md px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-60"
+              style={{ background: colors.brand }}
+            >
+              {isCreating ? "Creating..." : "Create"}
+            </button>
+          </div>
+        </form>
+
+        {apiError && (
+          <div
+            className="mt-4 rounded-md border px-4 py-3 text-[13px]"
+            style={{
+              borderColor: brand.aiAccent,
+              background: brand.aiBg,
+              color: brand.aiText,
+            }}
+          >
+            {apiError}
+          </div>
+        )}
+
+        {successMsg && (
+          <div
+            className="mt-4 rounded-md border px-4 py-3 text-[13px]"
+            style={{
+              borderColor: brand.humanAccent,
+              background: brand.humanBg,
+              color: brand.humanText,
+            }}
+          >
+            {successMsg}
+          </div>
+        )}
+
+        {isLoading ? (
+          <div
+            className="mt-6 rounded-md border bg-white px-5 py-10 text-center text-[13px]"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.secondary,
+            }}
+          >
+            Loading courses...
+          </div>
+        ) : courses.length === 0 ? (
+          <div
+            className="mt-6 rounded-md border bg-white px-5 py-10 text-center"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <h2
+              className="text-[15px] font-semibold"
               style={{ color: colors.text.primary }}
             >
-              No students enrolled yet
-            </p>
-            <p className="text-[13px]" style={{ color: colors.text.secondary }}>
-              Share the invite code above with your students.
+              No courses yet
+            </h2>
+            <p
+              className="mt-2 text-[13px]"
+              style={{ color: colors.text.secondary }}
+            >
+              Create your first course and share the invite code with students.
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr
-                  style={{
-                    background: colors.surface[50],
-                    borderBottom: `1px solid ${colors.surface[200]}`,
-                  }}
-                >
-                  {[
-                    "Student",
-                    "Student ID",
-                    "Joined",
-                    "Submissions",
-                    "Avg Conf.",
-                    "Suspicious",
-                    "Pending",
-                    "Last Active",
-                    "",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-widest"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((s) => (
-                  <tr
-                    key={s.user_id}
-                    className="border-b last:border-0 hover:bg-[#fafafa] transition-colors"
-                    style={{ borderColor: colors.surface[100] }}
-                  >
-                    <td className="px-4 py-3">
-                      <div
-                        className="font-medium"
-                        style={{ color: colors.text.primary }}
-                      >
-                        {s.first_name} {s.last_name}
-                      </div>
-                      <div
-                        className="text-[11px]"
-                        style={{ color: colors.text.secondary }}
-                      >
-                        {s.email}
-                      </div>
-                    </td>
-                    <td
-                      className="px-4 py-3 font-mono text-[12px]"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      {s.student_id ?? "—"}
-                    </td>
-                    <td
-                      className="px-4 py-3 text-[12px]"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      {s.joined_at}
-                    </td>
-                    <td
-                      className="px-4 py-3 font-semibold"
-                      style={{ color: colors.text.primary }}
-                    >
-                      {s.submission_count}
-                    </td>
-                    <td
-                      className="px-4 py-3 font-mono font-semibold"
-                      style={{
-                        color:
-                          s.avg_confidence > 80
-                            ? "#15803d"
-                            : s.avg_confidence > 50
-                              ? "#a16207"
-                              : colors.text.primary,
-                      }}
-                    >
-                      {s.submission_count > 0 ? `${s.avg_confidence}%` : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {s.suspicious_count > 0 ? (
-                        <span
-                          className="px-2 py-0.5 rounded-md text-[10px] font-bold border"
-                          style={{
-                            background: "#fef2f2",
-                            color: "#b91c1c",
-                            borderColor: "#fecaca",
-                          }}
-                        >
-                          {s.suspicious_count}
-                        </span>
-                      ) : (
-                        <span
-                          className="text-[12px]"
-                          style={{ color: "#15803d" }}
-                        >
-                          —
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {s.pending_reviews > 0 ? (
-                        <span
-                          className="px-2 py-0.5 rounded-md text-[10px] font-bold border"
-                          style={{
-                            background: "#fefce8",
-                            color: "#a16207",
-                            borderColor: "#fef08a",
-                          }}
-                        >
-                          {s.pending_reviews}
-                        </span>
-                      ) : (
-                        <span
-                          className="text-[12px]"
-                          style={{ color: "#15803d" }}
-                        >
-                          ✓
-                        </span>
-                      )}
-                    </td>
-                    <td
-                      className="px-4 py-3 text-[12px]"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      {s.last_submission}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        to={`/teacher/submissions?student=${s.user_id}&course=${course.id}`}
-                        className="px-3 py-1.5 rounded-md text-[12px] font-semibold border transition-colors whitespace-nowrap"
-                        style={{
-                          borderColor: colors.surface[200],
-                          color: colors.text.primary,
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.borderColor =
-                            TEACHER_BLUE;
-                          (e.currentTarget as HTMLElement).style.color =
-                            TEACHER_BLUE;
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.borderColor =
-                            colors.surface[200];
-                          (e.currentTarget as HTMLElement).style.color =
-                            colors.text.primary;
-                        }}
-                      >
-                        Sessions →
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            {courses.map((course) => (
+              <CourseCard key={course.id} course={course} />
+            ))}
           </div>
         )}
       </div>
