@@ -37,6 +37,7 @@ import VerifyOtpPage from "./pages/VerifyOtpPage";
 
 import JoinCoursePage from "./pages/student/JoinCoursePage";
 
+import TeacherCourseDetailPage from "./pages/teacher/TeacherCourseDetailPage";
 import TeacherCoursesPage from "./pages/teacher/TeacherCoursesPage";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
 import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
@@ -58,15 +59,6 @@ export default function App() {
             <Route path={ROUTES.HELP_DOCS} element={<HelpDocsPage />} />
             <Route path={ROUTES.VERIFY_LOOKUP} element={<VerifyLookupPage />} />
             <Route path={ROUTES.VERIFY} element={<VerifyCertificatePage />} />
-            <Route
-              path={ROUTES.PRICING}
-              element={
-                <PlaceholderPage
-                  title="Pricing"
-                  description="TypeTrace pricing is prepared for academic pilots, course deployments, and institutional demonstrations."
-                />
-              }
-            />
           </Route>
 
           <Route element={<AuthRedirectGuard />}>
@@ -83,7 +75,6 @@ export default function App() {
 
           <Route element={<RoleGuard allowedRoles={["STUDENT", "TEACHER"]} />}>
             <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
-            <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
           </Route>
 
           <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
@@ -98,6 +89,7 @@ export default function App() {
               />
               <Route path={ROUTES.ANALYTICS} element={<AnalyticsPage />} />
               <Route path={ROUTES.JOIN_COURSE} element={<JoinCoursePage />} />
+              <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
             </Route>
           </Route>
 
@@ -113,7 +105,7 @@ export default function App() {
               />
               <Route
                 path={ROUTES.TEACHER_COURSE_DETAIL}
-                element={<TeacherCoursesPage />}
+                element={<TeacherCourseDetailPage />}
               />
               <Route
                 path={ROUTES.TEACHER_SUBMISSIONS}
@@ -127,6 +119,7 @@ export default function App() {
                 path={ROUTES.TEACHER_REVIEW}
                 element={<TeacherReviewPage />}
               />
+              <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
             </Route>
           </Route>
 

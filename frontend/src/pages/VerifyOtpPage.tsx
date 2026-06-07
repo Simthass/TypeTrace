@@ -1,382 +1,136 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { ROUTES } from "../constants/routes";
-import { colors, brand } from "../styles/colors";
-import { useAuthStore } from "../store/authStore";
-import { api, getApiErrorMessage } from "../lib/api";
+// frontend/src/pages/VerifyOtpPage.tsx
 
-function MailIcon() {
-  return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M4 7.00005L10.2 11.65C11.2667 12.45 12.7333 12.45 13.8 11.65L20 7"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <rect
-        x="3"
-        y="5"
-        width="18"
-        height="14"
-        rx="2"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
+import { FormEvent, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+import {
+  AuthButton,
+  AuthField,
+  AuthForm,
+  AuthMessage,
+  AuthPanel,
+} from "../components/auth/AuthPanel";
+import { ROUTES } from "../constants/routes";
+import { api, getApiErrorMessage } from "../lib/api";
+import { useAuthStore, type AuthUser } from "../store/authStore";
+import { colors } from "../styles/colors";
+
+interface VerifyOtpResponse {
+  message: string;
+  access_token: string;
+  user: AuthUser;
 }
 
 export default function VerifyOtpPage() {
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingText, setLoadingText] = useState("Verify Account");
-  const [errorMsg, setErrorMsg] = useState("");
-
-  const pendingEmail = useAuthStore((state) => state.pendingEmail);
-  const setPendingEmail = useAuthStore((state) => state.setPendingEmail);
-  const login = useAuthStore((state) => state.login);
-
   const navigate = useNavigate();
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const { pendingEmail, login, setPendingEmail } = useAuthStore();
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-    if (!pendingEmail) {
-      navigate(ROUTES.REGISTER);
-    }
-  }, [pendingEmail, navigate]);
+  const [email, setEmail] = useState(pendingEmail || "");
+  const [otp, setOtp] = useState("");
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
-  const handleChange = (index: number, value: string) => {
-    if (!/^\d?$/.test(value)) return;
+  const cleanEmail = useMemo(() => email.trim().toLowerCase(), [email]);
 
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
 
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
+    setApiError(null);
+    setSuccessMsg(null);
 
-  const handleKeyDown = (
-    index: number,
-    event: React.KeyboardEvent<HTMLInputElement>,
-  ) => {
-    if (event.key === "Backspace" && !otp[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleSubmit = async () => {
-    const finalOtp = otp.join("");
-
-    if (!pendingEmail) {
-      setErrorMsg("Registration email not found. Please register again.");
-      navigate(ROUTES.REGISTER);
+    if (!cleanEmail || otp.trim().length !== 6) {
+      setApiError("Enter your email and the 6-digit verification code.");
       return;
     }
 
-    if (finalOtp.length !== 6) {
-      setErrorMsg("Please enter the complete 6-digit OTP.");
-      return;
-    }
-
-    setIsLoading(true);
-    setLoadingText("Verifying...");
-    setErrorMsg("");
+    setIsSubmitting(true);
 
     try {
-      const response = await api.post("/auth/verify-otp", {
-        email: pendingEmail,
-        otp: finalOtp,
+      const response = await api.post<VerifyOtpResponse>("/auth/verify-otp", {
+        email: cleanEmail,
+        otp: otp.trim(),
       });
 
-      const { user, access_token } = response.data;
-
-      login(user, access_token);
+      login(response.data.user, response.data.access_token);
       setPendingEmail(null);
 
-      if (user.role === "TEACHER") {
-        navigate(ROUTES.TEACHER_DASHBOARD);
-      } else {
-        navigate(ROUTES.DASHBOARD);
-      }
+      const next =
+        response.data.user.role === "TEACHER"
+          ? ROUTES.TEACHER_DASHBOARD
+          : ROUTES.DASHBOARD;
+
+      navigate(next, { replace: true });
     } catch (error) {
-      setErrorMsg(getApiErrorMessage(error));
+      setApiError(getApiErrorMessage(error));
     } finally {
-      setIsLoading(false);
-      setLoadingText("Verify Account");
+      setIsSubmitting(false);
     }
   };
 
-  const handleResendOtp = async () => {
-    if (!pendingEmail) {
-      setErrorMsg("Registration email not found. Please register again.");
-      navigate(ROUTES.REGISTER);
+  const resend = async () => {
+    setApiError(null);
+    setSuccessMsg(null);
+
+    if (!cleanEmail) {
+      setApiError("Enter your email before requesting a new code.");
       return;
     }
 
-    setIsLoading(true);
-    setLoadingText("Sending OTP...");
-    setErrorMsg("");
+    setIsResending(true);
 
     try {
-      await api.post("/auth/resend-otp", {
-        email: pendingEmail,
-      });
-
-      setOtp(["", "", "", "", "", ""]);
-      setLoadingText("OTP Sent");
-      inputRefs.current[0]?.focus();
+      await api.post("/auth/resend-otp", { email: cleanEmail });
+      setSuccessMsg("A new verification code has been sent.");
     } catch (error) {
-      setErrorMsg(getApiErrorMessage(error));
+      setApiError(getApiErrorMessage(error));
     } finally {
-      setIsLoading(false);
-
-      setTimeout(() => {
-        setLoadingText("Verify Account");
-      }, 1200);
+      setIsResending(false);
     }
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "center",
-        backgroundColor: colors.text.light,
-        padding: "10vh 24px 24px",
-        fontFamily: "inherit",
-      }}
+    <AuthPanel
+      eyebrow="Verify account"
+      title="Confirm your TypeTrace workspace."
+      description="Enter the 6-digit verification code sent to your email address to complete registration."
+      sideTitle="Verification keeps the authorship trail trusted."
+      sideDescription="Every TypeTrace workspace starts with verified identity, role-aware routing, and controlled access to student or teacher tools."
     >
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
-        style={{ width: "100%", maxWidth: "400px" }}
-      >
-        {/* Icon + heading */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            marginBottom: "32px",
-          }}
+      <AuthForm onSubmit={submit}>
+        {apiError && <AuthMessage type="error">{apiError}</AuthMessage>}
+        {successMsg && <AuthMessage type="success">{successMsg}</AuthMessage>}
+
+        <AuthField
+          label="Email address"
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="you@university.edu"
+        />
+
+        <AuthField
+          label="Verification code"
+          inputMode="numeric"
+          maxLength={6}
+          value={otp}
+          onChange={(event) => setOtp(event.target.value.replace(/\D/g, ""))}
+          placeholder="000000"
+        />
+
+        <AuthButton isLoading={isSubmitting}>Verify account</AuthButton>
+
+        <button
+          type="button"
+          onClick={resend}
+          disabled={isResending}
+          className="text-center text-[13px] font-semibold disabled:opacity-60"
+          style={{ color: colors.brand }}
         >
-          <div
-            style={{
-              width: "56px",
-              height: "56px",
-              borderRadius: "16px",
-              backgroundColor: `${brand.action}15`,
-              color: brand.action,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginBottom: "24px",
-            }}
-          >
-            <MailIcon />
-          </div>
-          <h1
-            style={{
-              fontSize: "24px",
-              fontWeight: 600,
-              color: colors.text.primary,
-              letterSpacing: "-0.03em",
-              marginBottom: "8px",
-              textAlign: "center",
-            }}
-          >
-            Check your email
-          </h1>
-          <p
-            style={{
-              fontSize: "15px",
-              color: colors.text.secondary,
-              textAlign: "center",
-              lineHeight: "1.6",
-            }}
-          >
-            We sent a 6-digit verification code to
-            <br />
-            <strong style={{ color: colors.text.primary, fontWeight: 600 }}>
-              {pendingEmail || "your email"}
-            </strong>
-          </p>
-        </div>
-
-        {/* OTP form */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSubmit();
-          }}
-          style={{ display: "flex", flexDirection: "column", gap: "24px" }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: "8px",
-            }}
-          >
-            {otp.map((digit, index) => (
-              <input
-                key={index}
-                ref={(element) => {
-                  inputRefs.current[index] = element;
-                }}
-                type="text"
-                inputMode="numeric"
-                maxLength={1}
-                value={otp[index]}
-                onChange={(event) => handleChange(index, event.target.value)}
-                onKeyDown={(event) => handleKeyDown(index, event)}
-                disabled={isLoading}
-                style={{
-                  width: "50px",
-                  height: "56px",
-                  textAlign: "center",
-                  fontSize: "20px",
-                  fontWeight: 700,
-                  backgroundColor: colors.surface[50],
-                  borderRadius: "8px",
-                  border: `1px solid ${
-                    errorMsg
-                      ? brand.aiAccent
-                      : digit
-                        ? brand.action
-                        : colors.surface[200]
-                  }`,
-                  color: colors.text.primary,
-                  outline: "none",
-                  transition: "all 0.2s ease",
-                  opacity: isLoading ? 0.6 : 1,
-                }}
-                onFocus={(e) => {
-                  if (!errorMsg && !isLoading)
-                    e.currentTarget.style.borderColor = brand.action;
-                }}
-                onBlur={(e) => {
-                  if (!digit && !errorMsg)
-                    e.currentTarget.style.borderColor = colors.surface[200];
-                }}
-              />
-            ))}
-          </div>
-
-          {errorMsg && (
-            <p
-              style={{
-                fontSize: "13px",
-                color: brand.aiAccent,
-                textAlign: "center",
-                fontWeight: 500,
-                marginTop: "-8px",
-              }}
-            >
-              {errorMsg}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={isLoading || otp.join("").length < 6}
-            style={{
-              width: "100%",
-              padding: "14px",
-              backgroundColor: brand.action,
-              color: colors.text.light,
-              border: "none",
-              borderRadius: "8px",
-              fontSize: "14.5px",
-              fontWeight: 600,
-              cursor:
-                isLoading || otp.join("").length < 6
-                  ? "not-allowed"
-                  : "pointer",
-              transition: "all 0.2s ease",
-              opacity: isLoading || otp.join("").length < 6 ? 0.8 : 1,
-            }}
-          >
-            {loadingText}
-          </button>
-        </form>
-
-        {/* Resend */}
-        <p
-          style={{
-            fontSize: "14px",
-            color: colors.text.secondary,
-            textAlign: "center",
-            marginTop: "32px",
-          }}
-        >
-          Didn't receive the email?{" "}
-          <button
-            type="button"
-            onClick={handleResendOtp}
-            disabled={isLoading}
-            style={{
-              color: colors.text.primary,
-              fontWeight: 500,
-              background: "none",
-              border: "none",
-              cursor: isLoading ? "not-allowed" : "pointer",
-              padding: 0,
-            }}
-            onMouseEnter={(e) =>
-              !isLoading && (e.currentTarget.style.textDecoration = "underline")
-            }
-            onMouseLeave={(e) =>
-              !isLoading && (e.currentTarget.style.textDecoration = "none")
-            }
-          >
-            Click to resend
-          </button>
-        </p>
-
-        {/* Security note */}
-        <div
-          style={{
-            marginTop: "32px",
-            padding: "16px",
-            backgroundColor: colors.surface[50],
-            borderRadius: "8px",
-            border: `1px solid ${colors.surface[200]}`,
-          }}
-        >
-          <p
-            style={{
-              fontSize: "12px",
-              color: colors.text.secondary,
-              textAlign: "center",
-              lineHeight: "1.5",
-            }}
-          >
-            <strong style={{ color: colors.text.primary }}>
-              Security Note:
-            </strong>{" "}
-            Your details are temporarily held in an encrypted Redis cache. If
-            not verified within 10 minutes, your data is permanently discarded
-            to maintain database integrity.
-          </p>
-        </div>
-      </motion.div>
-    </div>
+          {isResending ? "Sending new code..." : "Send a new code"}
+        </button>
+      </AuthForm>
+    </AuthPanel>
   );
 }

@@ -54,8 +54,8 @@ const footerColumns = [
     links: [
       { label: "How It Works", path: ROUTES.HOW_IT_WORKS },
       { label: "Features Stack", path: ROUTES.FEATURES },
-      { label: "Dashboard", path: ROUTES.DASHBOARD },
-      { label: "Enterprise Pricing", path: ROUTES.PRICING },
+      { label: "Student Dashboard", path: ROUTES.DASHBOARD },
+      { label: "Teacher Console", path: ROUTES.TEACHER_DASHBOARD },
     ],
   },
   {
@@ -70,8 +70,8 @@ const footerColumns = [
   {
     heading: "Trust",
     links: [
-      { label: "Privacy Philosophy", path: ROUTES.SETTINGS },
-      { label: "Data Portability", path: ROUTES.SETTINGS },
+      { label: "Privacy Controls", path: ROUTES.SETTINGS },
+      { label: "Data Export", path: ROUTES.SETTINGS },
       { label: "Certificate Ledger", path: ROUTES.VERIFY_LOOKUP },
       { label: "Academic Integrity", path: ROUTES.ABOUT },
     ],
@@ -93,9 +93,7 @@ function FooterLink({ label, path }: { label: string; path: string }) {
     <Link
       to={path}
       className="rounded-md text-[14px] font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-      style={{
-        color: colors.text.secondary,
-      }}
+      style={{ color: colors.text.secondary }}
       onMouseEnter={(event) => {
         event.currentTarget.style.color = colors.text.primary;
       }}
@@ -114,14 +112,9 @@ export default function Footer() {
   const dynamicStyles = {
     "--bg-footer": colors.text.light,
     "--border-light": colors.surface[200],
-    "--border-soft": colors.surface[100],
     "--text-primary": colors.text.primary,
     "--text-muted": colors.text.secondary,
     "--action-primary": brand.action,
-    "--action-hover": brand.actionHover,
-    "--verify-green": brand.humanText,
-    "--verify-bg": brand.humanBg,
-    "--verify-border": brand.humanAccent,
     "--surface-50": colors.surface[50],
   } as React.CSSProperties;
 

@@ -6,7 +6,6 @@ export const ROUTES = {
   HOW_IT_WORKS: "/how-it-works",
   FEATURES: "/features",
   ABOUT: "/about",
-  PRICING: "/pricing",
   SETTINGS: "/settings",
   HELP_DOCS: "/help",
 
