@@ -31,6 +31,7 @@ import RegisterPage from "./pages/RegisterPage";
 import ReplayPage from "./pages/ReplayPage";
 import SessionsPage from "./pages/SessionsPage";
 import SettingsPage from "./pages/SettingsPage";
+import SettingsRedirectPage from "./pages/SettingsRedirectPage";
 import VerifyCertificatePage from "./pages/VerifyCertificatePage";
 import VerifyLookupPage from "./pages/VerifyLookupPage";
 import VerifyOtpPage from "./pages/VerifyOtpPage";
@@ -74,12 +75,17 @@ export default function App() {
           </Route>
 
           <Route element={<RoleGuard allowedRoles={["STUDENT", "TEACHER"]} />}>
+            <Route path={ROUTES.SETTINGS} element={<SettingsRedirectPage />} />
             <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
           </Route>
 
           <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
             <Route element={<DashboardLayout />}>
               <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+              <Route
+                path={ROUTES.STUDENT_SETTINGS}
+                element={<SettingsPage />}
+              />
               <Route path={ROUTES.EDITOR} element={<EditorPage />} />
               <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
               <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
@@ -89,7 +95,6 @@ export default function App() {
               />
               <Route path={ROUTES.ANALYTICS} element={<AnalyticsPage />} />
               <Route path={ROUTES.JOIN_COURSE} element={<JoinCoursePage />} />
-              <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
             </Route>
           </Route>
 
@@ -98,6 +103,10 @@ export default function App() {
               <Route
                 path={ROUTES.TEACHER_DASHBOARD}
                 element={<TeacherDashboard />}
+              />
+              <Route
+                path={ROUTES.TEACHER_SETTINGS}
+                element={<SettingsPage />}
               />
               <Route
                 path={ROUTES.TEACHER_COURSES}
@@ -119,7 +128,6 @@ export default function App() {
                 path={ROUTES.TEACHER_REVIEW}
                 element={<TeacherReviewPage />}
               />
-              <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
             </Route>
           </Route>
 

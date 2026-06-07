@@ -71,7 +71,7 @@ const navItems = [
     icon: "submissions",
   },
   { label: "Students", path: ROUTES.TEACHER_STUDENTS, icon: "students" },
-  { label: "Settings", path: ROUTES.SETTINGS, icon: "settings" },
+  { label: "Settings", path: ROUTES.TEACHER_SETTINGS, icon: "settings" },
 ];
 
 export default function TeacherLayout() {
@@ -113,12 +113,14 @@ export default function TeacherLayout() {
           >
             Teacher workspace
           </p>
+
           <p
             className="mt-1 truncate text-[14px] font-semibold"
             style={{ color: colors.text.primary }}
           >
             {fullName}
           </p>
+
           <p
             className="mt-0.5 truncate text-[12px]"
             style={{ color: colors.text.secondary }}
@@ -182,6 +184,7 @@ export default function TeacherLayout() {
               >
                 Teacher console
               </p>
+
               <p
                 className="text-[15px] font-semibold"
                 style={{ color: colors.text.primary }}

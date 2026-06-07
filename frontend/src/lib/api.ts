@@ -1,6 +1,7 @@
 // frontend/src/lib/api.ts
 
 import axios, { AxiosError } from "axios";
+
 import { useAuthStore } from "../store/authStore";
 
 const API_BASE_URL =
@@ -25,10 +26,18 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<{ detail?: string }>) => {
+  (error: AxiosError<{ detail?: unknown; message?: string }>) => {
     const status = error.response?.status;
+    const requestHadAuth = Boolean(error.config?.headers?.Authorization);
+    const requestUrl = String(error.config?.url || "");
 
-    if (status === 401) {
+    const isAuthEndpoint =
+      requestUrl.includes("/auth/login") ||
+      requestUrl.includes("/auth/register") ||
+      requestUrl.includes("/auth/verify-otp") ||
+      requestUrl.includes("/auth/password-reset");
+
+    if (status === 401 && requestHadAuth && !isAuthEndpoint) {
       useAuthStore.getState().logout();
     }
 
@@ -42,12 +51,31 @@ export function getApiErrorMessage(error: unknown): string {
 
     if (Array.isArray(detail)) {
       return detail
-        .map((item) => item?.msg || item?.message || "Validation error")
+        .map((item) => {
+          if (typeof item === "string") return item;
+          if (item && typeof item === "object") {
+            const record = item as Record<string, unknown>;
+            return String(record.msg || record.message || "Validation error");
+          }
+
+          return "Validation error";
+        })
         .join(", ");
     }
 
     if (typeof detail === "string") {
       return detail;
+    }
+
+    if (detail && typeof detail === "object") {
+      const record = detail as Record<string, unknown>;
+      return String(record.message || record.error || "Request failed.");
+    }
+
+    const message = error.response?.data?.message;
+
+    if (typeof message === "string") {
+      return message;
     }
 
     if (error.message) {

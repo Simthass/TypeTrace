@@ -17,6 +17,7 @@ export const ROUTES = {
 
   // Student App
   DASHBOARD: "/dashboard",
+  STUDENT_SETTINGS: "/dashboard/settings",
   EDITOR: "/editor",
   EDITOR_NEW: "/editor/new",
   SESSIONS: "/sessions",
@@ -31,6 +32,7 @@ export const ROUTES = {
 
   // Teacher App
   TEACHER_DASHBOARD: "/teacher/dashboard",
+  TEACHER_SETTINGS: "/teacher/settings",
   TEACHER_COURSES: "/teacher/courses",
   TEACHER_COURSE_DETAIL: "/teacher/courses/:courseId",
   TEACHER_SUBMISSIONS: "/teacher/submissions",

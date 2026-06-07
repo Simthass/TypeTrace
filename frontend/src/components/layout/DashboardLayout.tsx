@@ -83,7 +83,7 @@ const navItems = [
   { label: "Certificates", path: ROUTES.CERTIFICATES, icon: "certificates" },
   { label: "Analytics", path: ROUTES.ANALYTICS, icon: "analytics" },
   { label: "Join Course", path: ROUTES.JOIN_COURSE, icon: "course" },
-  { label: "Settings", path: ROUTES.SETTINGS, icon: "settings" },
+  { label: "Settings", path: ROUTES.STUDENT_SETTINGS, icon: "settings" },
 ];
 
 export default function DashboardLayout() {
@@ -125,12 +125,14 @@ export default function DashboardLayout() {
           >
             Student workspace
           </p>
+
           <p
             className="mt-1 truncate text-[14px] font-semibold"
             style={{ color: colors.text.primary }}
           >
             {fullName}
           </p>
+
           <p
             className="mt-0.5 truncate text-[12px]"
             style={{ color: colors.text.secondary }}
@@ -191,6 +193,7 @@ export default function DashboardLayout() {
               >
                 Student console
               </p>
+
               <p
                 className="text-[15px] font-semibold"
                 style={{ color: colors.text.primary }}
@@ -204,7 +207,7 @@ export default function DashboardLayout() {
               className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
               style={{ background: colors.brand }}
             >
-              + New Session
+              New Session
             </Link>
           </div>
 
