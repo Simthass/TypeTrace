@@ -1,17 +1,19 @@
+// frontend/src/components/layout/RootLayout.tsx
+
 import { Outlet } from "react-router-dom";
+
 import Header from "./Header";
 import Footer from "./Footer";
+import { colors } from "../../styles/colors";
 
-/**
- * RootLayout — wraps every public-facing page.
- * Header is fixed (h-16 = 64px), so main gets padding-top to avoid overlap.
- */
 export default function RootLayout() {
   return (
-    <div className="flex min-h-dvh flex-col bg-surface-50">
+    <div
+      className="flex min-h-dvh flex-col"
+      style={{ background: colors.surface[50] }}
+    >
       <Header />
 
-      {/* pt-16 offsets the fixed 64px header */}
       <main
         id="main-content"
         role="main"
