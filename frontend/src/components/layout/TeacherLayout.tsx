@@ -1,13 +1,14 @@
 // frontend/src/components/layout/TeacherLayout.tsx
 
+import type { ReactNode } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
-import { colors, brand } from "../../styles/colors";
+import { brand, colors } from "../../styles/colors";
 import { useAuthStore } from "../../store/authStore";
 
 function Icon({ type }: { type: string }) {
-  const paths: Record<string, React.ReactNode> = {
+  const paths: Record<string, ReactNode> = {
     dashboard: (
       <>
         <rect x="3" y="3" width="7" height="7" />
@@ -30,9 +31,9 @@ function Icon({ type }: { type: string }) {
     ),
     students: (
       <>
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
         <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
         <path d="M16 3.13a4 4 0 0 1 0 7.75" />
       </>
     ),
@@ -54,6 +55,7 @@ function Icon({ type }: { type: string }) {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
+      aria-hidden="true"
     >
       {paths[type]}
     </svg>
@@ -90,28 +92,40 @@ export default function TeacherLayout() {
         className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r bg-white px-4 py-5 lg:block"
         style={{ borderColor: colors.surface[200] }}
       >
-        <Link
-          to={ROUTES.TEACHER_DASHBOARD}
-          className="flex items-center gap-3 px-2"
-        >
-          <span
-            className="flex h-9 w-9 items-center justify-center rounded-md text-[13px] font-bold text-white"
-            style={{ background: colors.brand }}
-          >
-            TT
-          </span>
-          <div>
-            <p
-              className="text-[14px] font-bold"
-              style={{ color: colors.text.primary }}
-            >
-              TypeTrace
-            </p>
-            <p className="text-[11px]" style={{ color: colors.text.secondary }}>
-              Teacher workspace
-            </p>
-          </div>
+        <Link to={ROUTES.TEACHER_DASHBOARD} className="flex items-center px-2">
+          <img
+            src="/Logo.png"
+            alt="TypeTrace"
+            className="h-[30px] w-auto object-contain"
+          />
         </Link>
+
+        <div
+          className="mt-5 rounded-md border px-3 py-3"
+          style={{
+            borderColor: colors.surface[200],
+            background: colors.surface[100],
+          }}
+        >
+          <p
+            className="text-[11px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: colors.text.secondary }}
+          >
+            Teacher workspace
+          </p>
+          <p
+            className="mt-1 truncate text-[14px] font-semibold"
+            style={{ color: colors.text.primary }}
+          >
+            {fullName}
+          </p>
+          <p
+            className="mt-0.5 truncate text-[12px]"
+            style={{ color: colors.text.secondary }}
+          >
+            {user?.email}
+          </p>
+        </div>
 
         <nav className="mt-7 grid gap-1">
           {navItems.map((item) => (
@@ -130,99 +144,59 @@ export default function TeacherLayout() {
           ))}
         </nav>
 
-        <div
-          className="absolute bottom-5 left-4 right-4 rounded-md border p-3"
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="absolute bottom-5 left-4 right-4 rounded-md border px-4 py-2.5 text-[13px] font-semibold transition"
           style={{
             borderColor: colors.surface[200],
+            color: brand.aiAccent,
             background: colors.surface[50],
           }}
         >
-          <p
-            className="truncate text-[13px] font-semibold"
-            style={{ color: colors.text.primary }}
-          >
-            {fullName}
-          </p>
-          <p
-            className="truncate text-[12px]"
-            style={{ color: colors.text.secondary }}
-          >
-            {user?.email}
-          </p>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="mt-3 w-full rounded-md border px-3 py-2 text-[12px] font-semibold"
-            style={{
-              borderColor: colors.surface[200],
-              color: colors.text.primary,
-              background: "#FFFFFF",
-            }}
-          >
-            Logout
-          </button>
-        </div>
+          Sign out
+        </button>
       </aside>
 
       <div className="lg:pl-72">
         <header
-          className="sticky top-0 z-30 border-b bg-white/95 px-4 py-3 backdrop-blur lg:px-6"
+          className="sticky top-0 z-30 border-b bg-white/95 px-4 py-3 backdrop-blur md:px-8"
           style={{ borderColor: colors.surface[200] }}
         >
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-4">
             <Link
               to={ROUTES.TEACHER_DASHBOARD}
-              className="flex items-center gap-3 lg:hidden"
+              className="flex items-center lg:hidden"
             >
-              <span
-                className="flex h-8 w-8 items-center justify-center rounded-md text-[12px] font-bold text-white"
-                style={{ background: colors.brand }}
-              >
-                TT
-              </span>
-              <span
-                className="text-[14px] font-bold"
-                style={{ color: colors.text.primary }}
-              >
-                TypeTrace
-              </span>
+              <img
+                src="/Logo.png"
+                alt="TypeTrace"
+                className="h-[28px] w-auto object-contain"
+              />
             </Link>
 
             <div className="hidden lg:block">
               <p
-                className="text-[12px]"
+                className="text-[12px] font-semibold uppercase tracking-[0.14em]"
                 style={{ color: colors.text.secondary }}
               >
-                Signed in as
+                Teacher console
               </p>
               <p
-                className="text-[13px] font-semibold"
+                className="text-[15px] font-semibold"
                 style={{ color: colors.text.primary }}
               >
-                {fullName}
+                Course review and authorship audit workspace
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Link
-                to={ROUTES.TEACHER_COURSES}
-                className="rounded-md px-3 py-2 text-[12px] font-semibold text-white"
-                style={{ background: colors.brand }}
-              >
-                New Course
-              </Link>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="rounded-md border px-3 py-2 text-[12px] font-semibold lg:hidden"
-                style={{
-                  borderColor: colors.surface[200],
-                  color: colors.text.primary,
-                }}
-              >
-                Logout
-              </button>
-            </div>
+            <Link
+              to={ROUTES.TEACHER_COURSES}
+              className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
+              style={{ background: colors.brand }}
+            >
+              Manage Courses
+            </Link>
           </div>
 
           <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden">
@@ -230,11 +204,11 @@ export default function TeacherLayout() {
               <NavLink
                 key={item.path}
                 to={item.path}
-                className="shrink-0 rounded-md border px-3 py-2 text-[12px] font-semibold"
+                className="whitespace-nowrap rounded-md border px-3 py-2 text-[12px] font-semibold"
                 style={({ isActive }) => ({
                   borderColor: isActive ? colors.brand : colors.surface[200],
-                  background: isActive ? brand.bgNavActive : "#FFFFFF",
                   color: isActive ? colors.brand : colors.text.secondary,
+                  background: isActive ? brand.bgNavActive : colors.surface[50],
                 })}
               >
                 {item.label}
@@ -243,7 +217,7 @@ export default function TeacherLayout() {
           </nav>
         </header>
 
-        <main>
+        <main className="px-4 py-8 md:px-8">
           <Outlet />
         </main>
       </div>

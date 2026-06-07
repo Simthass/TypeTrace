@@ -19,11 +19,9 @@ export default function RoleGuard({ allowedRoles }: RoleGuardProps) {
     );
   }
 
-  const role = user.role;
-
-  if (!allowedRoles.includes(role)) {
+  if (!allowedRoles.includes(user.role)) {
     const redirectTo =
-      role === "TEACHER" ? ROUTES.TEACHER_DASHBOARD : ROUTES.DASHBOARD;
+      user.role === "TEACHER" ? ROUTES.TEACHER_DASHBOARD : ROUTES.DASHBOARD;
 
     return <Navigate to={redirectTo} replace />;
   }

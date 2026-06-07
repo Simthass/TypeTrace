@@ -1,12 +1,14 @@
 // frontend/src/components/ui/PageState.tsx
 
-import { colors, brand } from "../../styles/colors";
+import type { ReactNode } from "react";
+
+import { brand, colors } from "../../styles/colors";
 
 interface PageHeaderProps {
   eyebrow?: string;
   title: string;
   description?: string;
-  action?: React.ReactNode;
+  action?: ReactNode;
 }
 
 export function PageHeader({
@@ -53,9 +55,12 @@ export function LoadingState({ label = "Loading..." }: { label?: string }) {
   return (
     <div
       className="rounded-md border bg-white px-5 py-10 text-center text-[13px]"
-      style={{ borderColor: colors.surface[200], color: colors.text.secondary }}
+      style={{
+        borderColor: colors.surface[200],
+        color: colors.text.secondary,
+      }}
     >
-      <div className="mx-auto mb-4 h-2 w-32 skeleton" />
+      <div className="skeleton mx-auto mb-4 h-2 w-32" />
       <p>{label}</p>
     </div>
   );
@@ -64,7 +69,7 @@ export function LoadingState({ label = "Loading..." }: { label?: string }) {
 interface EmptyStateProps {
   title: string;
   description: string;
-  action?: React.ReactNode;
+  action?: ReactNode;
 }
 
 export function EmptyState({ title, description, action }: EmptyStateProps) {
@@ -84,6 +89,7 @@ export function EmptyState({ title, description, action }: EmptyStateProps) {
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
+          aria-hidden="true"
         >
           <path d="M4 4h16v16H4z" />
           <path d="M8 9h8" />
@@ -112,34 +118,42 @@ export function EmptyState({ title, description, action }: EmptyStateProps) {
 
 interface AlertBoxProps {
   type?: "success" | "error" | "warning" | "info";
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export function AlertBox({ type = "info", children }: AlertBoxProps) {
   const styles =
     type === "success"
-      ? { bg: brand.humanBg, text: brand.humanText, border: brand.humanAccent }
+      ? {
+          border: brand.humanAccent,
+          bg: brand.humanBg,
+          text: brand.humanText,
+        }
       : type === "error"
-        ? { bg: brand.aiBg, text: brand.aiText, border: brand.aiAccent }
+        ? {
+            border: brand.aiAccent,
+            bg: brand.aiBg,
+            text: brand.aiText,
+          }
         : type === "warning"
           ? {
+              border: brand.suspiciousAccent,
               bg: brand.suspiciousBg,
               text: brand.suspiciousText,
-              border: brand.suspiciousAccent,
             }
           : {
+              border: colors.surface[200],
               bg: colors.surface[50],
               text: colors.text.secondary,
-              border: colors.surface[200],
             };
 
   return (
     <div
       className="rounded-md border px-4 py-3 text-[13px] leading-6"
       style={{
+        borderColor: styles.border,
         background: styles.bg,
         color: styles.text,
-        borderColor: styles.border,
       }}
     >
       {children}

@@ -1,59 +1,47 @@
 // frontend/src/App.tsx
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
-// Layouts
-import RootLayout from "./components/layout/RootLayout";
-import AuthLayout from "./components/layout/AuthLayout";
-import DashboardLayout from "./components/layout/DashboardLayout";
-import TeacherLayout from "./components/layout/TeacherLayout";
-
-// Guards
+import AuthRedirectGuard from "./components/guards/AuthRedirectGuard";
 import RoleGuard from "./components/guards/RoleGuard";
 
-// UI providers
+import AuthLayout from "./components/layout/AuthLayout";
+import DashboardLayout from "./components/layout/DashboardLayout";
+import RootLayout from "./components/layout/RootLayout";
+import TeacherLayout from "./components/layout/TeacherLayout";
+
 import ScrollToTop from "./components/ui/ScrollToTop";
 import { ToastProvider } from "./components/ui/ToastProvider";
 
-// Public pages
-import HomePage from "./pages/HomePage";
-import HowItWorksPage from "./pages/HowItWorksPage";
-import FeaturesPage from "./pages/FeaturesPage";
+import { ROUTES } from "./constants/routes";
+
 import AboutPage from "./pages/AboutPage";
-import PlaceholderPage from "./pages/PlaceholderPage";
-import HelpDocsPage from "./pages/HelpDocsPage";
-
-// Auth pages
-import LoginPage from "./pages/LoginPage";
-import RegisterPage from "./pages/RegisterPage";
-import VerifyOtpPage from "./pages/VerifyOtpPage";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-
-// Student pages
+import AnalyticsPage from "./pages/AnalyticsPage";
+import CertificatesPage from "./pages/CertificatesPage";
 import DashboardPage from "./pages/DashboardPage";
 import EditorPage from "./pages/EditorPage";
-import SessionsPage from "./pages/SessionsPage";
-import CertificatesPage from "./pages/CertificatesPage";
-import AnalyticsPage from "./pages/AnalyticsPage";
+import FeaturesPage from "./pages/FeaturesPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import HelpDocsPage from "./pages/HelpDocsPage";
+import HomePage from "./pages/HomePage";
+import HowItWorksPage from "./pages/HowItWorksPage";
+import LoginPage from "./pages/LoginPage";
+import PlaceholderPage from "./pages/PlaceholderPage";
+import RegisterPage from "./pages/RegisterPage";
 import ReplayPage from "./pages/ReplayPage";
-import JoinCoursePage from "./pages/student/JoinCoursePage";
-
-// Teacher pages
-import TeacherDashboard from "./pages/teacher/TeacherDashboard";
-import TeacherCoursesPage from "./pages/teacher/TeacherCoursesPage";
-import TeacherCoursePage from "./pages/teacher/TeacherCoursesPage";
-import TeacherSubmissionsPage from "./pages/teacher/TeacherSubmissionsPage";
-import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage";
-import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
-
-// Account / settings
+import SessionsPage from "./pages/SessionsPage";
 import SettingsPage from "./pages/SettingsPage";
-
-// Verification pages
 import VerifyCertificatePage from "./pages/VerifyCertificatePage";
 import VerifyLookupPage from "./pages/VerifyLookupPage";
+import VerifyOtpPage from "./pages/VerifyOtpPage";
 
-import { ROUTES } from "./constants/routes";
+import JoinCoursePage from "./pages/student/JoinCoursePage";
+
+import TeacherCoursesPage from "./pages/teacher/TeacherCoursesPage";
+import TeacherDashboard from "./pages/teacher/TeacherDashboard";
+import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
+import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage";
+import TeacherSubmissionsPage from "./pages/teacher/TeacherSubmissionsPage";
 
 export default function App() {
   return (
@@ -62,13 +50,14 @@ export default function App() {
         <ScrollToTop />
 
         <Routes>
-          {/* Public routes */}
           <Route element={<RootLayout />}>
             <Route index element={<HomePage />} />
             <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
             <Route path={ROUTES.FEATURES} element={<FeaturesPage />} />
             <Route path={ROUTES.ABOUT} element={<AboutPage />} />
             <Route path={ROUTES.HELP_DOCS} element={<HelpDocsPage />} />
+            <Route path={ROUTES.VERIFY_LOOKUP} element={<VerifyLookupPage />} />
+            <Route path={ROUTES.VERIFY} element={<VerifyCertificatePage />} />
             <Route
               path={ROUTES.PRICING}
               element={
@@ -78,33 +67,30 @@ export default function App() {
                 />
               }
             />
-            <Route path={ROUTES.VERIFY_LOOKUP} element={<VerifyLookupPage />} />
-            <Route path={ROUTES.VERIFY} element={<VerifyCertificatePage />} />
           </Route>
 
-          {/* Auth routes */}
-          <Route element={<AuthLayout />}>
-            <Route path={ROUTES.LOGIN} element={<LoginPage />} />
-            <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
-            <Route path={ROUTES.VERIFY_OTP} element={<VerifyOtpPage />} />
-            <Route
-              path={ROUTES.FORGOT_PASSWORD}
-              element={<ForgotPasswordPage />}
-            />
+          <Route element={<AuthRedirectGuard />}>
+            <Route element={<AuthLayout />}>
+              <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+              <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
+              <Route path={ROUTES.VERIFY_OTP} element={<VerifyOtpPage />} />
+              <Route
+                path={ROUTES.FORGOT_PASSWORD}
+                element={<ForgotPasswordPage />}
+              />
+            </Route>
           </Route>
 
-          {/* Shared authenticated routes for students and teachers */}
           <Route element={<RoleGuard allowedRoles={["STUDENT", "TEACHER"]} />}>
             <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
             <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
           </Route>
 
-          {/* Student routes */}
           <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
             <Route element={<DashboardLayout />}>
               <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
-              <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
               <Route path={ROUTES.EDITOR} element={<EditorPage />} />
+              <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
               <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
               <Route
                 path={ROUTES.CERTIFICATES}
@@ -115,7 +101,6 @@ export default function App() {
             </Route>
           </Route>
 
-          {/* Teacher routes */}
           <Route element={<RoleGuard allowedRoles={["TEACHER"]} />}>
             <Route element={<TeacherLayout />}>
               <Route
@@ -128,7 +113,7 @@ export default function App() {
               />
               <Route
                 path={ROUTES.TEACHER_COURSE_DETAIL}
-                element={<TeacherCoursePage />}
+                element={<TeacherCoursesPage />}
               />
               <Route
                 path={ROUTES.TEACHER_SUBMISSIONS}
@@ -145,13 +130,12 @@ export default function App() {
             </Route>
           </Route>
 
-          {/* Global fallback */}
           <Route
             path={ROUTES.NOT_FOUND}
             element={
               <PlaceholderPage
                 title="Page not found"
-                description="The page you are looking for does not exist or has moved."
+                description="The page you are looking for does not exist or has been moved."
               />
             }
           />
