@@ -3,219 +3,199 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { api, getApiErrorMessage } from "../lib/api";
+import { Badge, classificationTone } from "../components/ui/Badge";
+import { Button, ButtonLink } from "../components/ui/Button";
+import { Card, CardBody, CardHeader } from "../components/ui/Card";
+import { EmptyState, PageHeader } from "../components/ui/PageState";
+import { TableSkeleton } from "../components/ui/Skeleton";
+import { Tabs } from "../components/ui/Tabs";
 import { ROUTES } from "../constants/routes";
-import { colors, brand } from "../styles/colors";
-import type {
-  StudentSessionItem,
-  StudentSessionsResponse,
-} from "../types/student";
+import { api, getApiErrorMessage } from "../lib/api";
+import { useToast } from "../components/ui/ToastProvider";
+import { colors } from "../styles/colors";
 
-function SearchIcon() {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  );
+interface SessionItem {
+  id: number;
+  title: string;
+  classification: string;
+  classification_bucket: string;
+  confidence: number;
+  risk_level: string;
+  review_status: string;
+  wpm: number;
+  duration_seconds: number;
+  word_count: number;
+  certificate_id?: string | null;
+  course_name?: string | null;
+  course_code?: string | null;
+  created_at: string;
 }
 
-function getBadge(session: StudentSessionItem) {
-  if (session.classification_bucket === "HUMAN") {
-    return {
-      label: "Human",
-      bg: brand.humanBg,
-      text: brand.humanText,
-      border: brand.humanAccent,
-    };
-  }
-
-  if (session.classification_bucket === "SUSPICIOUS") {
-    return {
-      label: "Review",
-      bg: brand.suspiciousBg,
-      text: brand.suspiciousText,
-      border: brand.suspiciousAccent,
-    };
-  }
-
-  return {
-    label: "High Risk",
-    bg: brand.aiBg,
-    text: brand.aiText,
-    border: brand.aiAccent,
-  };
+interface SessionsResponse {
+  status: string;
+  total: number;
+  sessions: SessionItem[];
 }
 
-function SessionCard({ session }: { session: StudentSessionItem }) {
-  const badge = getBadge(session);
+const filters = [
+  { value: "ALL", label: "All" },
+  { value: "HUMAN", label: "Human" },
+  { value: "SUSPICIOUS", label: "Review" },
+  { value: "SYNTHETIC", label: "High Risk" },
+];
+
+function filterCount(sessions: SessionItem[], filter: string) {
+  if (filter === "ALL") return sessions.length;
+
+  return sessions.filter((session) => {
+    const bucket = String(
+      session.classification_bucket || session.classification,
+    ).toUpperCase();
+
+    if (filter === "SYNTHETIC") {
+      return ["SYNTHETIC", "AI", "AI-GENERATED", "HIGH_RISK"].includes(bucket);
+    }
+
+    return bucket === filter;
+  }).length;
+}
+
+function SessionCard({ session }: { session: SessionItem }) {
+  const bucket = session.classification_bucket || session.classification;
+  const tone = classificationTone(bucket);
 
   return (
-    <div
-      className="rounded-md border bg-white shadow-sm"
-      style={{ borderColor: colors.surface[200] }}
-    >
-      <div
-        className="flex flex-col justify-between gap-3 border-b px-5 py-4 md:flex-row md:items-start"
-        style={{ borderColor: colors.surface[200] }}
-      >
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2
-              className="truncate text-[15px] font-semibold"
-              style={{ color: colors.text.primary }}
-            >
-              {session.title}
-            </h2>
-            <span
-              className="rounded-md border px-2 py-0.5 text-[11px] font-semibold"
-              style={{
-                background: badge.bg,
-                color: badge.text,
-                borderColor: badge.border,
-              }}
-            >
-              {badge.label}
-            </span>
-          </div>
-          <p
-            className="mt-1 text-[12px]"
-            style={{ color: colors.text.secondary }}
-          >
-            {session.created_at}
-            {session.course_name ? ` · ${session.course_name}` : " · Personal"}
-          </p>
-        </div>
+    <Card className="transition hover:-translate-y-0.5">
+      <CardBody>
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2
+                className="text-[16px] font-bold"
+                style={{ color: colors.text.primary }}
+              >
+                {session.title || "Untitled Document"}
+              </h2>
 
-        <div className="text-left md:text-right">
-          <p
-            className="text-[15px] font-semibold"
-            style={{ color: colors.text.primary }}
-          >
-            {session.confidence}%
-          </p>
-          <p className="text-[11px]" style={{ color: colors.text.secondary }}>
-            Confidence
-          </p>
-        </div>
-      </div>
+              <Badge tone={tone}>{bucket}</Badge>
+              <Badge tone="neutral">{session.review_status || "PENDING"}</Badge>
+            </div>
 
-      <div className="grid gap-3 px-5 py-4 sm:grid-cols-4">
-        {[
-          ["WPM", session.wpm],
-          ["Words", session.word_count],
-          ["Keystrokes", session.total_keystrokes],
-          ["Risk", session.risk_level],
-          ["Review", session.review_status],
-          ["Deletions", session.deletions],
-          ["Pauses", session.pauses],
-          ["Avg IKI", `${session.avg_iki}ms`],
-        ].map(([label, value]) => (
-          <div key={label}>
             <p
-              className="text-[10px] font-semibold uppercase tracking-[0.12em]"
+              className="mt-2 text-[13px]"
               style={{ color: colors.text.secondary }}
             >
-              {label}
-            </p>
-            <p
-              className="mt-1 text-[13px] font-semibold"
-              style={{ color: colors.text.primary }}
-            >
-              {value || "—"}
+              {session.course_code || "Personal session"} · {session.created_at}
             </p>
           </div>
-        ))}
-      </div>
 
-      {session.review_notes && (
-        <div
-          className="border-t px-5 py-3 text-[13px]"
-          style={{
-            borderColor: colors.surface[200],
-            background: colors.surface[50],
-            color: colors.text.secondary,
-          }}
-        >
-          Teacher note: {session.review_notes}
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink
+              to={ROUTES.REPLAY.replace(":sessionId", String(session.id))}
+              variant="secondary"
+              size="sm"
+            >
+              Replay
+            </ButtonLink>
+
+            {session.certificate_id && (
+              <ButtonLink to={`/verify/${session.certificate_id}`} size="sm">
+                Verify
+              </ButtonLink>
+            )}
+          </div>
         </div>
-      )}
 
-      <div
-        className="flex flex-wrap gap-2 border-t px-5 py-4"
-        style={{ borderColor: colors.surface[200] }}
-      >
-        <Link
-          to={`/session/${session.id}/replay`}
-          className="rounded-md px-3 py-2 text-[12px] font-semibold text-white"
-          style={{ background: colors.brand }}
-        >
-          View Replay
-        </Link>
-
-        {session.certificate_id && (
-          <Link
-            to={`/verify/${session.certificate_id}`}
-            className="rounded-md border px-3 py-2 text-[12px] font-semibold"
-            style={{
-              borderColor: colors.surface[200],
-              color: colors.text.primary,
-            }}
-          >
-            Verify Certificate
-          </Link>
-        )}
-      </div>
-    </div>
+        <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+          {[
+            ["Confidence", `${session.confidence}%`],
+            ["WPM", session.wpm],
+            ["Words", session.word_count],
+            ["Duration", `${session.duration_seconds}s`],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              className="rounded-md border px-3 py-2"
+              style={{
+                borderColor: colors.surface[200],
+                background: colors.surface[50],
+              }}
+            >
+              <p
+                className="text-[10px] font-bold uppercase tracking-[0.14em]"
+                style={{ color: colors.text.secondary }}
+              >
+                {label}
+              </p>
+              <p
+                className="mt-1 text-[14px] font-bold"
+                style={{ color: colors.text.primary }}
+              >
+                {value}
+              </p>
+            </div>
+          ))}
+        </div>
+      </CardBody>
+    </Card>
   );
 }
 
 export default function SessionsPage() {
-  const [sessions, setSessions] = useState<StudentSessionItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [classification, setClassification] = useState("ALL");
-  const [reviewStatus, setReviewStatus] = useState("ALL");
+  const toast = useToast();
+
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [selectedFilter, setSelectedFilter] = useState("ALL");
   const [search, setSearch] = useState("");
-  const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const queryParams = useMemo(() => {
-    const params = new URLSearchParams();
-    params.set("limit", "100");
-    params.set("offset", "0");
+  const filteredSessions = useMemo(() => {
+    return sessions.filter((session) => {
+      const matchesFilter =
+        selectedFilter === "ALL" ||
+        (selectedFilter === "SYNTHETIC"
+          ? ["SYNTHETIC", "AI", "AI-GENERATED", "HIGH_RISK"].includes(
+              String(
+                session.classification_bucket || session.classification,
+              ).toUpperCase(),
+            )
+          : String(
+              session.classification_bucket || session.classification,
+            ).toUpperCase() === selectedFilter);
 
-    if (classification !== "ALL") params.set("classification", classification);
-    if (reviewStatus !== "ALL") params.set("review_status", reviewStatus);
-    if (search.trim()) params.set("search", search.trim());
+      const query = search.trim().toLowerCase();
+      const matchesSearch =
+        !query ||
+        session.title.toLowerCase().includes(query) ||
+        String(session.course_name || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(session.course_code || "")
+          .toLowerCase()
+          .includes(query);
 
-    return params.toString();
-  }, [classification, reviewStatus, search]);
+      return matchesFilter && matchesSearch;
+    });
+  }, [sessions, selectedFilter, search]);
 
   useEffect(() => {
     let mounted = true;
 
     async function loadSessions() {
       setIsLoading(true);
-      setApiError(null);
 
       try {
-        const response = await api.get<StudentSessionsResponse>(
-          `/student/sessions?${queryParams}`,
-        );
+        const response = await api.get<SessionsResponse>("/student/sessions", {
+          params: {
+            limit: 100,
+          },
+        });
 
         if (!mounted) return;
         setSessions(response.data.sessions || []);
-        setTotal(response.data.total || 0);
       } catch (error) {
         if (!mounted) return;
-        setApiError(getApiErrorMessage(error));
+        toast.error("Sessions failed to load", getApiErrorMessage(error));
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -226,158 +206,92 @@ export default function SessionsPage() {
     return () => {
       mounted = false;
     };
-  }, [queryParams]);
+  }, [toast]);
+
+  const tabItems = filters.map((filter) => ({
+    ...filter,
+    count: filterCount(sessions, filter.value),
+  }));
 
   return (
-    <div
-      className="min-h-screen px-6 py-8"
-      style={{ background: colors.surface[50] }}
-    >
-      <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-          <div>
-            <p
-              className="text-[12px] font-semibold uppercase tracking-[0.18em]"
-              style={{ color: colors.text.secondary }}
-            >
-              Writing evidence history
-            </p>
-            <h1
-              className="mt-2 text-2xl font-semibold"
-              style={{ color: colors.text.primary }}
-            >
-              Sessions
-            </h1>
-            <p
-              className="mt-2 max-w-2xl text-[14px]"
-              style={{ color: colors.text.secondary }}
-            >
-              Review every captured writing session, classification,
-              certificate, and teacher review state.
-            </p>
-          </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Evidence library"
+        title="Writing sessions"
+        description="Review your captured authorship trails, replay behavioral evidence, and access certificate records."
+        action={<ButtonLink to={ROUTES.EDITOR_NEW}>New session</ButtonLink>}
+      />
 
-          <Link
-            to={ROUTES.EDITOR_NEW}
-            className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
-            style={{ background: colors.brand }}
-          >
-            New Session
-          </Link>
-        </div>
+      <Card>
+        <CardBody className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <Tabs
+            items={tabItems}
+            value={selectedFilter}
+            onChange={setSelectedFilter}
+          />
 
-        <div
-          className="mt-6 rounded-md border bg-white p-4"
-          style={{ borderColor: colors.surface[200] }}
-        >
-          <div className="grid gap-3 md:grid-cols-[1fr_180px_180px]">
-            <div className="relative">
-              <span
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
-                style={{ color: colors.text.secondary }}
+          <div className="flex w-full gap-2 lg:w-auto">
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search sessions or courses..."
+              className="h-10 w-full rounded-md border px-3 text-[13px] outline-none lg:w-72"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.primary,
+                background: colors.surface[50],
+              }}
+            />
+
+            {search && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setSearch("")}
               >
-                <SearchIcon />
-              </span>
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search title or content..."
-                className="w-full rounded-md border py-2 pl-9 pr-3 text-[13px] outline-none"
-                style={{
-                  borderColor: colors.surface[200],
-                  color: colors.text.primary,
-                }}
-              />
-            </div>
-
-            <select
-              value={classification}
-              onChange={(event) => setClassification(event.target.value)}
-              className="rounded-md border px-3 py-2 text-[13px] outline-none"
-              style={{
-                borderColor: colors.surface[200],
-                color: colors.text.primary,
-              }}
-            >
-              <option value="ALL">All classifications</option>
-              <option value="HUMAN">Human</option>
-              <option value="SUSPICIOUS">Review</option>
-              <option value="SYNTHETIC">High Risk</option>
-            </select>
-
-            <select
-              value={reviewStatus}
-              onChange={(event) => setReviewStatus(event.target.value)}
-              className="rounded-md border px-3 py-2 text-[13px] outline-none"
-              style={{
-                borderColor: colors.surface[200],
-                color: colors.text.primary,
-              }}
-            >
-              <option value="ALL">All review states</option>
-              <option value="PENDING">Pending</option>
-              <option value="APPROVED">Approved</option>
-              <option value="FLAGGED">Flagged</option>
-            </select>
+                Clear
+              </Button>
+            )}
           </div>
+        </CardBody>
+      </Card>
 
-          <p
-            className="mt-3 text-[12px]"
-            style={{ color: colors.text.secondary }}
-          >
-            Showing {sessions.length} of {total} sessions
-          </p>
+      {isLoading ? (
+        <TableSkeleton rows={6} />
+      ) : !sessions.length ? (
+        <EmptyState
+          icon="session"
+          title="No sessions yet"
+          description="Start a writing session to capture keystrokes, pauses, edits, and a replayable authorship trail."
+          action={
+            <ButtonLink to={ROUTES.EDITOR_NEW}>Start first session</ButtonLink>
+          }
+        />
+      ) : !filteredSessions.length ? (
+        <EmptyState
+          icon="search"
+          title="No sessions match your filters"
+          description="Try changing the classification filter or clearing your search query."
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setSearch("");
+                setSelectedFilter("ALL");
+              }}
+            >
+              Reset filters
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid gap-4">
+          {filteredSessions.map((session) => (
+            <SessionCard key={session.id} session={session} />
+          ))}
         </div>
-
-        {apiError && (
-          <div
-            className="mt-6 rounded-md border px-4 py-3 text-[13px]"
-            style={{
-              borderColor: brand.aiAccent,
-              background: brand.aiBg,
-              color: brand.aiText,
-            }}
-          >
-            {apiError}
-          </div>
-        )}
-
-        {isLoading ? (
-          <div
-            className="mt-6 rounded-md border bg-white px-5 py-10 text-center text-[13px]"
-            style={{
-              borderColor: colors.surface[200],
-              color: colors.text.secondary,
-            }}
-          >
-            Loading sessions...
-          </div>
-        ) : sessions.length === 0 ? (
-          <div
-            className="mt-6 rounded-md border bg-white px-5 py-10 text-center"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <h2
-              className="text-[15px] font-semibold"
-              style={{ color: colors.text.primary }}
-            >
-              No sessions found
-            </h2>
-            <p
-              className="mt-2 text-[13px]"
-              style={{ color: colors.text.secondary }}
-            >
-              Adjust the filters or create your first writing session.
-            </p>
-          </div>
-        ) : (
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            {sessions.map((session) => (
-              <SessionCard key={session.id} session={session} />
-            ))}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

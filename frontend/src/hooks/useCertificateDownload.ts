@@ -1,43 +1,55 @@
 // frontend/src/hooks/useCertificateDownload.ts
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
+
 import { api, getApiErrorMessage } from "../lib/api";
+import { useToast } from "../components/ui/ToastProvider";
 
 export function useCertificateDownload() {
-  const [isDownloading, setIsDownloading] = useState(false);
+  const toast = useToast();
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  const downloadCertificate = useCallback(async (certificateId: string) => {
+  const downloadCertificate = async (certificateId: string) => {
     if (!certificateId) {
-      throw new Error("Certificate ID is required.");
+      toast.error("Download failed", "Certificate ID is missing.");
+      return;
     }
 
-    setIsDownloading(true);
+    setDownloadingId(certificateId);
 
     try {
       const response = await api.get(`/certificates/${certificateId}/pdf`, {
         responseType: "blob",
       });
 
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      const downloadUrl = window.URL.createObjectURL(blob);
+      const blob = new Blob([response.data], {
+        type: "application/pdf",
+      });
 
+      const fileUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = downloadUrl;
+
+      link.href = fileUrl;
       link.download = `TypeTrace_Certificate_${certificateId}.pdf`;
       document.body.appendChild(link);
       link.click();
-      link.remove();
 
-      window.URL.revokeObjectURL(downloadUrl);
+      link.remove();
+      window.URL.revokeObjectURL(fileUrl);
+
+      toast.success(
+        "Certificate downloaded",
+        "The PDF certificate has been saved to your device.",
+      );
     } catch (error) {
-      throw new Error(getApiErrorMessage(error));
+      toast.error("Download failed", getApiErrorMessage(error));
     } finally {
-      setIsDownloading(false);
+      setDownloadingId(null);
     }
-  }, []);
+  };
 
   return {
+    downloadingId,
     downloadCertificate,
-    isDownloading,
   };
 }

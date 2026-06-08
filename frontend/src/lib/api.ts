@@ -3,6 +3,7 @@
 import axios, { AxiosError } from "axios";
 
 import { useAuthStore } from "../store/authStore";
+import { toast } from "./toast";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
@@ -35,10 +36,15 @@ api.interceptors.response.use(
       requestUrl.includes("/auth/login") ||
       requestUrl.includes("/auth/register") ||
       requestUrl.includes("/auth/verify-otp") ||
+      requestUrl.includes("/auth/resend-otp") ||
       requestUrl.includes("/auth/password-reset");
 
     if (status === 401 && requestHadAuth && !isAuthEndpoint) {
       useAuthStore.getState().logout();
+      toast.warning(
+        "Session expired",
+        "Please sign in again to continue using TypeTrace.",
+      );
     }
 
     return Promise.reject(error);
@@ -53,6 +59,7 @@ export function getApiErrorMessage(error: unknown): string {
       return detail
         .map((item) => {
           if (typeof item === "string") return item;
+
           if (item && typeof item === "object") {
             const record = item as Record<string, unknown>;
             return String(record.msg || record.message || "Validation error");

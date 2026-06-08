@@ -3,14 +3,41 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { Badge } from "../components/ui/Badge";
+import { Button, ButtonLink } from "../components/ui/Button";
+import { Card, CardBody, CardHeader } from "../components/ui/Card";
 import { ROUTES } from "../constants/routes";
 import { useKeystrokeCapture } from "../hooks/useKeystrokeCapture";
 import { api, getApiErrorMessage } from "../lib/api";
+import { useToast } from "../components/ui/ToastProvider";
 import { useAuthStore } from "../store/authStore";
 import { brand, colors } from "../styles/colors";
-import type { AnalysisResult, EnrolledCourse } from "../types/editor";
 
 const MINIMUM_KEYSTROKES = 30;
+
+interface EnrolledCourse {
+  id: number;
+  course_name: string;
+  course_code: string;
+}
+
+interface AnalysisResult {
+  classification: string;
+  confidence: number;
+  certificate_id?: string | null;
+  document_hash?: string | null;
+  session_id?: number | null;
+  kill_switch_triggered?: boolean;
+  kill_switch_reason?: string | null;
+  stats: {
+    keystrokes: number;
+    deletions: number;
+    pauses: number;
+    wpm: number;
+    avgIki: number;
+    sessionSeconds: number;
+  };
+}
 
 function countWords(value: string): number {
   const clean = value.trim();
@@ -19,17 +46,19 @@ function countWords(value: string): number {
 }
 
 function formatDuration(seconds: number): string {
-  const safe = Math.max(0, Math.floor(seconds));
+  const safe = Math.max(0, Math.floor(seconds || 0));
   const minutes = Math.floor(safe / 60);
   const remaining = safe % 60;
+
   return `${minutes}:${String(remaining).padStart(2, "0")}`;
 }
 
-function getResultStyle(classification: string) {
+function resultTone(classification: string) {
   const normalized = classification.toUpperCase();
 
   if (normalized === "HUMAN") {
     return {
+      tone: "human" as const,
       label: "Human Writing Pattern",
       bg: brand.humanBg,
       text: brand.humanText,
@@ -39,6 +68,7 @@ function getResultStyle(classification: string) {
 
   if (normalized === "SUSPICIOUS") {
     return {
+      tone: "suspicious" as const,
       label: "Review Recommended",
       bg: brand.suspiciousBg,
       text: brand.suspiciousText,
@@ -47,6 +77,7 @@ function getResultStyle(classification: string) {
   }
 
   return {
+    tone: "danger" as const,
     label: "High Risk Pattern",
     bg: brand.aiBg,
     text: brand.aiText,
@@ -54,7 +85,7 @@ function getResultStyle(classification: string) {
   };
 }
 
-function MetricPill({
+function MetricTile({
   label,
   value,
 }: {
@@ -102,127 +133,117 @@ function CourseSelectorModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div
+      <button
+        type="button"
         className="absolute inset-0"
-        style={{ background: "rgba(15, 23, 42, 0.48)" }}
+        style={{
+          background: "rgba(15, 23, 42, 0.48)",
+          backdropFilter: "blur(5px)",
+        }}
         onClick={onCancel}
+        aria-label="Close modal"
       />
 
-      <div
-        className="relative z-10 w-full max-w-[520px] rounded-2xl border bg-white p-6"
-        style={{
-          borderColor: colors.surface[200],
-          boxShadow: `0 28px 100px -44px ${colors.shadowStrong}`,
-        }}
-      >
-        <p
-          className="text-[11px] font-bold uppercase tracking-[0.18em]"
-          style={{ color: colors.brand }}
-        >
-          Submit session
-        </p>
-
-        <h2
-          className="mt-2 text-2xl font-bold tracking-[-0.04em]"
-          style={{ color: colors.text.primary }}
-        >
-          Where should this evidence trail be linked?
-        </h2>
-
-        <p
-          className="mt-3 text-[14px] leading-6"
-          style={{ color: colors.text.secondary }}
-        >
-          Select a course if this writing session belongs to an academic module,
-          or keep it as a personal session.
-        </p>
-
-        <div className="mt-5 grid gap-3">
-          <button
-            type="button"
-            onClick={() => onSelect(null)}
-            className="rounded-md border px-4 py-3 text-left transition"
-            style={{
-              borderColor:
-                selectedCourseId === null ? colors.brand : colors.surface[200],
-              background:
-                selectedCourseId === null
-                  ? colors.brandSoft
-                  : colors.surface[50],
-            }}
+      <Card elevated className="relative z-10 w-full max-w-[540px]">
+        <CardHeader>
+          <p
+            className="text-[11px] font-bold uppercase tracking-[0.18em]"
+            style={{ color: colors.brand }}
           >
-            <p
-              className="text-[14px] font-semibold"
-              style={{ color: colors.text.primary }}
-            >
-              Personal session
-            </p>
-            <p
-              className="mt-1 text-[12px]"
-              style={{ color: colors.text.secondary }}
-            >
-              Keep this writing session inside your private workspace.
-            </p>
-          </button>
+            Submit session
+          </p>
 
-          {courses.map((course) => (
+          <h2
+            className="mt-2 text-2xl font-bold tracking-[-0.04em]"
+            style={{ color: colors.text.primary }}
+          >
+            Link this evidence trail
+          </h2>
+
+          <p
+            className="mt-3 text-[14px] leading-6"
+            style={{ color: colors.text.secondary }}
+          >
+            Select a course if this writing session belongs to an academic
+            module, or keep it as a personal session.
+          </p>
+        </CardHeader>
+
+        <CardBody>
+          <div className="grid gap-3">
             <button
-              key={course.id}
               type="button"
-              onClick={() => onSelect(course.id)}
+              onClick={() => onSelect(null)}
               className="rounded-md border px-4 py-3 text-left transition"
               style={{
                 borderColor:
-                  selectedCourseId === course.id
+                  selectedCourseId === null
                     ? colors.brand
                     : colors.surface[200],
                 background:
-                  selectedCourseId === course.id
+                  selectedCourseId === null
                     ? colors.brandSoft
                     : colors.surface[50],
               }}
             >
               <p
-                className="text-[14px] font-semibold"
+                className="text-[14px] font-bold"
                 style={{ color: colors.text.primary }}
               >
-                {course.course_name}
+                Personal session
               </p>
               <p
                 className="mt-1 text-[12px]"
                 style={{ color: colors.text.secondary }}
               >
-                {course.course_code}
+                Keep this evidence inside your private workspace.
               </p>
             </button>
-          ))}
-        </div>
 
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md border px-4 py-2 text-[13px] font-semibold"
-            style={{
-              borderColor: colors.surface[200],
-              color: colors.text.primary,
-              background: colors.surface[50],
-            }}
-          >
-            Cancel
-          </button>
+            {courses.map((course) => (
+              <button
+                key={course.id}
+                type="button"
+                onClick={() => onSelect(course.id)}
+                className="rounded-md border px-4 py-3 text-left transition"
+                style={{
+                  borderColor:
+                    selectedCourseId === course.id
+                      ? colors.brand
+                      : colors.surface[200],
+                  background:
+                    selectedCourseId === course.id
+                      ? colors.brandSoft
+                      : colors.surface[50],
+                }}
+              >
+                <p
+                  className="text-[14px] font-bold"
+                  style={{ color: colors.text.primary }}
+                >
+                  {course.course_name}
+                </p>
+                <p
+                  className="mt-1 text-[12px]"
+                  style={{ color: colors.text.secondary }}
+                >
+                  {course.course_code}
+                </p>
+              </button>
+            ))}
+          </div>
 
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isSubmitting}
-            className="rounded-md px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-60"
-            style={{ background: colors.brand }}
-          >
-            {isSubmitting ? "Analyzing..." : "Analyze session"}
-          </button>
-        </div>
-      </div>
+          <div className="mt-6 flex justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={onCancel}>
+              Cancel
+            </Button>
+
+            <Button type="button" onClick={onConfirm} disabled={isSubmitting}>
+              {isSubmitting ? "Analyzing..." : "Analyze session"}
+            </Button>
+          </div>
+        </CardBody>
+      </Card>
     </div>
   );
 }
@@ -234,113 +255,108 @@ function ResultPanel({
   result: AnalysisResult;
   onNewSession: () => void;
 }) {
-  const style = getResultStyle(result.classification);
+  const style = resultTone(result.classification);
 
   return (
-    <aside
-      className="rounded-2xl border bg-white p-5"
-      style={{
-        borderColor: colors.surface[200],
-        boxShadow: `0 22px 70px -48px ${colors.shadowStrong}`,
-      }}
-    >
-      <div
-        className="rounded-xl border p-5"
-        style={{
-          borderColor: style.accent,
-          background: style.bg,
-          color: style.text,
-        }}
-      >
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em]">
-          Authorship result
-        </p>
-
-        <h2 className="mt-3 text-[2.4rem] font-extrabold tracking-[-0.05em]">
-          {Math.round(result.confidence)}%
-        </h2>
-
-        <p className="mt-1 text-[14px] font-semibold">{style.label}</p>
-
-        {result.kill_switch_triggered && result.kill_switch_reason && (
-          <p className="mt-3 text-[12px] leading-5">
-            {result.kill_switch_reason}
-          </p>
-        )}
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <MetricPill label="WPM" value={result.stats.wpm} />
-        <MetricPill label="IKI" value={`${result.stats.avgIki}ms`} />
-        <MetricPill label="Keys" value={result.stats.keystrokes} />
-        <MetricPill label="Pauses" value={result.stats.pauses} />
-      </div>
-
-      {result.document_hash && (
+    <Card elevated>
+      <CardBody>
         <div
-          className="mt-4 rounded-md border p-3"
+          className="rounded-xl border p-5"
           style={{
-            borderColor: colors.surface[200],
-            background: colors.surface[100],
+            borderColor: style.accent,
+            background: style.bg,
+            color: style.text,
           }}
         >
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em]">
+            Authorship result
+          </p>
+
+          <h2 className="mt-3 text-[2.4rem] font-extrabold tracking-[-0.05em]">
+            {Math.round(result.confidence)}%
+          </h2>
+
+          <p className="mt-1 text-[14px] font-bold">{style.label}</p>
+
+          {result.kill_switch_triggered && result.kill_switch_reason && (
+            <p className="mt-3 text-[12px] leading-5">
+              {result.kill_switch_reason}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-5">
           <p
-            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em]"
             style={{ color: colors.text.secondary }}
           >
-            Document hash
+            Behavioral metrics
           </p>
-          <p
-            className="mt-2 break-all font-mono text-[11px]"
-            style={{ color: colors.text.primary }}
-          >
-            {result.document_hash}
-          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <MetricTile label="WPM" value={result.stats.wpm} />
+            <MetricTile label="IKI" value={`${result.stats.avgIki}ms`} />
+            <MetricTile label="Keys" value={result.stats.keystrokes} />
+            <MetricTile label="Pauses" value={result.stats.pauses} />
+          </div>
         </div>
-      )}
 
-      <div className="mt-5 grid gap-2">
-        {result.session_id && (
-          <Link
-            to={ROUTES.REPLAY.replace(":sessionId", String(result.session_id))}
-            className="rounded-md px-4 py-2.5 text-center text-[13px] font-semibold text-white"
-            style={{ background: colors.brand }}
-          >
-            View replay audit
-          </Link>
-        )}
-
-        {result.certificate_id && (
-          <Link
-            to={`/verify/${result.certificate_id}`}
-            className="rounded-md border px-4 py-2.5 text-center text-[13px] font-semibold"
+        {result.document_hash && (
+          <div
+            className="mt-5 rounded-md border p-3"
             style={{
               borderColor: colors.surface[200],
-              color: colors.text.primary,
+              background: colors.surface[100],
             }}
           >
-            Verify certificate
-          </Link>
+            <p
+              className="text-[10px] font-bold uppercase tracking-[0.16em]"
+              style={{ color: colors.text.secondary }}
+            >
+              Document hash
+            </p>
+
+            <p
+              className="mt-2 break-all font-mono text-[11px]"
+              style={{ color: colors.text.primary }}
+            >
+              {result.document_hash}
+            </p>
+          </div>
         )}
 
-        <button
-          type="button"
-          onClick={onNewSession}
-          className="rounded-md border px-4 py-2.5 text-[13px] font-semibold"
-          style={{
-            borderColor: colors.surface[200],
-            color: colors.text.secondary,
-            background: colors.surface[50],
-          }}
-        >
-          Start new session
-        </button>
-      </div>
-    </aside>
+        <div className="mt-5 grid gap-2">
+          {result.session_id && (
+            <ButtonLink
+              to={ROUTES.REPLAY.replace(
+                ":sessionId",
+                String(result.session_id),
+              )}
+            >
+              View replay audit
+            </ButtonLink>
+          )}
+
+          {result.certificate_id && (
+            <ButtonLink
+              to={`/verify/${result.certificate_id}`}
+              variant="secondary"
+            >
+              Verify certificate
+            </ButtonLink>
+          )}
+
+          <Button type="button" variant="secondary" onClick={onNewSession}>
+            Start new session
+          </Button>
+        </div>
+      </CardBody>
+    </Card>
   );
 }
 
 export default function EditorPage() {
+  const toast = useToast();
   const { user } = useAuthStore();
 
   const [title, setTitle] = useState("");
@@ -350,9 +366,11 @@ export default function EditorPage() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
     null,
   );
-  const [apiError, setApiError] = useState<string | null>(null);
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved">(
+    "saved",
+  );
 
   const {
     keystrokeLogRef,
@@ -379,6 +397,7 @@ export default function EditorPage() {
     async function loadCourses() {
       try {
         const response = await api.get("/courses/enrolled");
+
         if (!mounted) return;
         setEnrolledCourses(response.data?.courses || []);
       } catch {
@@ -394,17 +413,33 @@ export default function EditorPage() {
     };
   }, []);
 
-  const openAnalyzeModal = () => {
-    setApiError(null);
+  useEffect(() => {
+    if (!text && !title) return;
 
+    setSaveState("saving");
+
+    const timeout = window.setTimeout(() => {
+      setSaveState("saved");
+    }, 800);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [text, title]);
+
+  const openAnalyzeModal = () => {
     if (!text.trim()) {
-      setApiError("Please write something before analyzing the session.");
+      toast.error(
+        "Nothing to analyze",
+        "Please write something before analyzing.",
+      );
       return;
     }
 
     if (liveStats.keystrokes < MINIMUM_KEYSTROKES) {
-      setApiError(
-        `Please type at least ${MINIMUM_KEYSTROKES} keystrokes before analysis. Current: ${liveStats.keystrokes}.`,
+      toast.warning(
+        "More typing required",
+        `Please type at least ${MINIMUM_KEYSTROKES} keystrokes. Current: ${liveStats.keystrokes}.`,
       );
       return;
     }
@@ -414,7 +449,6 @@ export default function EditorPage() {
 
   const confirmSubmit = async () => {
     setIsSubmitting(true);
-    setApiError(null);
 
     try {
       const finalStats = getStats();
@@ -431,7 +465,6 @@ export default function EditorPage() {
         classification: response.data.classification,
         confidence: response.data.confidence_score,
         stats: finalStats,
-        advanced_stats: response.data.advanced_stats,
         kill_switch_triggered: response.data.kill_switch_triggered,
         kill_switch_reason: response.data.kill_switch_reason,
         certificate_id: response.data.certificate_id,
@@ -440,8 +473,12 @@ export default function EditorPage() {
       });
 
       setShowCourseModal(false);
+      toast.success(
+        "Analysis complete",
+        "Your writing evidence trail has been processed successfully.",
+      );
     } catch (error) {
-      setApiError(getApiErrorMessage(error));
+      toast.error("Analysis failed", getApiErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -452,13 +489,16 @@ export default function EditorPage() {
     setText("");
     setSelectedCourseId(null);
     setAnalysisResult(null);
-    setApiError(null);
     resetCapture();
+    toast.info(
+      "New session started",
+      "You can begin writing a new authorship trail.",
+    );
   };
 
   return (
     <main
-      className="min-h-screen pb-20"
+      className="min-h-screen pb-24"
       style={{ background: colors.surface[100] }}
     >
       <header
@@ -467,7 +507,7 @@ export default function EditorPage() {
       >
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-5 py-3">
           <div className="flex items-center gap-5">
-            <Link to={ROUTES.DASHBOARD} className="flex items-center">
+            <Link to={ROUTES.DASHBOARD}>
               <img
                 src="/Logo.png"
                 alt="TypeTrace"
@@ -488,7 +528,7 @@ export default function EditorPage() {
                 Live writing workspace
               </p>
               <p
-                className="text-[13px] font-semibold"
+                className="text-[13px] font-bold"
                 style={{ color: colors.text.primary }}
               >
                 Capture evidence while you write naturally
@@ -497,205 +537,204 @@ export default function EditorPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Link
-              to={ROUTES.DASHBOARD}
-              className="rounded-md border px-3 py-2 text-[13px] font-semibold"
-              style={{
-                borderColor: colors.surface[200],
-                color: colors.text.primary,
-                background: colors.surface[50],
-              }}
-            >
-              Dashboard
-            </Link>
+            <Badge tone={saveState === "saved" ? "human" : "brand"}>
+              {saveState === "saved"
+                ? "Saved"
+                : saveState === "saving"
+                  ? "Saving..."
+                  : "Unsaved"}
+            </Badge>
 
-            <button
+            <ButtonLink to={ROUTES.DASHBOARD} variant="secondary">
+              Dashboard
+            </ButtonLink>
+
+            <Button
               type="button"
               onClick={openAnalyzeModal}
               disabled={!canAnalyze || isSubmitting}
-              className="rounded-md px-4 py-2 text-[13px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ background: colors.brand }}
             >
               Analyze
-            </button>
+            </Button>
           </div>
         </div>
       </header>
 
-      <section className="mx-auto grid max-w-[1500px] grid-cols-1 gap-5 px-5 py-5 xl:grid-cols-[1fr_360px]">
-        <div
-          className="overflow-hidden rounded-2xl border bg-white"
-          style={{
-            borderColor: colors.surface[200],
-            boxShadow: `0 24px 90px -58px ${colors.shadowStrong}`,
-          }}
-        >
-          <div
-            className="flex flex-col gap-4 border-b px-5 py-4 md:flex-row md:items-center md:justify-between"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <div className="min-w-0 flex-1">
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="Untitled academic document"
-                className="w-full border-none bg-transparent text-[1.65rem] font-bold tracking-[-0.05em] outline-none"
-                style={{ color: colors.text.primary }}
-              />
+      <section className="mx-auto grid max-w-[1500px] grid-cols-1 gap-5 px-5 py-5 xl:grid-cols-[1fr_370px]">
+        <Card elevated className="overflow-hidden">
+          <CardHeader>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0 flex-1">
+                <input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder="Untitled academic document"
+                  className="w-full border-none bg-transparent text-[1.65rem] font-bold tracking-[-0.05em] outline-none"
+                  style={{ color: colors.text.primary }}
+                />
 
-              <p
-                className="mt-1 text-[12px]"
-                style={{ color: colors.text.secondary }}
-              >
-                Every keystroke, pause, correction, and paste event is captured
-                as behavioral evidence.
-              </p>
+                <p
+                  className="mt-1 text-[12px]"
+                  style={{ color: colors.text.secondary }}
+                >
+                  Keystrokes, pauses, edits, and paste events are captured as
+                  behavioral evidence.
+                </p>
+              </div>
+
+              <Badge tone={canAnalyze ? "human" : "brand"}>
+                {canAnalyze
+                  ? "Ready for analysis"
+                  : `${Math.max(0, MINIMUM_KEYSTROKES - liveStats.keystrokes)} more keys`}
+              </Badge>
             </div>
+          </CardHeader>
 
-            <div
-              className="rounded-md border px-3 py-2 text-[12px] font-semibold"
-              style={{
-                borderColor: colors.surface[200],
-                background: colors.surface[100],
-                color: colors.text.secondary,
-              }}
-            >
-              {liveStats.keystrokes < MINIMUM_KEYSTROKES
-                ? `${MINIMUM_KEYSTROKES - liveStats.keystrokes} more keys needed`
-                : "Ready for analysis"}
-            </div>
-          </div>
-
-          {apiError && (
-            <div
-              className="mx-5 mt-5 rounded-md border px-4 py-3 text-[13px]"
-              style={{
-                borderColor: brand.aiAccent,
-                background: brand.aiBg,
-                color: brand.aiText,
-              }}
-            >
-              {apiError}
-            </div>
-          )}
-
-          <div className="p-5">
+          <CardBody>
             <textarea
               value={text}
-              onChange={(event) => setText(event.target.value)}
+              onChange={(event) => {
+                setText(event.target.value);
+                setSaveState("unsaved");
+              }}
               onKeyDown={handleKeyDown}
               onKeyUp={handleKeyUp}
               onPaste={handlePaste}
               placeholder="Start writing here. TypeTrace will quietly capture your writing process in the background."
-              className="min-h-[calc(100vh-285px)] w-full resize-none rounded-xl border px-5 py-5 text-[16px] leading-8 outline-none transition focus:ring-2"
+              className="min-h-[calc(100vh-320px)] w-full resize-none rounded-xl border px-6 py-6 text-[16px] leading-8 outline-none transition focus:ring-2"
               style={{
                 borderColor: colors.surface[200],
                 background: colors.surface[50],
                 color: colors.text.primary,
+                boxShadow: `inset 0 1px 0 ${colors.surface[200]}`,
               }}
             />
-          </div>
-        </div>
+          </CardBody>
+        </Card>
 
         <div className="space-y-5">
           {analysisResult ? (
             <ResultPanel result={analysisResult} onNewSession={newSession} />
           ) : (
-            <aside
-              className="rounded-2xl border bg-white p-5"
-              style={{
-                borderColor: colors.surface[200],
-                boxShadow: `0 22px 70px -48px ${colors.shadowStrong}`,
-              }}
-            >
-              <p
-                className="text-[11px] font-bold uppercase tracking-[0.16em]"
-                style={{ color: colors.brand }}
-              >
-                Live telemetry
-              </p>
-
-              <h2
-                className="mt-2 text-xl font-bold tracking-[-0.04em]"
-                style={{ color: colors.text.primary }}
-              >
-                Session signal quality
-              </h2>
-
-              <p
-                className="mt-2 text-[13px] leading-6"
-                style={{ color: colors.text.secondary }}
-              >
-                The system needs enough natural typing behavior before it can
-                generate a reliable authorship result.
-              </p>
-
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <MetricPill label="Words" value={wordCount} />
-                <MetricPill label="Characters" value={charCount} />
-                <MetricPill label="Keystrokes" value={liveStats.keystrokes} />
-                <MetricPill label="Deletions" value={liveStats.deletions} />
-                <MetricPill label="WPM" value={liveStats.wpm} />
-                <MetricPill
-                  label="Duration"
-                  value={formatDuration(liveStats.sessionSeconds)}
-                />
-                <MetricPill label="Pauses" value={liveStats.pauses} />
-                <MetricPill label="Avg IKI" value={`${liveStats.avgIki}ms`} />
-              </div>
-            </aside>
-          )}
-
-          <aside
-            className="rounded-2xl border bg-white p-5"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <p
-              className="text-[11px] font-bold uppercase tracking-[0.16em]"
-              style={{ color: colors.text.secondary }}
-            >
-              Writing evidence
-            </p>
-
-            <div className="mt-4 grid gap-3">
-              {[
-                [
-                  "Behavioral capture",
-                  "Keydown, keyup, dwell and flight timing",
-                ],
-                [
-                  "Integrity trail",
-                  "Session evidence prepared for certificate sealing",
-                ],
-                [
-                  "Replay ready",
-                  "Teachers can review suspicious sessions later",
-                ],
-              ].map(([titleValue, desc]) => (
-                <div
-                  key={titleValue}
-                  className="rounded-md border p-3"
-                  style={{
-                    borderColor: colors.surface[200],
-                    background: colors.surface[50],
-                  }}
+            <Card elevated>
+              <CardHeader>
+                <p
+                  className="text-[11px] font-bold uppercase tracking-[0.16em]"
+                  style={{ color: colors.brand }}
                 >
+                  Live telemetry
+                </p>
+
+                <h2
+                  className="mt-2 text-xl font-bold tracking-[-0.04em]"
+                  style={{ color: colors.text.primary }}
+                >
+                  Session signal quality
+                </h2>
+
+                <p
+                  className="mt-2 text-[13px] leading-6"
+                  style={{ color: colors.text.secondary }}
+                >
+                  Metrics are grouped so the panel feels like a product tool,
+                  not a noisy stat wall.
+                </p>
+              </CardHeader>
+
+              <CardBody className="space-y-5">
+                <div>
                   <p
-                    className="text-[13px] font-semibold"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {titleValue}
-                  </p>
-                  <p
-                    className="mt-1 text-[12px] leading-5"
+                    className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em]"
                     style={{ color: colors.text.secondary }}
                   >
-                    {desc}
+                    Writing
                   </p>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <MetricTile label="Words" value={wordCount} />
+                    <MetricTile label="Characters" value={charCount} />
+                    <MetricTile label="WPM" value={liveStats.wpm} />
+                    <MetricTile
+                      label="Duration"
+                      value={formatDuration(liveStats.sessionSeconds)}
+                    />
+                  </div>
                 </div>
-              ))}
-            </div>
-          </aside>
+
+                <div>
+                  <p
+                    className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em]"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    Behavior
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <MetricTile
+                      label="Keystrokes"
+                      value={liveStats.keystrokes}
+                    />
+                    <MetricTile label="Deletions" value={liveStats.deletions} />
+                    <MetricTile label="Pauses" value={liveStats.pauses} />
+                    <MetricTile
+                      label="Avg IKI"
+                      value={`${liveStats.avgIki}ms`}
+                    />
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
+          <Card>
+            <CardBody>
+              <p
+                className="text-[11px] font-bold uppercase tracking-[0.16em]"
+                style={{ color: colors.text.secondary }}
+              >
+                Evidence trail
+              </p>
+
+              <div className="mt-4 grid gap-3">
+                {[
+                  [
+                    "Behavioral capture",
+                    "Keydown, keyup, dwell and flight timing",
+                  ],
+                  [
+                    "Integrity trail",
+                    "Document hash and certificate-ready proof",
+                  ],
+                  [
+                    "Replay ready",
+                    "Teachers can inspect suspicious moments later",
+                  ],
+                ].map(([label, description]) => (
+                  <div
+                    key={label}
+                    className="rounded-md border p-3"
+                    style={{
+                      borderColor: colors.surface[200],
+                      background: colors.surface[50],
+                    }}
+                  >
+                    <p
+                      className="text-[13px] font-bold"
+                      style={{ color: colors.text.primary }}
+                    >
+                      {label}
+                    </p>
+                    <p
+                      className="mt-1 text-[12px] leading-5"
+                      style={{ color: colors.text.secondary }}
+                    >
+                      {description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </CardBody>
+          </Card>
         </div>
       </section>
 
@@ -723,12 +762,14 @@ export default function EditorPage() {
               >
                 Student workspace
               </p>
+
               <p
-                className="truncate text-[13px] font-semibold"
+                className="truncate text-[13px] font-bold"
                 style={{ color: colors.text.primary }}
               >
                 {fullName}
               </p>
+
               <p
                 className="truncate text-[12px]"
                 style={{ color: colors.text.secondary }}
@@ -739,10 +780,10 @@ export default function EditorPage() {
           </div>
 
           <div className="grid grid-cols-4 gap-2 md:flex">
-            <MetricPill label="Words" value={wordCount} />
-            <MetricPill label="Keys" value={liveStats.keystrokes} />
-            <MetricPill label="WPM" value={liveStats.wpm} />
-            <MetricPill
+            <MetricTile label="Words" value={wordCount} />
+            <MetricTile label="Keys" value={liveStats.keystrokes} />
+            <MetricTile label="WPM" value={liveStats.wpm} />
+            <MetricTile
               label="Time"
               value={formatDuration(liveStats.sessionSeconds)}
             />
