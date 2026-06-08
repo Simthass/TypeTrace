@@ -1,16 +1,16 @@
 // frontend/src/components/layout/Footer.tsx
 
-import React from "react";
 import { Link } from "react-router-dom";
-
-import { ROUTES } from "../../constants/routes";
 import { brand, colors } from "../../styles/colors";
+import { ROUTES } from "../../constants/routes";
+
+// ─── Icons ───────────────────────────────────────────────────────────────────
 
 function GitHubIcon() {
   return (
     <svg
-      width="20"
-      height="20"
+      width="16"
+      height="16"
       viewBox="0 0 24 24"
       fill="currentColor"
       aria-hidden="true"
@@ -23,8 +23,8 @@ function GitHubIcon() {
 function TwitterIcon() {
   return (
     <svg
-      width="20"
-      height="20"
+      width="15"
+      height="15"
       viewBox="0 0 24 24"
       fill="currentColor"
       aria-hidden="true"
@@ -37,8 +37,8 @@ function TwitterIcon() {
 function LinkedInIcon() {
   return (
     <svg
-      width="20"
-      height="20"
+      width="15"
+      height="15"
       viewBox="0 0 24 24"
       fill="currentColor"
       aria-hidden="true"
@@ -48,57 +48,121 @@ function LinkedInIcon() {
   );
 }
 
-const footerColumns = [
+function ShieldCheck() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 13 13"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M6.5 1.5L2 3.5v3c0 2.8 1.95 5.1 4.5 5.8C9.05 11.6 11 9.3 11 6.5v-3L6.5 1.5z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4.5 6.5l1.5 1.5 2.5-2.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// ─── Footer column data ───────────────────────────────────────────────────────
+
+const FOOTER_COLUMNS = [
   {
     heading: "Platform",
     links: [
       { label: "How It Works", path: ROUTES.HOW_IT_WORKS },
-      { label: "Features Stack", path: ROUTES.FEATURES },
+      { label: "Features", path: ROUTES.FEATURES },
       { label: "Student Dashboard", path: ROUTES.DASHBOARD },
       { label: "Teacher Console", path: ROUTES.TEACHER_DASHBOARD },
+      { label: "Writing Sessions", path: ROUTES.SESSIONS },
     ],
   },
   {
-    heading: "Resources",
+    heading: "Verification",
     links: [
-      { label: "Academic Research", path: ROUTES.HELP_DOCS },
-      { label: "Help Center", path: ROUTES.HELP_DOCS },
       { label: "Certificate Lookup", path: ROUTES.VERIFY_LOOKUP },
-      { label: "Public Verification", path: ROUTES.VERIFY_LOOKUP },
+      { label: "Session Replay", path: ROUTES.SESSIONS },
+      { label: "Certificates", path: ROUTES.CERTIFICATES },
+      { label: "Analytics", path: ROUTES.ANALYTICS },
     ],
   },
   {
-    heading: "Trust",
+    heading: "Company",
     links: [
-      { label: "Privacy Controls", path: ROUTES.SETTINGS },
-      { label: "Data Export", path: ROUTES.SETTINGS },
-      { label: "Certificate Ledger", path: ROUTES.VERIFY_LOOKUP },
-      { label: "Academic Integrity", path: ROUTES.ABOUT },
+      { label: "About TypeTrace", path: ROUTES.ABOUT },
+      { label: "Help & Docs", path: ROUTES.HELP_DOCS },
+      { label: "Privacy & GDPR", path: ROUTES.SETTINGS },
+      { label: "Academic Research", path: ROUTES.ABOUT },
     ],
   },
 ] as const;
 
-const socialLinks = [
-  { label: "GitHub Repository", href: "https://github.com", Icon: GitHubIcon },
-  { label: "Follow on X", href: "https://twitter.com", Icon: TwitterIcon },
+const SOCIAL = [
+  { label: "GitHub", href: "https://github.com", Icon: GitHubIcon },
+  { label: "X / Twitter", href: "https://twitter.com", Icon: TwitterIcon },
+  { label: "LinkedIn", href: "https://linkedin.com", Icon: LinkedInIcon },
+] as const;
+
+// ─── Trust badges ─────────────────────────────────────────────────────────────
+
+const TRUST_BADGES = [
   {
-    label: "LinkedIn Network",
-    href: "https://linkedin.com",
-    Icon: LinkedInIcon,
+    label: "GDPR Compliant",
+    color: colors.text.secondary,
+    bg: colors.surface[100],
+    border: colors.surface[200],
+  },
+  {
+    label: "WCAG 2.1 AA",
+    color: colors.text.secondary,
+    bg: colors.surface[100],
+    border: colors.surface[200],
+  },
+  {
+    label: "SHA-256 Sealed",
+    color: brand.humanText,
+    bg: brand.humanBg,
+    border: brand.humanAccent,
   },
 ] as const;
+
+// ─── Stat items ───────────────────────────────────────────────────────────────
+
+const STATS = [
+  { value: "96.3%", label: "Model accuracy" },
+  { value: "<5%", label: "False positive target" },
+  { value: "3", label: "Evidence layers" },
+] as const;
+
+// ─── Footer link component ────────────────────────────────────────────────────
 
 function FooterLink({ label, path }: { label: string; path: string }) {
   return (
     <Link
       to={path}
-      className="rounded-md text-[14px] font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-      style={{ color: colors.text.secondary }}
-      onMouseEnter={(event) => {
-        event.currentTarget.style.color = colors.text.primary;
+      style={{
+        fontSize: 13.5,
+        fontWeight: 400,
+        color: colors.text.secondary,
+        textDecoration: "none",
+        transition: "color 0.15s ease",
+        lineHeight: 1,
       }}
-      onMouseLeave={(event) => {
-        event.currentTarget.style.color = colors.text.secondary;
+      onMouseEnter={(e) => {
+        e.currentTarget.style.color = colors.text.primary;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.color = colors.text.secondary;
       }}
     >
       {label}
@@ -106,142 +170,433 @@ function FooterLink({ label, path }: { label: string; path: string }) {
   );
 }
 
+// ─── Main Footer export ───────────────────────────────────────────────────────
+
 export default function Footer() {
   const currentYear = new Date().getFullYear();
-
-  const dynamicStyles = {
-    "--bg-footer": colors.text.light,
-    "--border-light": colors.surface[200],
-    "--text-primary": colors.text.primary,
-    "--text-muted": colors.text.secondary,
-    "--action-primary": brand.action,
-    "--surface-50": colors.surface[50],
-  } as React.CSSProperties;
 
   return (
     <footer
       role="contentinfo"
-      style={dynamicStyles}
-      className="overflow-hidden border-t bg-[var(--bg-footer)] font-sans"
+      style={{
+        backgroundColor: colors.surface[50],
+        borderTop: `1px solid ${colors.surface[200]}`,
+        fontFamily: "inherit",
+      }}
     >
-      <div className="mx-auto max-w-[1440px] px-6 py-20 md:px-12">
-        <div className="grid grid-cols-1 gap-16 lg:grid-cols-6">
-          <div className="flex flex-col gap-6 lg:col-span-2">
+      {/* ── Top CTA band ── */}
+      <div
+        style={{
+          borderBottom: `1px solid ${colors.surface[200]}`,
+          backgroundColor: colors.surface[100],
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1200,
+            margin: "0 auto",
+            padding: "40px 32px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 32,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ maxWidth: 520 }}>
+            <p
+              style={{
+                margin: "0 0 6px",
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: "0.09em",
+                textTransform: "uppercase",
+                color: colors.brand,
+              }}
+            >
+              Behavioral authorship verification
+            </p>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: "clamp(18px, 2.4vw, 24px)",
+                fontWeight: 700,
+                letterSpacing: "-0.03em",
+                color: colors.text.primary,
+                lineHeight: 1.2,
+              }}
+            >
+              Prove authorship before doubt begins.
+            </h2>
+            <p
+              style={{
+                margin: "8px 0 0",
+                fontSize: 13.5,
+                color: colors.text.secondary,
+                lineHeight: 1.6,
+              }}
+            >
+              TypeTrace captures how you type, not just what you type. Generate
+              verifiable authorship evidence with every session.
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexShrink: 0,
+            }}
+          >
+            <Link
+              to={ROUTES.REGISTER}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                padding: "9px 20px",
+                borderRadius: 8,
+                fontSize: 13.5,
+                fontWeight: 600,
+                letterSpacing: "-0.015em",
+                color: colors.text.light,
+                backgroundColor: colors.brand,
+                textDecoration: "none",
+                transition: "background-color 0.13s ease",
+                whiteSpace: "nowrap",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = colors.brandHover;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = colors.brand;
+              }}
+            >
+              Start free session
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M2.5 6h7M6.5 2.5l3.5 3.5-3.5 3.5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </Link>
+            <Link
+              to={ROUTES.VERIFY_LOOKUP}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                padding: "9px 18px",
+                borderRadius: 8,
+                fontSize: 13.5,
+                fontWeight: 500,
+                letterSpacing: "-0.012em",
+                color: colors.text.secondary,
+                backgroundColor: "transparent",
+                border: `1px solid ${colors.surface[200]}`,
+                textDecoration: "none",
+                transition: "all 0.13s ease",
+                whiteSpace: "nowrap",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = colors.text.primary;
+                e.currentTarget.style.borderColor = colors.surface[300];
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = colors.text.secondary;
+                e.currentTarget.style.borderColor = colors.surface[200];
+              }}
+            >
+              Verify a certificate
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main footer body ── */}
+      <div
+        style={{ maxWidth: 1200, margin: "0 auto", padding: "52px 32px 48px" }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: "32px 48px",
+          }}
+          className="tt-footer-grid"
+        >
+          {/* ── Brand column ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {/* Logo */}
             <Link
               to={ROUTES.HOME}
-              className="w-fit rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--action-primary)] focus-visible:ring-offset-2"
               aria-label="TypeTrace Home"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                textDecoration: "none",
+                width: "fit-content",
+              }}
             >
               <img
                 src="/Logo.png"
                 alt="TypeTrace"
-                className="h-[35px] w-auto object-contain transition-opacity hover:opacity-80"
-                onError={(event) => {
-                  event.currentTarget.style.display = "none";
+                style={{
+                  height: 30,
+                  width: "auto",
+                  objectFit: "contain",
+                  display: "block",
                 }}
               />
             </Link>
 
-            <p className="max-w-[340px] text-[14px] leading-[1.8] text-[var(--text-muted)]">
-              Behavioral keystroke biometrics engineered to protect honest
-              students and uphold institutional integrity in the generative AI
-              era.
+            {/* Tagline */}
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13.5,
+                lineHeight: 1.7,
+                color: colors.text.secondary,
+                maxWidth: 240,
+              }}
+            >
+              Behavioral keystroke biometrics that protect honest students in
+              the generative AI era.
             </p>
 
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              {socialLinks.map(({ label, href, Icon }) => (
+            {/* Stats mini-grid */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {STATS.map((stat) => (
+                <div
+                  key={stat.label}
+                  style={{ display: "flex", alignItems: "center", gap: 10 }}
+                >
+                  <span
+                    style={{
+                      fontSize: 15,
+                      fontWeight: 700,
+                      letterSpacing: "-0.025em",
+                      color: colors.text.primary,
+                      minWidth: 48,
+                    }}
+                  >
+                    {stat.value}
+                  </span>
+                  <span style={{ fontSize: 12, color: colors.text.secondary }}>
+                    {stat.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Social links */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                marginTop: 4,
+              }}
+            >
+              {SOCIAL.map(({ label, href, Icon: SocialIcon }) => (
                 <a
                   key={label}
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={label}
-                  className="flex h-10 w-10 items-center justify-center rounded-md border border-transparent bg-[var(--surface-50)] text-[var(--text-muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--action-primary)] focus-visible:ring-offset-2"
-                  onMouseEnter={(event) => {
-                    event.currentTarget.style.color = "var(--action-primary)";
-                    event.currentTarget.style.borderColor =
-                      "var(--border-light)";
-                    event.currentTarget.style.backgroundColor =
-                      "var(--bg-footer)";
+                  style={{
+                    display: "flex",
+                    width: 32,
+                    height: 32,
+                    borderRadius: 7,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: colors.text.secondary,
+                    backgroundColor: colors.surface[100],
+                    border: `1px solid ${colors.surface[200]}`,
+                    transition: "all 0.13s ease",
+                    textDecoration: "none",
                   }}
-                  onMouseLeave={(event) => {
-                    event.currentTarget.style.color = "var(--text-muted)";
-                    event.currentTarget.style.borderColor = "transparent";
-                    event.currentTarget.style.backgroundColor =
-                      "var(--surface-50)";
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = colors.brand;
+                    e.currentTarget.style.borderColor = colors.surface[300];
+                    e.currentTarget.style.backgroundColor = colors.brandSoft;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = colors.text.secondary;
+                    e.currentTarget.style.borderColor = colors.surface[200];
+                    e.currentTarget.style.backgroundColor = colors.surface[100];
                   }}
                 >
-                  <Icon />
+                  <SocialIcon />
                 </a>
               ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-10 md:grid-cols-3 lg:col-span-4 lg:pl-12">
-            {footerColumns.map((column) => (
-              <div key={column.heading} className="flex flex-col gap-5">
-                <h3 className="text-[12px] font-bold uppercase tracking-widest text-[var(--text-primary)]">
-                  {column.heading}
-                </h3>
+          {/* ── Link columns ── */}
+          {FOOTER_COLUMNS.map((col) => (
+            <div
+              key={col.heading}
+              style={{ display: "flex", flexDirection: "column", gap: 16 }}
+            >
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: "0.09em",
+                  textTransform: "uppercase",
+                  color: colors.text.primary,
+                }}
+              >
+                {col.heading}
+              </h3>
+              <ul
+                style={{
+                  margin: 0,
+                  padding: 0,
+                  listStyle: "none",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 11,
+                }}
+              >
+                {col.links.map((link) => (
+                  <li key={link.label}>
+                    <FooterLink label={link.label} path={link.path} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
 
-                <ul className="flex flex-col gap-3.5" role="list">
-                  {column.links.map((link) => (
-                    <li key={link.label}>
-                      <FooterLink label={link.label} path={link.path} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
+      {/* ── Bottom bar ── */}
+      <div
+        style={{
+          borderTop: `1px solid ${colors.surface[200]}`,
+          backgroundColor: colors.surface[100],
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1200,
+            margin: "0 auto",
+            padding: "16px 32px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 20,
+            flexWrap: "wrap",
+          }}
+        >
+          {/* Left: copyright + author */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 20,
+              flexWrap: "wrap",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: 12.5,
+                color: colors.text.secondary,
+              }}
+            >
+              © {currentYear} TypeTrace. All rights reserved.
+            </p>
+            <span
+              style={{
+                width: 1,
+                height: 14,
+                backgroundColor: colors.surface[200],
+                flexShrink: 0,
+              }}
+            />
+            <p
+              style={{
+                margin: 0,
+                fontSize: 12.5,
+                color: colors.text.secondary,
+              }}
+            >
+              Built by{" "}
+              <span
+                style={{
+                  fontWeight: 600,
+                  color: colors.text.primary,
+                  cursor: "default",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = colors.brand;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = colors.text.primary;
+                }}
+              >
+                Simthass Mohammed
+              </span>{" "}
+              · BSc Computer Science · University of Bedfordshire
+            </p>
+          </div>
+
+          {/* Right: trust badges */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {TRUST_BADGES.map(({ label, color, bg, border }) => (
+              <span
+                key={label}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  color,
+                  backgroundColor: bg,
+                  border: `1px solid ${border}`,
+                  borderRadius: 6,
+                  padding: "4px 9px",
+                  whiteSpace: "nowrap",
+                  letterSpacing: "-0.005em",
+                }}
+              >
+                <ShieldCheck />
+                {label}
+              </span>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="border-t border-[var(--border-light)] bg-[var(--surface-50)]">
-        <div className="mx-auto flex max-w-[1440px] flex-col gap-6 px-6 py-6 md:flex-row md:items-center md:justify-between md:px-12">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-6">
-            <p className="text-[13px] font-medium text-[var(--text-muted)]">
-              &copy; {currentYear} TypeTrace Systems.
-            </p>
-
-            <p className="flex items-center gap-1.5 text-[13px] text-[var(--text-muted)]">
-              Developed by{" "}
-              <span className="font-semibold text-[var(--text-primary)] transition-colors hover:text-[var(--action-primary)]">
-                Simthass Mohammed
-              </span>
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="rounded-md border border-[var(--border-light)] bg-[var(--bg-footer)] px-2.5 py-1.5">
-              <span className="text-[11.5px] font-medium text-[var(--text-muted)]">
-                GDPR Ready
-              </span>
-            </div>
-
-            <div className="rounded-md border border-[var(--border-light)] bg-[var(--bg-footer)] px-2.5 py-1.5">
-              <span className="text-[11.5px] font-medium text-[var(--text-muted)]">
-                WCAG 2.1 AA
-              </span>
-            </div>
-
-            <div
-              className="rounded-md border px-2.5 py-1.5"
-              style={{
-                borderColor: brand.humanAccent,
-                backgroundColor: brand.humanBg,
-              }}
-            >
-              <span
-                className="text-[11.5px] font-medium"
-                style={{ color: brand.humanText }}
-              >
-                Verification Active
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* ── Responsive ── */}
+      <style>{`
+        @media (max-width: 900px) {
+          .tt-footer-grid {
+            grid-template-columns: 1fr 1fr !important;
+          }
+        }
+        @media (max-width: 560px) {
+          .tt-footer-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
     </footer>
   );
 }

@@ -10,7 +10,9 @@ import { useAuthStore } from "../../store/authStore";
 
 export const HEADER_HEIGHT = 60;
 
-const I = {
+// ─── Icon primitives ──────────────────────────────────────────────────────────
+
+const Icon = {
   grid: (
     <svg
       width="14"
@@ -171,7 +173,53 @@ const I = {
       />
     </svg>
   ),
+
+  check: (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 13 13"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M2.5 6.5L5.5 9.5L10.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
+
+  scan: (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M1.5 4.5V2.5a1 1 0 0 1 1-1h2M12.5 4.5V2.5a1 1 0 0 0-1-1h-2M1.5 9.5v2a1 1 0 0 0 1 1h2M12.5 9.5v2a1 1 0 0 1-1 1h-2"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+      <line
+        x1="1.5"
+        y1="7"
+        x2="12.5"
+        y2="7"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  ),
 };
+
+// ─── Sub-components ────────────────────────────────────────────────────────────
 
 function Hamburger({ open }: { open: boolean }) {
   const bar: React.CSSProperties = {
@@ -183,7 +231,6 @@ function Hamburger({ open }: { open: boolean }) {
     position: "absolute",
     left: 0,
   };
-
   return (
     <div style={{ width: 20, height: 15, position: "relative", flexShrink: 0 }}>
       <motion.span
@@ -211,7 +258,7 @@ function Avatar({ initials, size = 30 }: { initials: string; size?: number }) {
       style={{
         width: size,
         height: size,
-        borderRadius: Math.round(size * 0.28),
+        borderRadius: Math.round(size * 0.3),
         backgroundColor: colors.brandSoft,
         color: colors.brand,
         fontSize: size * 0.37,
@@ -229,22 +276,417 @@ function Avatar({ initials, size = 30 }: { initials: string; size?: number }) {
   );
 }
 
-function NavItem({
+// ─── Product dropdown menu ─────────────────────────────────────────────────────
+
+function ProductDropdown({ onClose }: { onClose: () => void }) {
+  const items = [
+    {
+      icon: (
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 15 15"
+          fill="none"
+          aria-hidden="true"
+        >
+          <rect
+            x="1"
+            y="1"
+            width="6"
+            height="6"
+            rx="1.5"
+            stroke={colors.brand}
+            strokeWidth="1.3"
+          />
+          <rect
+            x="8"
+            y="1"
+            width="6"
+            height="4"
+            rx="1.5"
+            stroke={colors.surface[300]}
+            strokeWidth="1.3"
+          />
+          <rect
+            x="1"
+            y="8"
+            width="6"
+            height="6"
+            rx="1.5"
+            stroke={colors.surface[300]}
+            strokeWidth="1.3"
+          />
+          <rect
+            x="8"
+            y="6.5"
+            width="6"
+            height="7.5"
+            rx="1.5"
+            stroke={colors.surface[300]}
+            strokeWidth="1.3"
+          />
+        </svg>
+      ),
+      label: "Dashboard",
+      desc: "Writing evidence & analytics",
+      path: ROUTES.DASHBOARD,
+      active: true,
+    },
+    {
+      icon: Icon.plus,
+      label: "New Session",
+      desc: "Start capturing authorship",
+      path: ROUTES.EDITOR_NEW,
+      active: false,
+    },
+    {
+      icon: Icon.scan,
+      label: "Verify Certificate",
+      desc: "Public integrity lookup",
+      path: ROUTES.VERIFY_LOOKUP,
+      active: false,
+    },
+    {
+      icon: Icon.help,
+      label: "Documentation",
+      desc: "Guides and how-it-works",
+      path: ROUTES.HELP_DOCS,
+      active: false,
+    },
+  ];
+
+  return (
+    <motion.div
+      role="menu"
+      initial={{ opacity: 0, y: 8, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 8, scale: 0.97 }}
+      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+      style={{
+        position: "absolute",
+        top: "calc(100% + 10px)",
+        left: 0,
+        width: 280,
+        zIndex: 200,
+        backgroundColor: colors.surface[50],
+        border: `1px solid ${colors.surface[200]}`,
+        borderRadius: 12,
+        overflow: "hidden",
+        boxShadow:
+          "0 20px 48px rgba(15,23,42,0.11), 0 1px 0 rgba(15,23,42,0.04)",
+      }}
+    >
+      <div style={{ padding: "6px" }}>
+        {items.map((item) => (
+          <Link
+            key={item.path}
+            to={item.path}
+            onClick={onClose}
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+              padding: "9px 10px",
+              borderRadius: 8,
+              textDecoration: "none",
+              backgroundColor: item.active ? colors.brandSoft : "transparent",
+              transition: "background-color 0.1s",
+            }}
+            onMouseEnter={(e) => {
+              if (!item.active)
+                e.currentTarget.style.backgroundColor = colors.surface[100];
+            }}
+            onMouseLeave={(e) => {
+              if (!item.active)
+                e.currentTarget.style.backgroundColor = "transparent";
+            }}
+          >
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 7,
+                backgroundColor: item.active
+                  ? colors.brandSoft
+                  : colors.surface[100],
+                border: `1px solid ${item.active ? colors.surface[200] : colors.surface[200]}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                color: item.active ? colors.brand : colors.text.secondary,
+              }}
+            >
+              {item.icon}
+            </div>
+            <div>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: item.active ? colors.brand : colors.text.primary,
+                  letterSpacing: "-0.012em",
+                }}
+              >
+                {item.label}
+              </p>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 11.5,
+                  color: colors.text.secondary,
+                  marginTop: 1,
+                }}
+              >
+                {item.desc}
+              </p>
+            </div>
+          </Link>
+        ))}
+      </div>
+      <div
+        style={{
+          borderTop: `1px solid ${colors.surface[200]}`,
+          padding: "10px 14px",
+          backgroundColor: colors.surface[100],
+        }}
+      >
+        <p
+          style={{
+            margin: 0,
+            fontSize: 11,
+            color: colors.text.secondary,
+            letterSpacing: "0.02em",
+          }}
+        >
+          <span style={{ color: colors.brand, fontWeight: 600 }}>
+            TypeTrace
+          </span>{" "}
+          — Behavioral authorship verification
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Resources dropdown ────────────────────────────────────────────────────────
+
+function ResourcesDropdown({ onClose }: { onClose: () => void }) {
+  const sections = [
+    {
+      heading: "Learn",
+      items: [
+        {
+          label: "How It Works",
+          desc: "Keystroke capture explained",
+          path: ROUTES.HOW_IT_WORKS,
+        },
+        {
+          label: "Features",
+          desc: "Full capability overview",
+          path: ROUTES.FEATURES,
+        },
+      ],
+    },
+    {
+      heading: "Trust",
+      items: [
+        {
+          label: "About TypeTrace",
+          desc: "Research & methodology",
+          path: ROUTES.ABOUT,
+        },
+        {
+          label: "Help Center",
+          desc: "Guides & documentation",
+          path: ROUTES.HELP_DOCS,
+        },
+      ],
+    },
+  ];
+
+  return (
+    <motion.div
+      role="menu"
+      initial={{ opacity: 0, y: 8, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 8, scale: 0.97 }}
+      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+      style={{
+        position: "absolute",
+        top: "calc(100% + 10px)",
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: 320,
+        zIndex: 200,
+        backgroundColor: colors.surface[50],
+        border: `1px solid ${colors.surface[200]}`,
+        borderRadius: 12,
+        overflow: "hidden",
+        boxShadow:
+          "0 20px 48px rgba(15,23,42,0.11), 0 1px 0 rgba(15,23,42,0.04)",
+      }}
+    >
+      <div style={{ padding: "6px" }}>
+        {sections.map((section) => (
+          <div key={section.heading}>
+            <p
+              style={{
+                margin: "8px 10px 4px",
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                color: colors.text.muted,
+                textTransform: "uppercase",
+              }}
+            >
+              {section.heading}
+            </p>
+            {section.items.map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                onClick={onClose}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "9px 10px",
+                  borderRadius: 8,
+                  textDecoration: "none",
+                  transition: "background-color 0.1s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = colors.surface[100];
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                }}
+              >
+                <div>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: colors.text.primary,
+                      letterSpacing: "-0.012em",
+                    }}
+                  >
+                    {item.label}
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 11.5,
+                      color: colors.text.secondary,
+                      marginTop: 1,
+                    }}
+                  >
+                    {item.desc}
+                  </p>
+                </div>
+                <span style={{ color: colors.surface[300], flexShrink: 0 }}>
+                  {Icon.arrow}
+                </span>
+              </Link>
+            ))}
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Nav item with optional dropdown ──────────────────────────────────────────
+
+function NavDropdownItem({
+  label,
+  children,
+}: {
+  label: string;
+  children: (close: () => void) => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          padding: "5px 13px",
+          borderRadius: 8,
+          fontSize: 13.5,
+          fontWeight: open ? 600 : 500,
+          letterSpacing: "-0.012em",
+          color: open ? colors.text.primary : colors.text.secondary,
+          backgroundColor: open ? colors.surface[100] : "transparent",
+          border: "1px solid transparent",
+          cursor: "pointer",
+          transition: "all 0.13s ease",
+          whiteSpace: "nowrap",
+        }}
+        onMouseEnter={(e) => {
+          if (!open) {
+            e.currentTarget.style.color = colors.text.primary;
+            e.currentTarget.style.backgroundColor = colors.surface[100];
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!open) {
+            e.currentTarget.style.color = colors.text.secondary;
+            e.currentTarget.style.backgroundColor = "transparent";
+          }
+        }}
+        aria-expanded={open}
+        aria-haspopup="true"
+      >
+        {label}
+        <motion.span
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ duration: 0.18 }}
+          style={{
+            color: colors.text.secondary,
+            display: "flex",
+            marginTop: 1,
+          }}
+        >
+          {Icon.chevron}
+        </motion.span>
+      </button>
+      <AnimatePresence>
+        {open && children(() => setOpen(false))}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function NavLink({
   item,
   active,
 }: {
   item: { path: string; label: string };
   active: boolean;
 }) {
-  const [hovered, setHovered] = useState(false);
-
   return (
     <Link
       to={item.path}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       style={{
-        position: "relative",
         display: "inline-flex",
         alignItems: "center",
         padding: "5px 13px",
@@ -252,16 +694,8 @@ function NavItem({
         fontSize: 13.5,
         fontWeight: active ? 600 : 500,
         letterSpacing: "-0.012em",
-        color: active
-          ? colors.brand
-          : hovered
-            ? colors.text.primary
-            : colors.text.secondary,
-        backgroundColor: active
-          ? colors.brandSoft
-          : hovered
-            ? colors.surface[150]
-            : "transparent",
+        color: active ? colors.brand : colors.text.secondary,
+        backgroundColor: active ? colors.brandSoft : "transparent",
         border: active
           ? `1px solid ${colors.surface[200]}`
           : "1px solid transparent",
@@ -269,11 +703,25 @@ function NavItem({
         transition: "all 0.13s ease",
         whiteSpace: "nowrap",
       }}
+      onMouseEnter={(e) => {
+        if (!active) {
+          e.currentTarget.style.color = colors.text.primary;
+          e.currentTarget.style.backgroundColor = colors.surface[100];
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          e.currentTarget.style.color = colors.text.secondary;
+          e.currentTarget.style.backgroundColor = "transparent";
+        }
+      }}
     >
       {item.label}
     </Link>
   );
 }
+
+// ─── Profile dropdown ──────────────────────────────────────────────────────────
 
 function MenuItem({
   to,
@@ -293,7 +741,6 @@ function MenuItem({
   muted?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
-
   const color = danger
     ? hovered
       ? colors.red
@@ -303,13 +750,11 @@ function MenuItem({
       : muted
         ? colors.text.secondary
         : colors.text.primary;
-
-  const backgroundColor = hovered
+  const bg = hovered
     ? danger
       ? `${colors.red}09`
       : colors.surface[150]
     : "transparent";
-
   const iconColor = danger
     ? hovered
       ? colors.red
@@ -327,7 +772,7 @@ function MenuItem({
     fontSize: 13,
     fontWeight: 500,
     color,
-    backgroundColor,
+    backgroundColor: bg,
     transition: "all 0.1s ease",
     cursor: "pointer",
     border: "none",
@@ -349,9 +794,7 @@ function MenuItem({
       >
         {icon}
       </span>
-
       <span style={{ flex: 1 }}>{label}</span>
-
       {badge && (
         <span
           style={{
@@ -402,54 +845,6 @@ function Divider() {
         margin: "4px 0",
       }}
     />
-  );
-}
-
-function ScrollProgress() {
-  const [percentage, setPercentage] = useState(0);
-
-  useEffect(() => {
-    const update = () => {
-      const documentElement = document.documentElement;
-      const total = documentElement.scrollHeight - documentElement.clientHeight;
-      setPercentage(total > 0 ? documentElement.scrollTop / total : 0);
-    };
-
-    update();
-
-    window.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
-
-    return () => {
-      window.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
-  }, []);
-
-  if (percentage <= 0.01 || percentage >= 0.99) return null;
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 2,
-        backgroundColor: "transparent",
-        overflow: "hidden",
-      }}
-    >
-      <motion.div
-        style={{
-          height: "100%",
-          backgroundColor: colors.brand,
-          transformOrigin: "left",
-        }}
-        animate={{ scaleX: percentage }}
-        transition={{ duration: 0.05 }}
-      />
-    </div>
   );
 }
 
@@ -504,17 +899,14 @@ const ProfileDropdown = React.forwardRef<
             gap: 7,
             padding: "4px 8px 4px 5px",
             borderRadius: 9,
-            border: `1px solid ${
-              open || hovered ? colors.surface[200] : "transparent"
-            }`,
+            border: `1px solid ${open || hovered ? colors.surface[200] : "transparent"}`,
             backgroundColor:
               open || hovered ? colors.surface[150] : "transparent",
             cursor: "pointer",
             transition: "all 0.13s ease",
           }}
         >
-          <Avatar initials={initials} size={30} />
-
+          <Avatar initials={initials} size={28} />
           <span
             className="tt-username"
             style={{
@@ -522,7 +914,7 @@ const ProfileDropdown = React.forwardRef<
               fontWeight: 500,
               color: colors.text.primary,
               letterSpacing: "-0.01em",
-              maxWidth: 110,
+              maxWidth: 100,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -530,13 +922,12 @@ const ProfileDropdown = React.forwardRef<
           >
             {user.first_name}
           </span>
-
           <motion.span
             animate={{ rotate: open ? 180 : 0 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             style={{ color: colors.text.secondary, display: "flex" }}
           >
-            {I.chevron}
+            {Icon.chevron}
           </motion.span>
         </button>
 
@@ -552,14 +943,14 @@ const ProfileDropdown = React.forwardRef<
                 position: "absolute",
                 top: "calc(100% + 8px)",
                 right: 0,
-                width: 246,
+                width: 250,
                 zIndex: 200,
                 backgroundColor: colors.surface[50],
                 border: `1px solid ${colors.surface[200]}`,
                 borderRadius: 12,
                 overflow: "hidden",
                 boxShadow:
-                  "0 18px 42px rgba(15, 23, 42, 0.10), 0 1px 0 rgba(15, 23, 42, 0.04)",
+                  "0 18px 42px rgba(15,23,42,0.10), 0 1px 0 rgba(15,23,42,0.04)",
               }}
             >
               <div
@@ -571,14 +962,9 @@ const ProfileDropdown = React.forwardRef<
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <Avatar initials={initials} size={34} />
-
                   <div style={{ minWidth: 0 }}>
                     <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                      }}
+                      style={{ display: "flex", alignItems: "center", gap: 6 }}
                     >
                       <p
                         style={{
@@ -594,7 +980,6 @@ const ProfileDropdown = React.forwardRef<
                       >
                         {user.first_name} {user.last_name ?? ""}
                       </p>
-
                       <span
                         style={{
                           fontSize: 9.5,
@@ -604,11 +989,7 @@ const ProfileDropdown = React.forwardRef<
                           backgroundColor: isTeacher
                             ? colors.brandSoft
                             : brand.humanBg,
-                          border: `1px solid ${
-                            isTeacher
-                              ? colors.surface[200]
-                              : `${brand.humanAccent}40`
-                          }`,
+                          border: `1px solid ${isTeacher ? colors.surface[200] : `${brand.humanAccent}40`}`,
                           borderRadius: 4,
                           padding: "1px 5px",
                           textTransform: "uppercase",
@@ -618,7 +999,6 @@ const ProfileDropdown = React.forwardRef<
                         {roleLabel}
                       </span>
                     </div>
-
                     <p
                       style={{
                         margin: 0,
@@ -637,44 +1017,42 @@ const ProfileDropdown = React.forwardRef<
               </div>
 
               <div style={{ padding: "6px 6px 0" }}>
-                <MenuItem to={dashboardPath} icon={I.grid} label="Dashboard" />
-
+                <MenuItem
+                  to={dashboardPath}
+                  icon={Icon.grid}
+                  label="Dashboard"
+                />
                 <MenuItem
                   to={primaryActionPath}
-                  icon={I.plus}
+                  icon={Icon.plus}
                   label={primaryActionLabel}
                   badge={isTeacher ? "Class" : "Free"}
                 />
               </div>
-
               <div style={{ padding: "4px 6px" }}>
                 <Divider />
               </div>
-
               <div style={{ padding: "0 6px" }}>
                 <MenuItem
                   to={ROUTES.SETTINGS}
-                  icon={I.gear}
+                  icon={Icon.gear}
                   label="Settings"
                   muted
                 />
-
                 <MenuItem
                   to={ROUTES.HELP_DOCS}
-                  icon={I.help}
+                  icon={Icon.help}
                   label="Help & Docs"
                   muted
                 />
               </div>
-
               <div style={{ padding: "4px 6px" }}>
                 <Divider />
               </div>
-
               <div style={{ padding: "0 6px 6px" }}>
                 <MenuItem
                   onClick={onLogout}
-                  icon={I.signout}
+                  icon={Icon.signout}
                   label="Sign out"
                   danger
                 />
@@ -689,67 +1067,137 @@ const ProfileDropdown = React.forwardRef<
 
 ProfileDropdown.displayName = "ProfileDropdown";
 
-function CTAButton() {
-  const [hovered, setHovered] = useState(false);
+// ─── Scroll progress bar ───────────────────────────────────────────────────────
 
+function ScrollProgress() {
+  const [pct, setPct] = useState(0);
+  useEffect(() => {
+    const update = () => {
+      const el = document.documentElement;
+      const total = el.scrollHeight - el.clientHeight;
+      setPct(total > 0 ? el.scrollTop / total : 0);
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+  if (pct <= 0.01 || pct >= 0.99) return null;
   return (
-    <Link
-      to={ROUTES.REGISTER}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+    <div
       style={{
-        display: "inline-flex",
+        position: "absolute",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 2,
+        overflow: "hidden",
+      }}
+    >
+      <motion.div
+        style={{
+          height: "100%",
+          backgroundColor: colors.brand,
+          transformOrigin: "left",
+        }}
+        animate={{ scaleX: pct }}
+        transition={{ duration: 0.05 }}
+      />
+    </div>
+  );
+}
+
+const BANNER_HEIGHT = 36;
+
+// ─── Announcement banner ───────────────────────────────────────────────────────
+
+function AnnouncementBanner({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: BANNER_HEIGHT,
+        backgroundColor: colors.brand,
+        display: "flex",
         alignItems: "center",
-        gap: 6,
-        padding: "7px 15px",
-        borderRadius: 8,
-        fontSize: 13.5,
-        fontWeight: 600,
-        letterSpacing: "-0.015em",
-        color: colors.text.light,
-        backgroundColor: hovered ? colors.brandHover : colors.brand,
-        textDecoration: "none",
-        transition: "background-color 0.13s ease",
-        whiteSpace: "nowrap",
+        justifyContent: "center",
+        gap: 12,
+        padding: "0 48px 0 20px",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
-      Start for free
-      <motion.span
-        animate={{ x: hovered ? 2 : 0 }}
-        transition={{ duration: 0.13 }}
-        style={{ display: "flex", color: "rgba(255,255,255,0.75)" }}
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: colors.text.light,
+          letterSpacing: "-0.01em",
+          whiteSpace: "nowrap",
+        }}
       >
-        {I.arrow}
-      </motion.span>
-    </Link>
+        TypeTrace v1.0 — Behavioral authorship verification now in early access
+      </span>
+      <Link
+        to={ROUTES.HOW_IT_WORKS}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          fontSize: 11.5,
+          fontWeight: 700,
+          color: colors.brand,
+          backgroundColor: colors.text.light,
+          borderRadius: 5,
+          padding: "2px 9px",
+          textDecoration: "none",
+          letterSpacing: "-0.01em",
+          flexShrink: 0,
+        }}
+      >
+        Get Started {Icon.arrow}
+      </Link>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss banner"
+        style={{
+          position: "absolute",
+          right: 14,
+          top: "50%",
+          transform: "translateY(-50%)",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          color: `${colors.text.light}88`,
+          padding: 4,
+          display: "flex",
+          alignItems: "center",
+        }}
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M2 2l8 8M10 2l-8 8"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+    </div>
   );
 }
 
-function GhostLink({ to, label }: { to: string; label: string }) {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <Link
-      to={to}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        padding: "7px 14px",
-        borderRadius: 8,
-        fontSize: 13.5,
-        fontWeight: 500,
-        letterSpacing: "-0.01em",
-        color: hovered ? colors.text.primary : colors.text.secondary,
-        backgroundColor: hovered ? colors.surface[150] : "transparent",
-        textDecoration: "none",
-        transition: "all 0.13s ease",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {label}
-    </Link>
-  );
-}
+// ─── Mobile menu ───────────────────────────────────────────────────────────────
 
 function MobileMenu({
   user,
@@ -776,62 +1224,96 @@ function MobileMenu({
       "U"
     : "";
 
+  const navGroups = [
+    {
+      label: "Platform",
+      items: [
+        { label: "How It Works", path: ROUTES.HOW_IT_WORKS },
+        { label: "Features", path: ROUTES.FEATURES },
+        { label: "About", path: ROUTES.ABOUT },
+        { label: "Verify Certificate", path: ROUTES.VERIFY_LOOKUP },
+      ],
+    },
+    {
+      label: "Resources",
+      items: [{ label: "Help & Docs", path: ROUTES.HELP_DOCS }],
+    },
+  ];
+
   return (
     <div
       style={{
         height: "100%",
         overflowY: "auto",
-        padding: "24px 20px 48px",
         display: "flex",
         flexDirection: "column",
       }}
     >
-      <nav style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        {PUBLIC_NAV.map((item, index) => {
-          const active =
-            pathname === item.path ||
-            (item.path !== "/" && pathname.startsWith(item.path));
-
-          return (
-            <motion.div
-              key={item.path}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{
-                delay: index * 0.035,
-                duration: 0.2,
-                ease: [0.16, 1, 0.3, 1],
+      <div style={{ padding: "16px 20px 0" }}>
+        {navGroups.map((group, gi) => (
+          <div key={group.label} style={{ marginBottom: 20 }}>
+            <p
+              style={{
+                margin: "0 0 6px 4px",
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: "0.09em",
+                color: colors.text.muted,
+                textTransform: "uppercase",
               }}
             >
-              <Link
-                to={item.path}
-                style={{
-                  display: "block",
-                  padding: "11px 14px",
-                  borderRadius: 10,
-                  fontSize: 17,
-                  fontWeight: active ? 600 : 500,
-                  letterSpacing: "-0.02em",
-                  color: active ? colors.brand : colors.text.primary,
-                  backgroundColor: active ? colors.brandSoft : "transparent",
-                  textDecoration: "none",
-                  transition: "all 0.12s",
-                }}
-              >
-                {item.label}
-              </Link>
-            </motion.div>
-          );
-        })}
-      </nav>
+              {group.label}
+            </p>
+            {group.items.map((item, i) => {
+              const active =
+                pathname === item.path ||
+                (item.path !== "/" && pathname.startsWith(item.path));
+              return (
+                <motion.div
+                  key={item.path}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{
+                    delay: (gi * 3 + i) * 0.04,
+                    duration: 0.2,
+                    ease: [0.16, 1, 0.3, 1],
+                  }}
+                >
+                  <Link
+                    to={item.path}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 14px",
+                      borderRadius: 9,
+                      fontSize: 15,
+                      fontWeight: active ? 600 : 500,
+                      letterSpacing: "-0.015em",
+                      color: active ? colors.brand : colors.text.primary,
+                      backgroundColor: active
+                        ? colors.brandSoft
+                        : "transparent",
+                      textDecoration: "none",
+                      marginBottom: 2,
+                    }}
+                  >
+                    {item.label}
+                    {active && (
+                      <span style={{ color: colors.brand }}>{Icon.check}</span>
+                    )}
+                  </Link>
+                </motion.div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
 
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.16 }}
+      <div
         style={{
           marginTop: "auto",
-          paddingTop: 28,
+          padding: "20px",
           borderTop: `1px solid ${colors.surface[200]}`,
           display: "flex",
           flexDirection: "column",
@@ -845,15 +1327,14 @@ function MobileMenu({
                 display: "flex",
                 alignItems: "center",
                 gap: 12,
-                padding: "13px 14px",
+                padding: "12px 14px",
                 borderRadius: 10,
                 backgroundColor: colors.surface[100],
                 border: `1px solid ${colors.surface[200]}`,
                 marginBottom: 4,
               }}
             >
-              <Avatar initials={initials} size={38} />
-
+              <Avatar initials={initials} size={36} />
               <div style={{ minWidth: 0 }}>
                 <p
                   style={{
@@ -861,12 +1342,10 @@ function MobileMenu({
                     fontSize: 14,
                     fontWeight: 600,
                     color: colors.text.primary,
-                    letterSpacing: "-0.015em",
                   }}
                 >
                   {user.first_name} {user.last_name ?? ""}
                 </p>
-
                 <p
                   style={{
                     margin: 0,
@@ -881,16 +1360,14 @@ function MobileMenu({
                 </p>
               </div>
             </div>
-
             <Link
               to={dashboardPath}
               style={{
                 display: "block",
-                padding: "13px 16px",
+                padding: "12px 16px",
                 borderRadius: 10,
                 fontSize: 14,
                 fontWeight: 600,
-                letterSpacing: "-0.01em",
                 color: colors.text.primary,
                 backgroundColor: colors.surface[100],
                 border: `1px solid ${colors.surface[200]}`,
@@ -900,35 +1377,30 @@ function MobileMenu({
             >
               Dashboard
             </Link>
-
             <Link
               to={primaryActionPath}
               style={{
                 display: "block",
-                padding: "13px 16px",
+                padding: "12px 16px",
                 borderRadius: 10,
                 fontSize: 14,
                 fontWeight: 600,
-                letterSpacing: "-0.01em",
-                color: colors.text.primary,
-                backgroundColor: colors.surface[100],
-                border: `1px solid ${colors.surface[200]}`,
+                color: colors.text.light,
+                backgroundColor: colors.brand,
                 textDecoration: "none",
                 textAlign: "center",
               }}
             >
               {primaryActionLabel}
             </Link>
-
             <Link
               to={ROUTES.SETTINGS}
               style={{
                 display: "block",
-                padding: "13px 16px",
+                padding: "12px 16px",
                 borderRadius: 10,
                 fontSize: 14,
                 fontWeight: 500,
-                letterSpacing: "-0.01em",
                 color: colors.text.secondary,
                 backgroundColor: "transparent",
                 border: `1px solid ${colors.surface[200]}`,
@@ -938,16 +1410,14 @@ function MobileMenu({
             >
               Settings
             </Link>
-
             <button
               type="button"
               onClick={onLogout}
               style={{
-                padding: "13px 16px",
+                padding: "12px 16px",
                 borderRadius: 10,
                 fontSize: 14,
                 fontWeight: 600,
-                letterSpacing: "-0.01em",
                 color: colors.red,
                 backgroundColor: `${colors.red}08`,
                 border: `1px solid ${colors.red}22`,
@@ -965,7 +1435,7 @@ function MobileMenu({
               to={ROUTES.LOGIN}
               style={{
                 display: "block",
-                padding: "13px 16px",
+                padding: "12px 16px",
                 borderRadius: 10,
                 fontSize: 14,
                 fontWeight: 500,
@@ -974,17 +1444,15 @@ function MobileMenu({
                 border: `1px solid ${colors.surface[200]}`,
                 textDecoration: "none",
                 textAlign: "center",
-                letterSpacing: "-0.01em",
               }}
             >
               Sign in
             </Link>
-
             <Link
               to={ROUTES.REGISTER}
               style={{
                 display: "block",
-                padding: "13px 16px",
+                padding: "12px 16px",
                 borderRadius: 10,
                 fontSize: 15,
                 fontWeight: 700,
@@ -992,49 +1460,44 @@ function MobileMenu({
                 backgroundColor: colors.brand,
                 textDecoration: "none",
                 textAlign: "center",
-                letterSpacing: "-0.02em",
               }}
             >
               Start for free
             </Link>
           </>
         )}
-      </motion.div>
+      </div>
     </div>
   );
 }
+
+// ─── Main Header export ────────────────────────────────────────────────────────
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [showBanner, setShowBanner] = useState(true);
 
   const location = useLocation();
   const navigate = useNavigate();
-
   const prevPath = useRef<string | null>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
   const { user, logout } = useAuthStore();
-
   const isTeacher = user?.role === "TEACHER";
-
   const dashboardPath = isTeacher ? ROUTES.TEACHER_DASHBOARD : ROUTES.DASHBOARD;
-
   const primaryActionPath = isTeacher
     ? ROUTES.TEACHER_COURSES
     : ROUTES.EDITOR_NEW;
-
   const primaryActionLabel = isTeacher ? "Create Course" : "New Session";
   const roleLabel = isTeacher ? "Teacher" : "Student";
 
   useEffect(() => {
-    const updateScrolled = () => setScrolled(window.scrollY > 6);
-    updateScrolled();
-
-    window.addEventListener("scroll", updateScrolled, { passive: true });
-
-    return () => window.removeEventListener("scroll", updateScrolled);
+    const update = () => setScrolled(window.scrollY > 6);
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
   }, []);
 
   useEffect(() => {
@@ -1042,29 +1505,20 @@ export default function Header() {
       setMobileOpen(false);
       setProfileOpen(false);
     }
-
     prevPath.current = location.pathname;
   }, [location.pathname]);
 
   useEffect(() => {
-    const closeProfileOnOutsideClick = (event: MouseEvent) => {
-      if (
-        profileRef.current &&
-        !profileRef.current.contains(event.target as Node)
-      ) {
+    const close = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node))
         setProfileOpen(false);
-      }
     };
-
-    document.addEventListener("mousedown", closeProfileOnOutsideClick);
-
-    return () =>
-      document.removeEventListener("mousedown", closeProfileOnOutsideClick);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
   }, []);
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? "hidden" : "";
-
     return () => {
       document.body.style.overflow = "";
     };
@@ -1082,22 +1536,50 @@ export default function Header() {
       "U"
     : "U";
 
+  // Which nav links exist as simple links (not dropdowns)
+  const simpleNavItems = [{ label: "Verify", path: ROUTES.VERIFY_LOOKUP }];
+
   return (
     <>
-      <header
+      {/* ── Announcement banner — only when not logged in and not dismissed ── */}
+      <AnimatePresence>
+        {!user && showBanner && (
+          <motion.div
+            key="banner"
+            initial={{ height: BANNER_HEIGHT, opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 60,
+              overflow: "hidden",
+            }}
+          >
+            <AnnouncementBanner onDismiss={() => setShowBanner(false)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.header
         role="banner"
+        animate={{ top: !user && showBanner ? BANNER_HEIGHT : 0 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
         style={{
           position: "fixed",
-          top: 0,
           left: 0,
           right: 0,
           zIndex: 50,
           height: HEADER_HEIGHT,
-          backgroundColor: colors.surface[50],
-          borderBottom: `1px solid ${
-            scrolled ? colors.surface[200] : "transparent"
-          }`,
-          transition: "border-color 0.25s ease",
+          backgroundColor: scrolled
+            ? `${colors.surface[50]}F5`
+            : colors.surface[50],
+          backdropFilter: scrolled ? "blur(12px)" : "none",
+          WebkitBackdropFilter: scrolled ? "blur(12px)" : "none",
+          borderBottom: `1px solid ${scrolled ? colors.surface[200] : "transparent"}`,
+          transition: "border-color 0.25s ease, background-color 0.25s ease",
         }}
       >
         <ScrollProgress />
@@ -1107,12 +1589,13 @@ export default function Header() {
             height: "100%",
             maxWidth: 1440,
             margin: "0 auto",
-            padding: "0 28px",
+            padding: "0 24px",
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
+            gap: 0,
           }}
         >
+          {/* ── Logo ── */}
           <Link
             to={ROUTES.HOME}
             aria-label="TypeTrace Home"
@@ -1122,14 +1605,14 @@ export default function Header() {
               alignItems: "center",
               textDecoration: "none",
               outline: "none",
+              marginRight: 8,
             }}
           >
             <img
               src="/Logo.png"
               alt="TypeTrace"
               style={{
-                height: 30,
-                minHeight: 30,
+                height: 28,
                 width: "auto",
                 objectFit: "contain",
                 display: "block",
@@ -1137,57 +1620,168 @@ export default function Header() {
             />
           </Link>
 
+          {/* ── Separator ── */}
+          <div
+            style={{
+              width: 1,
+              height: 18,
+              backgroundColor: colors.surface[200],
+              margin: "0 16px",
+              flexShrink: 0,
+            }}
+            className="tt-nav"
+          />
+
+          {/* ── Desktop nav ── */}
           <nav
             aria-label="Main navigation"
             className="tt-nav"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-              position: "absolute",
-              left: "50%",
-              transform: "translateX(-50%)",
-            }}
+            style={{ display: "flex", alignItems: "center", gap: 2 }}
           >
-            {PUBLIC_NAV.map((item) => {
+            {/* Product dropdown */}
+            <NavDropdownItem label="Product">
+              {(close) => <ProductDropdown onClose={close} />}
+            </NavDropdownItem>
+
+            {/* Resources dropdown */}
+            <NavDropdownItem label="Resources">
+              {(close) => <ResourcesDropdown onClose={close} />}
+            </NavDropdownItem>
+
+            {/* Simple nav items */}
+            {simpleNavItems.map((item) => {
               const active =
                 location.pathname === item.path ||
                 (item.path !== "/" && location.pathname.startsWith(item.path));
-
-              return <NavItem key={item.path} item={item} active={active} />;
+              return <NavLink key={item.path} item={item} active={active} />;
             })}
           </nav>
 
+          {/* ── Spacer ── */}
+          <div style={{ flex: 1 }} />
+
+          {/* ── Right side ── */}
           <div
             className="tt-auth"
             style={{ display: "flex", alignItems: "center", gap: 6 }}
           >
             {user ? (
-              <ProfileDropdown
-                ref={profileRef}
-                open={profileOpen}
-                onToggle={() => setProfileOpen((value) => !value)}
-                onLogout={handleLogout}
-                initials={initials}
-                user={user}
-                dashboardPath={dashboardPath}
-                primaryActionPath={primaryActionPath}
-                primaryActionLabel={primaryActionLabel}
-                roleLabel={roleLabel}
-              />
+              <>
+                {/* Quick action button */}
+                <Link
+                  to={primaryActionPath}
+                  className="tt-quick-action"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "6px 13px",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    letterSpacing: "-0.012em",
+                    color: colors.text.secondary,
+                    backgroundColor: colors.surface[100],
+                    border: `1px solid ${colors.surface[200]}`,
+                    textDecoration: "none",
+                    transition: "all 0.13s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = colors.text.primary;
+                    e.currentTarget.style.borderColor = colors.surface[300];
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = colors.text.secondary;
+                    e.currentTarget.style.borderColor = colors.surface[200];
+                  }}
+                >
+                  {Icon.plus}
+                  {primaryActionLabel}
+                </Link>
+
+                {/* Profile */}
+                <ProfileDropdown
+                  ref={profileRef}
+                  open={profileOpen}
+                  onToggle={() => setProfileOpen((v) => !v)}
+                  onLogout={handleLogout}
+                  initials={initials}
+                  user={user}
+                  dashboardPath={dashboardPath}
+                  primaryActionPath={primaryActionPath}
+                  primaryActionLabel={primaryActionLabel}
+                  roleLabel={roleLabel}
+                />
+              </>
             ) : (
               <>
-                <GhostLink to={ROUTES.LOGIN} label="Sign in" />
-                <CTAButton />
+                <Link
+                  to={ROUTES.LOGIN}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 8,
+                    fontSize: 13.5,
+                    fontWeight: 500,
+                    letterSpacing: "-0.01em",
+                    color: colors.text.secondary,
+                    backgroundColor: "transparent",
+                    textDecoration: "none",
+                    transition: "all 0.13s ease",
+                    whiteSpace: "nowrap",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = colors.text.primary;
+                    e.currentTarget.style.backgroundColor = colors.surface[100];
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = colors.text.secondary;
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }}
+                >
+                  Sign in
+                </Link>
+
+                <Link
+                  to={ROUTES.REGISTER}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "7px 15px",
+                    borderRadius: 8,
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    letterSpacing: "-0.015em",
+                    color: colors.text.light,
+                    backgroundColor: colors.brand,
+                    textDecoration: "none",
+                    transition: "background-color 0.13s ease",
+                    whiteSpace: "nowrap",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = colors.brandHover;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = colors.brand;
+                  }}
+                >
+                  Start for free
+                  <span
+                    style={{ color: "rgba(255,255,255,0.72)", display: "flex" }}
+                  >
+                    {Icon.arrow}
+                  </span>
+                </Link>
               </>
             )}
           </div>
 
+          {/* ── Hamburger ── */}
           <button
             type="button"
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileOpen}
-            onClick={() => setMobileOpen((value) => !value)}
+            onClick={() => setMobileOpen((v) => !v)}
             className="tt-hamburger"
             style={{
               display: "none",
@@ -1205,8 +1799,9 @@ export default function Header() {
             <Hamburger open={mobileOpen} />
           </button>
         </div>
-      </header>
+      </motion.header>
 
+      {/* ── Mobile drawer ── */}
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
@@ -1218,7 +1813,7 @@ export default function Header() {
             style={{
               position: "fixed",
               inset: 0,
-              top: HEADER_HEIGHT,
+              top: HEADER_HEIGHT + (!user && showBanner ? BANNER_HEIGHT : 0),
               zIndex: 40,
               backgroundColor: colors.surface[50],
             }}
@@ -1235,39 +1830,21 @@ export default function Header() {
         )}
       </AnimatePresence>
 
+      {/* ── Responsive styles ── */}
       <style>{`
         @media (min-width: 768px) {
-          .tt-nav {
-            display: flex !important;
-          }
-
-          .tt-auth {
-            display: flex !important;
-          }
-
-          .tt-hamburger {
-            display: none !important;
-          }
+          .tt-nav { display: flex !important; }
+          .tt-auth { display: flex !important; }
+          .tt-hamburger { display: none !important; }
         }
-
         @media (max-width: 767px) {
-          .tt-nav {
-            display: none !important;
-          }
-
-          .tt-auth {
-            display: none !important;
-          }
-
-          .tt-hamburger {
-            display: flex !important;
-          }
+          .tt-nav { display: none !important; }
+          .tt-auth { display: none !important; }
+          .tt-hamburger { display: flex !important; }
         }
-
-        @media (max-width: 1060px) {
-          .tt-username {
-            display: none !important;
-          }
+        @media (max-width: 1100px) {
+          .tt-username { display: none !important; }
+          .tt-quick-action { display: none !important; }
         }
       `}</style>
     </>
