@@ -1,6 +1,6 @@
 // frontend/src/components/layout/TeacherLayout.tsx
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
@@ -43,6 +43,11 @@ function Icon({ type }: { type: string }) {
         <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 1 1 7.1 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1z" />
       </>
     ),
+    collapse: (
+      <>
+        <path d="m15 18-6-6 6-6" />
+      </>
+    ),
   };
 
   return (
@@ -62,21 +67,37 @@ function Icon({ type }: { type: string }) {
   );
 }
 
-const navItems = [
-  { label: "Overview", path: ROUTES.TEACHER_DASHBOARD, icon: "dashboard" },
-  { label: "Courses", path: ROUTES.TEACHER_COURSES, icon: "courses" },
+const navSections = [
   {
-    label: "Submissions",
-    path: ROUTES.TEACHER_SUBMISSIONS,
-    icon: "submissions",
+    label: "Review",
+    items: [
+      { label: "Overview", path: ROUTES.TEACHER_DASHBOARD, icon: "dashboard" },
+      {
+        label: "Submissions",
+        path: ROUTES.TEACHER_SUBMISSIONS,
+        icon: "submissions",
+      },
+    ],
   },
-  { label: "Students", path: ROUTES.TEACHER_STUDENTS, icon: "students" },
-  { label: "Settings", path: ROUTES.TEACHER_SETTINGS, icon: "settings" },
+  {
+    label: "Courses",
+    items: [
+      { label: "Courses", path: ROUTES.TEACHER_COURSES, icon: "courses" },
+      { label: "Students", path: ROUTES.TEACHER_STUDENTS, icon: "students" },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { label: "Settings", path: ROUTES.TEACHER_SETTINGS, icon: "settings" },
+    ],
+  },
 ];
 
 export default function TeacherLayout() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const [collapsed, setCollapsed] = useState(false);
 
   const fullName =
     `${user?.first_name || "Teacher"} ${user?.last_name || ""}`.trim();
@@ -86,81 +107,149 @@ export default function TeacherLayout() {
     navigate(ROUTES.LOGIN);
   };
 
+  const sidebarWidth = collapsed ? "lg:w-[88px]" : "lg:w-72";
+  const pagePadding = collapsed ? "lg:pl-[88px]" : "lg:pl-72";
+
   return (
     <div className="min-h-screen" style={{ background: colors.surface[50] }}>
       <aside
-        className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r bg-white px-4 py-5 lg:block"
+        className={`fixed inset-y-0 left-0 z-40 hidden border-r bg-white px-4 py-5 transition-all duration-200 lg:block ${sidebarWidth}`}
         style={{ borderColor: colors.surface[200] }}
       >
-        <Link to={ROUTES.TEACHER_DASHBOARD} className="flex items-center px-2">
-          <img
-            src="/Logo.png"
-            alt="TypeTrace"
-            className="h-[30px] w-auto object-contain"
-          />
-        </Link>
-
-        <div
-          className="mt-5 rounded-md border px-3 py-3"
-          style={{
-            borderColor: colors.surface[200],
-            background: colors.surface[100],
-          }}
-        >
-          <p
-            className="text-[11px] font-semibold uppercase tracking-[0.14em]"
-            style={{ color: colors.text.secondary }}
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            to={ROUTES.TEACHER_DASHBOARD}
+            className="flex min-w-0 items-center px-1"
           >
-            Teacher workspace
-          </p>
+            <img
+              src="/Logo.png"
+              alt="TypeTrace"
+              className={`h-[30px] w-auto object-contain transition ${
+                collapsed ? "opacity-0" : "opacity-100"
+              }`}
+            />
+            {collapsed && (
+              <span
+                className="flex h-9 w-9 items-center justify-center rounded-md border text-[13px] font-bold"
+                style={{
+                  borderColor: colors.surface[200],
+                  color: colors.brand,
+                  background: colors.brandSoft,
+                }}
+              >
+                TT
+              </span>
+            )}
+          </Link>
 
-          <p
-            className="mt-1 truncate text-[14px] font-semibold"
-            style={{ color: colors.text.primary }}
+          <button
+            type="button"
+            onClick={() => setCollapsed((value) => !value)}
+            className="hidden h-8 w-8 items-center justify-center rounded-md border transition lg:flex"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.secondary,
+              background: colors.surface[50],
+              transform: collapsed ? "rotate(180deg)" : "rotate(0deg)",
+            }}
+            aria-label="Toggle sidebar"
           >
-            {fullName}
-          </p>
-
-          <p
-            className="mt-0.5 truncate text-[12px]"
-            style={{ color: colors.text.secondary }}
-          >
-            {user?.email}
-          </p>
+            <Icon type="collapse" />
+          </button>
         </div>
 
-        <nav className="mt-7 grid gap-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className="flex items-center gap-3 rounded-md px-3 py-2.5 text-[13px] font-semibold transition"
-              style={({ isActive }) => ({
-                background: isActive ? brand.bgNavActive : "transparent",
-                color: isActive ? colors.brand : colors.text.secondary,
-              })}
-            >
-              <Icon type={item.icon} />
-              {item.label}
-            </NavLink>
+        <nav className="mt-7 grid gap-6">
+          {navSections.map((section) => (
+            <div key={section.label}>
+              {!collapsed && (
+                <p
+                  className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em]"
+                  style={{ color: colors.text.muted }}
+                >
+                  {section.label}
+                </p>
+              )}
+
+              <div className="grid gap-1">
+                {section.items.map((item) => (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    title={collapsed ? item.label : undefined}
+                    className="relative flex items-center gap-3 rounded-md px-3 py-2.5 text-[13px] font-semibold transition"
+                    style={({ isActive }) => ({
+                      background: isActive ? brand.bgNavActive : "transparent",
+                      color: isActive ? colors.brand : colors.text.secondary,
+                    })}
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <span
+                          className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full"
+                          style={{
+                            background: isActive ? colors.brand : "transparent",
+                          }}
+                        />
+                        <Icon type={item.icon} />
+                        {!collapsed && <span>{item.label}</span>}
+                      </>
+                    )}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="absolute bottom-5 left-4 right-4 rounded-md border px-4 py-2.5 text-[13px] font-semibold transition"
-          style={{
-            borderColor: colors.surface[200],
-            color: brand.aiAccent,
-            background: colors.surface[50],
-          }}
-        >
-          Sign out
-        </button>
+        <div className="absolute bottom-5 left-4 right-4">
+          <div
+            className="rounded-md border p-3"
+            style={{
+              borderColor: colors.surface[200],
+              background: colors.surface[100],
+            }}
+          >
+            <p
+              className="text-[10px] font-bold uppercase tracking-[0.16em]"
+              style={{ color: colors.text.secondary }}
+            >
+              {!collapsed ? "Teacher workspace" : "Teacher"}
+            </p>
+
+            {!collapsed && (
+              <>
+                <p
+                  className="mt-1 truncate text-[14px] font-semibold"
+                  style={{ color: colors.text.primary }}
+                >
+                  {fullName}
+                </p>
+                <p
+                  className="mt-0.5 truncate text-[12px]"
+                  style={{ color: colors.text.secondary }}
+                >
+                  {user?.email}
+                </p>
+              </>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-3 w-full rounded-md border px-4 py-2.5 text-[13px] font-semibold transition"
+            style={{
+              borderColor: colors.surface[200],
+              color: brand.aiAccent,
+              background: colors.surface[50],
+            }}
+          >
+            {collapsed ? "Out" : "Sign out"}
+          </button>
+        </div>
       </aside>
 
-      <div className="lg:pl-72">
+      <div className={pagePadding}>
         <header
           className="sticky top-0 z-30 border-b bg-white/95 px-4 py-3 backdrop-blur md:px-8"
           style={{ borderColor: colors.surface[200] }}
@@ -184,7 +273,6 @@ export default function TeacherLayout() {
               >
                 Teacher console
               </p>
-
               <p
                 className="text-[15px] font-semibold"
                 style={{ color: colors.text.primary }}
@@ -203,20 +291,24 @@ export default function TeacherLayout() {
           </div>
 
           <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className="whitespace-nowrap rounded-md border px-3 py-2 text-[12px] font-semibold"
-                style={({ isActive }) => ({
-                  borderColor: isActive ? colors.brand : colors.surface[200],
-                  color: isActive ? colors.brand : colors.text.secondary,
-                  background: isActive ? brand.bgNavActive : colors.surface[50],
-                })}
-              >
-                {item.label}
-              </NavLink>
-            ))}
+            {navSections
+              .flatMap((section) => section.items)
+              .map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className="whitespace-nowrap rounded-md border px-3 py-2 text-[12px] font-semibold"
+                  style={({ isActive }) => ({
+                    borderColor: isActive ? colors.brand : colors.surface[200],
+                    color: isActive ? colors.brand : colors.text.secondary,
+                    background: isActive
+                      ? brand.bgNavActive
+                      : colors.surface[50],
+                  })}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
           </nav>
         </header>
 

@@ -3,45 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { api, getApiErrorMessage } from "../../lib/api";
+import {
+  EmptyState,
+  LoadingState,
+  PageHeader,
+} from "../../components/ui/PageState";
 import { ROUTES } from "../../constants/routes";
-import { colors, brand } from "../../styles/colors";
+import { api, getApiErrorMessage } from "../../lib/api";
+import { brand, colors } from "../../styles/colors";
 import type {
+  TeacherCourse,
   TeacherDashboardResponse,
   TeacherSubmission,
+  TeacherSummary,
 } from "../../types/teacher";
-
-function ArrowIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M5 12h14" />
-      <path d="m12 5 7 7-7 7" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M12 5v14" />
-      <path d="M5 12h14" />
-    </svg>
-  );
-}
 
 function badgeStyle(submission: TeacherSubmission) {
   if (submission.classification_bucket === "HUMAN") {
@@ -74,37 +49,133 @@ function MetricCard({
   label,
   value,
   sub,
+  tone = "neutral",
 }: {
   label: string;
   value: string | number;
-  sub?: string;
+  sub: string;
+  tone?: "neutral" | "blue" | "green" | "amber" | "red";
 }) {
+  const accent =
+    tone === "green"
+      ? brand.humanAccent
+      : tone === "amber"
+        ? brand.suspiciousAccent
+        : tone === "red"
+          ? brand.aiAccent
+          : colors.brand;
+
   return (
     <div
-      className="rounded-md border bg-white px-4 py-3 shadow-sm"
-      style={{ borderColor: colors.surface[200] }}
+      className="relative overflow-hidden rounded-xl border bg-white p-5"
+      style={{
+        borderColor: colors.surface[200],
+        boxShadow: `0 18px 70px -52px ${colors.shadowStrong}`,
+      }}
     >
+      <div
+        className="absolute right-[-26px] top-[-26px] h-20 w-20 rounded-full"
+        style={{
+          background: `${accent}14`,
+        }}
+      />
+
       <p
-        className="text-[11px] font-semibold uppercase tracking-[0.12em]"
+        className="text-[11px] font-bold uppercase tracking-[0.16em]"
         style={{ color: colors.text.secondary }}
       >
         {label}
       </p>
+
       <p
-        className="mt-2 text-2xl font-semibold"
+        className="mt-3 text-3xl font-bold tracking-[-0.04em]"
         style={{ color: colors.text.primary }}
       >
         {value}
       </p>
-      {sub && (
-        <p
-          className="mt-1 text-[12px]"
-          style={{ color: colors.text.secondary }}
-        >
-          {sub}
-        </p>
-      )}
+
+      <p className="mt-1 text-[13px]" style={{ color: colors.text.secondary }}>
+        {sub}
+      </p>
+
+      <div
+        className="mt-5 h-1.5 rounded-full"
+        style={{ background: colors.surface[200] }}
+      >
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: "62%",
+            background: accent,
+          }}
+        />
+      </div>
     </div>
+  );
+}
+
+function CourseCard({ course }: { course: TeacherCourse }) {
+  return (
+    <Link
+      to={ROUTES.TEACHER_COURSE_DETAIL.replace(":courseId", String(course.id))}
+      className="block rounded-xl border bg-white p-5 transition hover:-translate-y-0.5"
+      style={{
+        borderColor: colors.surface[200],
+        boxShadow: `0 18px 70px -52px ${colors.shadowStrong}`,
+      }}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3
+            className="text-[15px] font-bold"
+            style={{ color: colors.text.primary }}
+          >
+            {course.course_name}
+          </h3>
+
+          <p
+            className="mt-1 text-[12px]"
+            style={{ color: colors.text.secondary }}
+          >
+            {course.course_code}
+          </p>
+        </div>
+
+        <span
+          className="rounded-md border px-2 py-1 font-mono text-[11px] font-bold"
+          style={{
+            borderColor: colors.surface[200],
+            background: colors.surface[100],
+            color: colors.text.primary,
+          }}
+        >
+          {course.invite_code}
+        </span>
+      </div>
+
+      <div className="mt-5 grid grid-cols-3 gap-3">
+        {[
+          ["Students", course.student_count],
+          ["Sessions", course.submission_count],
+          ["Pending", course.pending_count],
+        ].map(([label, value]) => (
+          <div key={label}>
+            <p
+              className="text-[10px] font-bold uppercase tracking-[0.14em]"
+              style={{ color: colors.text.secondary }}
+            >
+              {label}
+            </p>
+            <p
+              className="mt-1 text-[16px] font-bold"
+              style={{ color: colors.text.primary }}
+            >
+              {value}
+            </p>
+          </div>
+        ))}
+      </div>
+    </Link>
   );
 }
 
@@ -113,57 +184,83 @@ function SubmissionRow({ submission }: { submission: TeacherSubmission }) {
 
   return (
     <div
-      className="flex flex-col gap-3 border-b px-5 py-4 last:border-b-0 md:flex-row md:items-center md:justify-between"
+      className="grid grid-cols-1 gap-4 border-b px-5 py-4 last:border-b-0 md:grid-cols-[1.2fr_0.9fr_0.7fr_0.6fr_auto] md:items-center"
       style={{ borderColor: colors.surface[200] }}
     >
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3
-            className="truncate text-[14px] font-semibold"
-            style={{ color: colors.text.primary }}
-          >
-            {submission.title}
-          </h3>
-          <span
-            className="rounded-md border px-2 py-0.5 text-[11px] font-semibold"
-            style={{
-              background: style.bg,
-              color: style.text,
-              borderColor: style.border,
-            }}
-          >
-            {style.label}
-          </span>
-        </div>
+      <div>
+        <p
+          className="text-[14px] font-semibold"
+          style={{ color: colors.text.primary }}
+        >
+          {submission.title}
+        </p>
         <p
           className="mt-1 text-[12px]"
           style={{ color: colors.text.secondary }}
         >
-          {submission.student_name} · {submission.course_code} ·{" "}
           {submission.created_at}
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 text-[12px]">
-        <span style={{ color: colors.text.secondary }}>
-          {submission.confidence}% confidence
-        </span>
-        <span style={{ color: colors.text.secondary }}>
-          {submission.review_status}
-        </span>
-        <Link
-          to={`/teacher/review/${submission.id}`}
-          className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 font-semibold"
-          style={{
-            borderColor: colors.surface[200],
-            color: colors.text.primary,
-          }}
+      <div>
+        <p
+          className="text-[13px] font-medium"
+          style={{ color: colors.text.primary }}
         >
-          Review <ArrowIcon />
-        </Link>
+          {submission.student_name}
+        </p>
+        <p className="text-[12px]" style={{ color: colors.text.secondary }}>
+          {submission.course_code}
+        </p>
       </div>
+
+      <span
+        className="w-fit rounded-md border px-2.5 py-1.5 text-[11px] font-bold"
+        style={{
+          borderColor: style.border,
+          background: style.bg,
+          color: style.text,
+        }}
+      >
+        {style.label}
+      </span>
+
+      <p
+        className="text-[13px] font-bold"
+        style={{ color: colors.text.primary }}
+      >
+        {submission.confidence}%
+      </p>
+
+      <Link
+        to={ROUTES.TEACHER_REVIEW.replace(":sessionId", String(submission.id))}
+        className="w-fit rounded-md border px-3 py-2 text-[12px] font-semibold"
+        style={{
+          borderColor: colors.surface[200],
+          color: colors.text.primary,
+          background: colors.surface[50],
+        }}
+      >
+        Review
+      </Link>
     </div>
   );
+}
+
+function summaryFallback(): TeacherSummary {
+  return {
+    total_courses: 0,
+    total_students: 0,
+    total_submissions: 0,
+    pending_reviews: 0,
+    approved_reviews: 0,
+    flagged_reviews: 0,
+    human_submissions: 0,
+    suspicious_submissions: 0,
+    synthetic_submissions: 0,
+    avg_confidence: 0,
+    avg_wpm: 0,
+  };
 }
 
 export default function TeacherDashboard() {
@@ -181,6 +278,7 @@ export default function TeacherDashboard() {
       try {
         const response =
           await api.get<TeacherDashboardResponse>("/teacher/dashboard");
+
         if (!mounted) return;
         setData(response.data);
       } catch (error) {
@@ -198,10 +296,10 @@ export default function TeacherDashboard() {
     };
   }, []);
 
-  const summary = data?.summary;
+  const summary = data?.summary || summaryFallback();
 
-  const reviewCompletionRate = useMemo(() => {
-    if (!summary || summary.total_submissions === 0) return 0;
+  const reviewRate = useMemo(() => {
+    if (!summary.total_submissions) return 0;
     return Math.round(
       ((summary.approved_reviews + summary.flagged_reviews) /
         summary.total_submissions) *
@@ -209,297 +307,252 @@ export default function TeacherDashboard() {
     );
   }, [summary]);
 
+  if (isLoading) {
+    return <LoadingState label="Loading teacher console..." />;
+  }
+
+  if (apiError) {
+    return (
+      <EmptyState
+        title="Teacher dashboard could not be loaded"
+        description={apiError}
+        action={
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
+            style={{ background: colors.brand }}
+          >
+            Reload dashboard
+          </button>
+        }
+      />
+    );
+  }
+
   return (
-    <div
-      className="min-h-screen px-6 py-8"
-      style={{ background: colors.surface[50] }}
-    >
-      <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Teacher console"
+        title="Review authorship evidence with clarity."
+        description="Monitor courses, students, pending reviews, and high-risk writing sessions from one academic integrity workspace."
+        action={
+          <Link
+            to={ROUTES.TEACHER_COURSES}
+            className="rounded-md px-4 py-2.5 text-[13px] font-semibold text-white"
+            style={{ background: colors.brand }}
+          >
+            Manage courses
+          </Link>
+        }
+      />
+
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Courses"
+          value={summary.total_courses}
+          sub="Active academic modules"
+          tone="blue"
+        />
+        <MetricCard
+          label="Students"
+          value={summary.total_students}
+          sub="Enrolled across courses"
+          tone="green"
+        />
+        <MetricCard
+          label="Pending reviews"
+          value={summary.pending_reviews}
+          sub="Need teacher decision"
+          tone="amber"
+        />
+        <MetricCard
+          label="Review completion"
+          value={`${reviewRate}%`}
+          sub="Approved or flagged"
+          tone="blue"
+        />
+      </section>
+
+      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_360px]">
+        <div
+          className="rounded-xl border bg-white"
+          style={{
+            borderColor: colors.surface[200],
+            boxShadow: `0 18px 70px -52px ${colors.shadowStrong}`,
+          }}
+        >
+          <div
+            className="flex items-center justify-between border-b px-5 py-4"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <div>
+              <h2
+                className="text-[15px] font-bold"
+                style={{ color: colors.text.primary }}
+              >
+                Recent submissions
+              </h2>
+              <p
+                className="mt-1 text-[12px]"
+                style={{ color: colors.text.secondary }}
+              >
+                Latest writing sessions requiring review or audit.
+              </p>
+            </div>
+
+            <Link
+              to={ROUTES.TEACHER_SUBMISSIONS}
+              className="rounded-md border px-3 py-2 text-[12px] font-semibold"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.primary,
+              }}
+            >
+              View all
+            </Link>
+          </div>
+
+          {!data?.recent_submissions?.length ? (
+            <div className="p-5">
+              <EmptyState
+                compact
+                title="No submissions yet"
+                description="When students submit writing sessions, review-ready evidence will appear here."
+                action={
+                  <Link
+                    to={ROUTES.TEACHER_COURSES}
+                    className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
+                    style={{ background: colors.brand }}
+                  >
+                    Create or manage courses
+                  </Link>
+                }
+              />
+            </div>
+          ) : (
+            data.recent_submissions.map((submission) => (
+              <SubmissionRow key={submission.id} submission={submission} />
+            ))
+          )}
+        </div>
+
+        <aside
+          className="rounded-xl border bg-white p-5"
+          style={{
+            borderColor: colors.surface[200],
+            boxShadow: `0 18px 70px -52px ${colors.shadowStrong}`,
+          }}
+        >
+          <p
+            className="text-[11px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: colors.brand }}
+          >
+            Risk distribution
+          </p>
+
+          <h2
+            className="mt-2 text-xl font-bold tracking-[-0.04em]"
+            style={{ color: colors.text.primary }}
+          >
+            Submission quality
+          </h2>
+
+          <div className="mt-5 grid gap-4">
+            {[
+              ["Human", summary.human_submissions, brand.humanAccent],
+              [
+                "Review",
+                summary.suspicious_submissions,
+                brand.suspiciousAccent,
+              ],
+              ["High Risk", summary.synthetic_submissions, brand.aiAccent],
+            ].map(([label, value, accent]) => {
+              const total = Math.max(summary.total_submissions, 1);
+              const pct = Math.round((Number(value) / total) * 100);
+
+              return (
+                <div key={label as string}>
+                  <div className="flex justify-between text-[12px]">
+                    <span
+                      className="font-semibold"
+                      style={{ color: colors.text.primary }}
+                    >
+                      {label}
+                    </span>
+                    <span style={{ color: colors.text.secondary }}>{pct}%</span>
+                  </div>
+
+                  <div
+                    className="mt-2 h-2 rounded-full"
+                    style={{ background: colors.surface[200] }}
+                  >
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${pct}%`,
+                        background: accent as string,
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </aside>
+      </section>
+
+      <section>
+        <div className="mb-4 flex items-end justify-between gap-4">
           <div>
             <p
-              className="text-[12px] font-semibold uppercase tracking-[0.18em]"
-              style={{ color: colors.text.secondary }}
+              className="text-[11px] font-bold uppercase tracking-[0.16em]"
+              style={{ color: colors.brand }}
             >
-              Teacher workspace
+              Courses
             </p>
-            <h1
-              className="mt-2 text-2xl font-semibold"
+            <h2
+              className="mt-2 text-xl font-bold tracking-[-0.04em]"
               style={{ color: colors.text.primary }}
             >
-              Welcome back
-              {data?.teacher?.first_name ? `, ${data.teacher.first_name}` : ""}
-            </h1>
-            <p
-              className="mt-2 max-w-2xl text-[14px]"
-              style={{ color: colors.text.secondary }}
-            >
-              Manage courses, review student submissions, and verify behavioral
-              authorship evidence.
-            </p>
+              Active course workspaces
+            </h2>
           </div>
 
           <Link
             to={ROUTES.TEACHER_COURSES}
-            className="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-[13px] font-semibold text-white"
-            style={{ background: colors.brand }}
+            className="rounded-md border px-3 py-2 text-[12px] font-semibold"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.primary,
+            }}
           >
-            <PlusIcon />
-            Create Course
+            View courses
           </Link>
         </div>
 
-        {apiError && (
-          <div
-            className="mt-6 rounded-md border px-4 py-3 text-[13px]"
-            style={{
-              borderColor: brand.aiAccent,
-              background: brand.aiBg,
-              color: brand.aiText,
-            }}
-          >
-            {apiError}
-          </div>
-        )}
-
-        {isLoading ? (
-          <div
-            className="mt-6 rounded-md border bg-white px-5 py-10 text-center text-[13px]"
-            style={{
-              borderColor: colors.surface[200],
-              color: colors.text.secondary,
-            }}
-          >
-            Loading teacher dashboard...
-          </div>
+        {!data?.courses?.length ? (
+          <EmptyState
+            title="No courses created yet"
+            description="Create a course workspace and share the invite code with students to start collecting writing evidence."
+            action={
+              <Link
+                to={ROUTES.TEACHER_COURSES}
+                className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
+                style={{ background: colors.brand }}
+              >
+                Create course
+              </Link>
+            }
+          />
         ) : (
-          <>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <MetricCard
-                label="Courses"
-                value={summary?.total_courses ?? 0}
-                sub={`${summary?.total_students ?? 0} enrolled students`}
-              />
-              <MetricCard
-                label="Submissions"
-                value={summary?.total_submissions ?? 0}
-                sub={`${summary?.pending_reviews ?? 0} pending reviews`}
-              />
-              <MetricCard
-                label="Review Progress"
-                value={`${reviewCompletionRate}%`}
-                sub={`${summary?.approved_reviews ?? 0} approved · ${summary?.flagged_reviews ?? 0} flagged`}
-              />
-              <MetricCard
-                label="Avg Confidence"
-                value={`${summary?.avg_confidence ?? 0}%`}
-                sub={`${summary?.avg_wpm ?? 0} average WPM`}
-              />
-            </div>
-
-            <div className="mt-6 grid gap-4 lg:grid-cols-3">
-              <div
-                className="rounded-md border bg-white p-5 shadow-sm lg:col-span-2"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h2
-                      className="text-[15px] font-semibold"
-                      style={{ color: colors.text.primary }}
-                    >
-                      Recent submissions
-                    </h2>
-                    <p
-                      className="mt-1 text-[13px]"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      Latest course-linked writing evidence from your students.
-                    </p>
-                  </div>
-
-                  <Link
-                    to={ROUTES.TEACHER_SUBMISSIONS}
-                    className="text-[13px] font-semibold"
-                    style={{ color: colors.brand }}
-                  >
-                    View all
-                  </Link>
-                </div>
-
-                <div
-                  className="mt-4 overflow-hidden rounded-md border"
-                  style={{ borderColor: colors.surface[200] }}
-                >
-                  {data?.recent_submissions?.length ? (
-                    data.recent_submissions.map((submission) => (
-                      <SubmissionRow
-                        key={submission.id}
-                        submission={submission}
-                      />
-                    ))
-                  ) : (
-                    <div className="px-5 py-8 text-center">
-                      <p
-                        className="text-[14px] font-semibold"
-                        style={{ color: colors.text.primary }}
-                      >
-                        No submissions yet
-                      </p>
-                      <p
-                        className="mt-1 text-[13px]"
-                        style={{ color: colors.text.secondary }}
-                      >
-                        Share a course invite code so students can submit
-                        writing evidence.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div
-                className="rounded-md border bg-white p-5 shadow-sm"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <h2
-                  className="text-[15px] font-semibold"
-                  style={{ color: colors.text.primary }}
-                >
-                  Classification mix
-                </h2>
-                <p
-                  className="mt-1 text-[13px]"
-                  style={{ color: colors.text.secondary }}
-                >
-                  Distribution of student submission outcomes.
-                </p>
-
-                <div className="mt-4 space-y-3">
-                  {[
-                    [
-                      "Human",
-                      summary?.human_submissions ?? 0,
-                      brand.humanBg,
-                      brand.humanText,
-                    ],
-                    [
-                      "Review",
-                      summary?.suspicious_submissions ?? 0,
-                      brand.suspiciousBg,
-                      brand.suspiciousText,
-                    ],
-                    [
-                      "High Risk",
-                      summary?.synthetic_submissions ?? 0,
-                      brand.aiBg,
-                      brand.aiText,
-                    ],
-                  ].map(([label, value, bg, text]) => (
-                    <div
-                      key={String(label)}
-                      className="flex items-center justify-between rounded-md px-3 py-2"
-                      style={{ background: String(bg), color: String(text) }}
-                    >
-                      <span className="text-[13px] font-semibold">{label}</span>
-                      <span className="text-[13px] font-bold">{value}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <Link
-                  to={ROUTES.TEACHER_STUDENTS}
-                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md border px-3 py-2 text-[13px] font-semibold"
-                  style={{
-                    borderColor: colors.surface[200],
-                    color: colors.text.primary,
-                  }}
-                >
-                  View students <ArrowIcon />
-                </Link>
-              </div>
-            </div>
-
-            <div
-              className="mt-6 rounded-md border bg-white p-5 shadow-sm"
-              style={{ borderColor: colors.surface[200] }}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2
-                    className="text-[15px] font-semibold"
-                    style={{ color: colors.text.primary }}
-                  >
-                    Active courses
-                  </h2>
-                  <p
-                    className="mt-1 text-[13px]"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    Your most recent courses and invite codes.
-                  </p>
-                </div>
-
-                <Link
-                  to={ROUTES.TEACHER_COURSES}
-                  className="text-[13px] font-semibold"
-                  style={{ color: colors.brand }}
-                >
-                  Manage
-                </Link>
-              </div>
-
-              <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                {data?.courses?.length ? (
-                  data.courses.map((course) => (
-                    <Link
-                      key={course.id}
-                      to={`/teacher/courses/${course.id}`}
-                      className="rounded-md border px-4 py-3"
-                      style={{
-                        borderColor: colors.surface[200],
-                        background: "#FFFFFF",
-                      }}
-                    >
-                      <p
-                        className="text-[14px] font-semibold"
-                        style={{ color: colors.text.primary }}
-                      >
-                        {course.course_name}
-                      </p>
-                      <p
-                        className="mt-1 text-[12px]"
-                        style={{ color: colors.text.secondary }}
-                      >
-                        {course.course_code} · Invite {course.invite_code}
-                      </p>
-                      <p
-                        className="mt-3 text-[12px]"
-                        style={{ color: colors.text.secondary }}
-                      >
-                        {course.student_count} students ·{" "}
-                        {course.submission_count} submissions
-                      </p>
-                    </Link>
-                  ))
-                ) : (
-                  <div
-                    className="rounded-md border px-4 py-8 text-center lg:col-span-3"
-                    style={{ borderColor: colors.surface[200] }}
-                  >
-                    <p
-                      className="text-[13px]"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      No courses created yet.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {data.courses.slice(0, 3).map((course) => (
+              <CourseCard key={course.id} course={course} />
+            ))}
+          </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

@@ -1,12 +1,13 @@
 // frontend/src/pages/EditorPage.tsx
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { ROUTES } from "../constants/routes";
-import { colors, brand } from "../styles/colors";
-import { api, getApiErrorMessage } from "../lib/api";
 import { useKeystrokeCapture } from "../hooks/useKeystrokeCapture";
+import { api, getApiErrorMessage } from "../lib/api";
+import { useAuthStore } from "../store/authStore";
+import { brand, colors } from "../styles/colors";
 import type { AnalysisResult, EnrolledCourse } from "../types/editor";
 
 const MINIMUM_KEYSTROKES = 30;
@@ -18,119 +19,150 @@ function countWords(value: string): number {
 }
 
 function formatDuration(seconds: number): string {
-  const safeSeconds = Math.max(0, seconds);
-  const minutes = Math.floor(safeSeconds / 60);
-  const remainingSeconds = safeSeconds % 60;
-  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+  const safe = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(safe / 60);
+  const remaining = safe % 60;
+  return `${minutes}:${String(remaining).padStart(2, "0")}`;
 }
 
-function getClassificationStyles(classification: string) {
+function getResultStyle(classification: string) {
   const normalized = classification.toUpperCase();
 
   if (normalized === "HUMAN") {
     return {
-      background: brand.humanBg,
-      color: brand.humanText,
-      borderColor: brand.humanAccent,
       label: "Human Writing Pattern",
+      bg: brand.humanBg,
+      text: brand.humanText,
+      accent: brand.humanAccent,
     };
   }
 
   if (normalized === "SUSPICIOUS") {
     return {
-      background: brand.suspiciousBg,
-      color: brand.suspiciousText,
-      borderColor: brand.suspiciousAccent,
-      label: "Suspicious Writing Pattern",
+      label: "Review Recommended",
+      bg: brand.suspiciousBg,
+      text: brand.suspiciousText,
+      accent: brand.suspiciousAccent,
     };
   }
 
   return {
-    background: brand.aiBg,
-    color: brand.aiText,
-    borderColor: brand.aiAccent,
-    label: "Synthetic Writing Pattern",
+    label: "High Risk Pattern",
+    bg: brand.aiBg,
+    text: brand.aiText,
+    accent: brand.aiAccent,
   };
 }
 
-interface CourseSelectorModalProps {
-  courses: EnrolledCourse[];
-  selectedCourseId: number | null;
-  onSelect: (courseId: number | null) => void;
-  onConfirm: () => void;
-  onCancel: () => void;
-  isSubmitting: boolean;
+function MetricPill({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div
+      className="rounded-md border px-3 py-2"
+      style={{
+        borderColor: colors.surface[200],
+        background: colors.surface[50],
+      }}
+    >
+      <p
+        className="text-[10px] font-bold uppercase tracking-[0.14em]"
+        style={{ color: colors.text.secondary }}
+      >
+        {label}
+      </p>
+      <p
+        className="mt-1 text-[15px] font-bold"
+        style={{ color: colors.text.primary }}
+      >
+        {value}
+      </p>
+    </div>
+  );
 }
 
 function CourseSelectorModal({
   courses,
   selectedCourseId,
   onSelect,
-  onConfirm,
   onCancel,
+  onConfirm,
   isSubmitting,
-}: CourseSelectorModalProps) {
+}: {
+  courses: EnrolledCourse[];
+  selectedCourseId: number | null;
+  onSelect: (courseId: number | null) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+  isSubmitting: boolean;
+}) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div
-        className="w-full max-w-lg rounded-md border bg-white shadow-xl"
-        style={{ borderColor: colors.surface[200] }}
-      >
-        <div
-          className="border-b px-5 py-4"
-          style={{ borderColor: colors.surface[200] }}
-        >
-          <h2
-            className="text-[15px] font-semibold"
-            style={{ color: colors.text.primary }}
-          >
-            Attach this writing session
-          </h2>
-          <p
-            className="mt-1 text-[13px]"
-            style={{ color: colors.text.secondary }}
-          >
-            Choose a course if this submission belongs to one. You can also
-            submit it as a personal writing session.
-          </p>
-        </div>
+        className="absolute inset-0"
+        style={{ background: "rgba(15, 23, 42, 0.48)" }}
+        onClick={onCancel}
+      />
 
-        <div className="max-h-80 overflow-y-auto p-3">
+      <div
+        className="relative z-10 w-full max-w-[520px] rounded-2xl border bg-white p-6"
+        style={{
+          borderColor: colors.surface[200],
+          boxShadow: `0 28px 100px -44px ${colors.shadowStrong}`,
+        }}
+      >
+        <p
+          className="text-[11px] font-bold uppercase tracking-[0.18em]"
+          style={{ color: colors.brand }}
+        >
+          Submit session
+        </p>
+
+        <h2
+          className="mt-2 text-2xl font-bold tracking-[-0.04em]"
+          style={{ color: colors.text.primary }}
+        >
+          Where should this evidence trail be linked?
+        </h2>
+
+        <p
+          className="mt-3 text-[14px] leading-6"
+          style={{ color: colors.text.secondary }}
+        >
+          Select a course if this writing session belongs to an academic module,
+          or keep it as a personal session.
+        </p>
+
+        <div className="mt-5 grid gap-3">
           <button
             type="button"
             onClick={() => onSelect(null)}
-            className="mb-2 flex w-full items-center justify-between rounded-md border px-4 py-3 text-left transition-colors"
+            className="rounded-md border px-4 py-3 text-left transition"
             style={{
               borderColor:
                 selectedCourseId === null ? colors.brand : colors.surface[200],
               background:
                 selectedCourseId === null
-                  ? brand.bgNavActive
+                  ? colors.brandSoft
                   : colors.surface[50],
             }}
           >
-            <div>
-              <p
-                className="text-[13px] font-semibold"
-                style={{ color: colors.text.primary }}
-              >
-                Personal session
-              </p>
-              <p
-                className="text-[12px]"
-                style={{ color: colors.text.secondary }}
-              >
-                Not linked to a course
-              </p>
-            </div>
-            {selectedCourseId === null && (
-              <span
-                className="text-[12px] font-semibold"
-                style={{ color: colors.brand }}
-              >
-                Selected
-              </span>
-            )}
+            <p
+              className="text-[14px] font-semibold"
+              style={{ color: colors.text.primary }}
+            >
+              Personal session
+            </p>
+            <p
+              className="mt-1 text-[12px]"
+              style={{ color: colors.text.secondary }}
+            >
+              Keep this writing session inside your private workspace.
+            </p>
           </button>
 
           {courses.map((course) => (
@@ -138,7 +170,7 @@ function CourseSelectorModal({
               key={course.id}
               type="button"
               onClick={() => onSelect(course.id)}
-              className="mb-2 flex w-full items-center justify-between rounded-md border px-4 py-3 text-left transition-colors"
+              className="rounded-md border px-4 py-3 text-left transition"
               style={{
                 borderColor:
                   selectedCourseId === course.id
@@ -146,52 +178,40 @@ function CourseSelectorModal({
                     : colors.surface[200],
                 background:
                   selectedCourseId === course.id
-                    ? brand.bgNavActive
+                    ? colors.brandSoft
                     : colors.surface[50],
               }}
             >
-              <div>
-                <p
-                  className="text-[13px] font-semibold"
-                  style={{ color: colors.text.primary }}
-                >
-                  {course.course_name}
-                </p>
-                <p
-                  className="text-[12px]"
-                  style={{ color: colors.text.secondary }}
-                >
-                  {course.course_code}
-                </p>
-              </div>
-              {selectedCourseId === course.id && (
-                <span
-                  className="text-[12px] font-semibold"
-                  style={{ color: colors.brand }}
-                >
-                  Selected
-                </span>
-              )}
+              <p
+                className="text-[14px] font-semibold"
+                style={{ color: colors.text.primary }}
+              >
+                {course.course_name}
+              </p>
+              <p
+                className="mt-1 text-[12px]"
+                style={{ color: colors.text.secondary }}
+              >
+                {course.course_code}
+              </p>
             </button>
           ))}
         </div>
 
-        <div
-          className="flex items-center justify-end gap-2 border-t px-5 py-4"
-          style={{ borderColor: colors.surface[200] }}
-        >
+        <div className="mt-6 flex justify-end gap-3">
           <button
             type="button"
             onClick={onCancel}
-            disabled={isSubmitting}
             className="rounded-md border px-4 py-2 text-[13px] font-semibold"
             style={{
               borderColor: colors.surface[200],
-              color: colors.text.secondary,
+              color: colors.text.primary,
+              background: colors.surface[50],
             }}
           >
             Cancel
           </button>
+
           <button
             type="button"
             onClick={onConfirm}
@@ -207,394 +227,132 @@ function CourseSelectorModal({
   );
 }
 
-interface AnalysisScreenProps {
-  result: AnalysisResult;
-  courseName: string | null;
-  onNewSession: () => void;
-}
-
-function AnalysisScreen({
+function ResultPanel({
   result,
-  courseName,
   onNewSession,
-}: AnalysisScreenProps) {
-  const classificationStyle = getClassificationStyles(result.classification);
-  const advancedStats = result.advanced_stats;
-  const riskSignals = advancedStats?.risk_signals || [];
-  const humanSignals = advancedStats?.human_signals || [];
-  const classProbabilities = advancedStats?.class_probabilities || {};
-
-  const behavioralMetrics = [
-    [
-      "Risk Score",
-      advancedStats?.risk_score !== undefined
-        ? `${advancedStats.risk_score}/100`
-        : "—",
-    ],
-    ["Risk Level", advancedStats?.risk_level || "—"],
-    ["Decision Source", advancedStats?.decision_source || "model"],
-    ["Paste Events", advancedStats?.paste_count ?? 0],
-    [
-      "Deletion Ratio",
-      advancedStats?.deletion_ratio !== undefined
-        ? `${Math.round(advancedStats.deletion_ratio * 100)}%`
-        : "—",
-    ],
-    [
-      "Pause Ratio",
-      advancedStats?.pause_ratio !== undefined
-        ? `${Math.round(advancedStats.pause_ratio * 100)}%`
-        : "—",
-    ],
-    [
-      "Flight Entropy",
-      advancedStats?.ft_entropy !== undefined ? advancedStats.ft_entropy : "—",
-    ],
-    [
-      "Longest Pause",
-      advancedStats?.longest_pause_ms !== undefined
-        ? `${Math.round(advancedStats.longest_pause_ms)}ms`
-        : "—",
-    ],
-  ];
+}: {
+  result: AnalysisResult;
+  onNewSession: () => void;
+}) {
+  const style = getResultStyle(result.classification);
 
   return (
-    <div
-      className="min-h-screen px-6 py-8"
-      style={{ background: colors.surface[50] }}
+    <aside
+      className="rounded-2xl border bg-white p-5"
+      style={{
+        borderColor: colors.surface[200],
+        boxShadow: `0 22px 70px -48px ${colors.shadowStrong}`,
+      }}
     >
-      <div className="mx-auto max-w-5xl">
-        <div
-          className="rounded-md border bg-white p-6 shadow-sm"
-          style={{ borderColor: colors.surface[200] }}
-        >
-          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-            <div>
-              <p
-                className="text-[12px] font-semibold uppercase tracking-[0.18em]"
-                style={{ color: colors.text.secondary }}
-              >
-                TypeTrace analysis complete
-              </p>
-              <h1
-                className="mt-2 text-2xl font-semibold"
-                style={{ color: colors.text.primary }}
-              >
-                Writing authenticity report
-              </h1>
-              <p
-                className="mt-2 max-w-2xl text-[14px]"
-                style={{ color: colors.text.secondary }}
-              >
-                This result combines ML classification with behavioral evidence:
-                keystroke rhythm, dwell time, paste behavior, deletion ratio,
-                pause patterns, and writing speed.
-              </p>
-            </div>
+      <div
+        className="rounded-xl border p-5"
+        style={{
+          borderColor: style.accent,
+          background: style.bg,
+          color: style.text,
+        }}
+      >
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em]">
+          Authorship result
+        </p>
 
-            <div
-              className="rounded-md border px-4 py-3 text-right"
-              style={{
-                background: classificationStyle.background,
-                color: classificationStyle.color,
-                borderColor: classificationStyle.borderColor,
-              }}
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.15em]">
-                Classification
-              </p>
-              <p className="mt-1 text-lg font-bold">
-                {classificationStyle.label}
-              </p>
-              <p className="mt-1 text-[13px] font-semibold">
-                {result.confidence}% confidence
-              </p>
-            </div>
-          </div>
+        <h2 className="mt-3 text-[2.4rem] font-extrabold tracking-[-0.05em]">
+          {Math.round(result.confidence)}%
+        </h2>
 
-          {result.kill_switch_triggered && (
-            <div
-              className="mt-5 rounded-md border px-4 py-3 text-[13px]"
-              style={{
-                background: brand.aiBg,
-                borderColor: brand.aiAccent,
-                color: brand.aiText,
-              }}
-            >
-              Strong behavioral rule triggered:{" "}
-              {result.kill_switch_reason ||
-                "High-risk typing behavior detected."}
-            </div>
-          )}
+        <p className="mt-1 text-[14px] font-semibold">{style.label}</p>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              ["WPM", result.stats.wpm],
-              ["Keystrokes", result.stats.keystrokes],
-              ["Deletions", result.stats.deletions],
-              ["Avg IKI", `${result.stats.avgIki}ms`],
-              ["Pauses", result.stats.pauses],
-              ["Duration", formatDuration(result.stats.sessionSeconds)],
-              ["Certificate", result.certificate_id || "Pending"],
-              ["Course", courseName || "Personal"],
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                className="rounded-md border bg-white px-4 py-3"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <p
-                  className="text-[11px] font-semibold uppercase tracking-[0.12em]"
-                  style={{ color: colors.text.secondary }}
-                >
-                  {label}
-                </p>
-                <p
-                  className="mt-1 text-[17px] font-semibold"
-                  style={{ color: colors.text.primary }}
-                >
-                  {value}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div
-            className="mt-6 rounded-md border bg-white p-5"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
-              <div>
-                <h2
-                  className="text-[15px] font-semibold"
-                  style={{ color: colors.text.primary }}
-                >
-                  Behavioral ML signals
-                </h2>
-                <p
-                  className="mt-1 text-[13px]"
-                  style={{ color: colors.text.secondary }}
-                >
-                  These values explain why the classifier reached this decision.
-                </p>
-              </div>
-
-              {advancedStats?.model_version && (
-                <span
-                  className="rounded-md border px-3 py-1 text-[11px] font-semibold"
-                  style={{
-                    borderColor: colors.surface[200],
-                    color: colors.text.secondary,
-                    background: colors.surface[50],
-                  }}
-                >
-                  Model {advancedStats.model_version}
-                </span>
-              )}
-            </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {behavioralMetrics.map(([label, value]) => (
-                <div
-                  key={label}
-                  className="rounded-md border px-3 py-2"
-                  style={{ borderColor: colors.surface[200] }}
-                >
-                  <p
-                    className="text-[10px] font-semibold uppercase tracking-[0.12em]"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {label}
-                  </p>
-                  <p
-                    className="mt-1 text-[14px] font-semibold"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {value}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              <div
-                className="rounded-md border p-4"
-                style={{
-                  borderColor: brand.humanAccent,
-                  background: brand.humanBg,
-                }}
-              >
-                <h3
-                  className="text-[13px] font-semibold"
-                  style={{ color: brand.humanText }}
-                >
-                  Human-supporting signals
-                </h3>
-                <div className="mt-3 space-y-2">
-                  {humanSignals.length > 0 ? (
-                    humanSignals.map((signal) => (
-                      <p
-                        key={signal}
-                        className="text-[12px]"
-                        style={{ color: brand.humanText }}
-                      >
-                        {signal}
-                      </p>
-                    ))
-                  ) : (
-                    <p
-                      className="text-[12px]"
-                      style={{ color: brand.humanText }}
-                    >
-                      No strong human-supporting behavioral signals were found.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div
-                className="rounded-md border p-4"
-                style={{
-                  borderColor: brand.aiAccent,
-                  background: brand.aiBg,
-                }}
-              >
-                <h3
-                  className="text-[13px] font-semibold"
-                  style={{ color: brand.aiText }}
-                >
-                  Risk signals
-                </h3>
-                <div className="mt-3 space-y-2">
-                  {riskSignals.length > 0 ? (
-                    riskSignals.map((signal) => (
-                      <p
-                        key={signal}
-                        className="text-[12px]"
-                        style={{ color: brand.aiText }}
-                      >
-                        {signal}
-                      </p>
-                    ))
-                  ) : (
-                    <p className="text-[12px]" style={{ color: brand.aiText }}>
-                      No major behavioral risk signal was detected.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {Object.keys(classProbabilities).length > 0 && (
-              <div className="mt-5">
-                <h3
-                  className="text-[13px] font-semibold"
-                  style={{ color: colors.text.primary }}
-                >
-                  Model probability breakdown
-                </h3>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                  {Object.entries(classProbabilities).map(
-                    ([label, probability]) => (
-                      <div
-                        key={label}
-                        className="rounded-md border px-3 py-2"
-                        style={{ borderColor: colors.surface[200] }}
-                      >
-                        <p
-                          className="text-[11px] font-semibold uppercase tracking-[0.12em]"
-                          style={{ color: colors.text.secondary }}
-                        >
-                          {label}
-                        </p>
-                        <p
-                          className="mt-1 text-[15px] font-semibold"
-                          style={{ color: colors.text.primary }}
-                        >
-                          {probability}%
-                        </p>
-                      </div>
-                    ),
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {result.document_hash && (
-            <div
-              className="mt-5 rounded-md border px-4 py-3"
-              style={{ borderColor: colors.surface[200] }}
-            >
-              <p
-                className="text-[11px] font-semibold uppercase tracking-[0.12em]"
-                style={{ color: colors.text.secondary }}
-              >
-                Document SHA-256 Hash
-              </p>
-              <p
-                className="mt-1 break-all font-mono text-[12px]"
-                style={{ color: colors.text.primary }}
-              >
-                {result.document_hash}
-              </p>
-            </div>
-          )}
-
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={onNewSession}
-              className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
-              style={{ background: colors.brand }}
-            >
-              Start new session
-            </button>
-
-            {result.session_id && (
-              <Link
-                to={`/session/${result.session_id}/replay`}
-                className="rounded-md border px-4 py-2 text-[13px] font-semibold"
-                style={{
-                  borderColor: colors.surface[200],
-                  color: colors.text.primary,
-                }}
-              >
-                View replay
-              </Link>
-            )}
-
-            {result.certificate_id && (
-              <Link
-                to={`/verify/${result.certificate_id}`}
-                className="rounded-md border px-4 py-2 text-[13px] font-semibold"
-                style={{
-                  borderColor: colors.surface[200],
-                  color: colors.text.primary,
-                }}
-              >
-                Verify certificate
-              </Link>
-            )}
-          </div>
-        </div>
+        {result.kill_switch_triggered && result.kill_switch_reason && (
+          <p className="mt-3 text-[12px] leading-5">
+            {result.kill_switch_reason}
+          </p>
+        )}
       </div>
-    </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <MetricPill label="WPM" value={result.stats.wpm} />
+        <MetricPill label="IKI" value={`${result.stats.avgIki}ms`} />
+        <MetricPill label="Keys" value={result.stats.keystrokes} />
+        <MetricPill label="Pauses" value={result.stats.pauses} />
+      </div>
+
+      {result.document_hash && (
+        <div
+          className="mt-4 rounded-md border p-3"
+          style={{
+            borderColor: colors.surface[200],
+            background: colors.surface[100],
+          }}
+        >
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: colors.text.secondary }}
+          >
+            Document hash
+          </p>
+          <p
+            className="mt-2 break-all font-mono text-[11px]"
+            style={{ color: colors.text.primary }}
+          >
+            {result.document_hash}
+          </p>
+        </div>
+      )}
+
+      <div className="mt-5 grid gap-2">
+        {result.session_id && (
+          <Link
+            to={ROUTES.REPLAY.replace(":sessionId", String(result.session_id))}
+            className="rounded-md px-4 py-2.5 text-center text-[13px] font-semibold text-white"
+            style={{ background: colors.brand }}
+          >
+            View replay audit
+          </Link>
+        )}
+
+        {result.certificate_id && (
+          <Link
+            to={`/verify/${result.certificate_id}`}
+            className="rounded-md border px-4 py-2.5 text-center text-[13px] font-semibold"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.primary,
+            }}
+          >
+            Verify certificate
+          </Link>
+        )}
+
+        <button
+          type="button"
+          onClick={onNewSession}
+          className="rounded-md border px-4 py-2.5 text-[13px] font-semibold"
+          style={{
+            borderColor: colors.surface[200],
+            color: colors.text.secondary,
+            background: colors.surface[50],
+          }}
+        >
+          Start new session
+        </button>
+      </div>
+    </aside>
   );
 }
 
 export default function EditorPage() {
+  const { user } = useAuthStore();
+
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
-  const [focusMode, setFocusMode] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showCourseModal, setShowCourseModal] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
   const [enrolledCourses, setEnrolledCourses] = useState<EnrolledCourse[]>([]);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
     null,
   );
   const [apiError, setApiError] = useState<string | null>(null);
+  const [showCourseModal, setShowCourseModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     keystrokeLogRef,
@@ -609,17 +367,22 @@ export default function EditorPage() {
   const wordCount = useMemo(() => countWords(text), [text]);
   const charCount = text.length;
 
+  const fullName =
+    `${user?.first_name || "Student"} ${user?.last_name || ""}`.trim();
+
+  const canAnalyze =
+    liveStats.keystrokes >= MINIMUM_KEYSTROKES && text.trim().length > 0;
+
   useEffect(() => {
-    let isMounted = true;
+    let mounted = true;
 
     async function loadCourses() {
       try {
         const response = await api.get("/courses/enrolled");
-        if (!isMounted) return;
-
+        if (!mounted) return;
         setEnrolledCourses(response.data?.courses || []);
       } catch {
-        if (!isMounted) return;
+        if (!mounted) return;
         setEnrolledCourses([]);
       }
     }
@@ -627,14 +390,11 @@ export default function EditorPage() {
     loadCourses();
 
     return () => {
-      isMounted = false;
+      mounted = false;
     };
   }, []);
 
-  const canAnalyze =
-    liveStats.keystrokes >= MINIMUM_KEYSTROKES && text.trim().length > 0;
-
-  const handleOpenAnalyzeModal = () => {
+  const openAnalyzeModal = () => {
     setApiError(null);
 
     if (!text.trim()) {
@@ -652,7 +412,7 @@ export default function EditorPage() {
     setShowCourseModal(true);
   };
 
-  const handleConfirmSubmit = async () => {
+  const confirmSubmit = async () => {
     setIsSubmitting(true);
     setApiError(null);
 
@@ -667,8 +427,6 @@ export default function EditorPage() {
         course_id: selectedCourseId,
       });
 
-      setShowCourseModal(false);
-
       setAnalysisResult({
         classification: response.data.classification,
         confidence: response.data.confidence_score,
@@ -680,6 +438,8 @@ export default function EditorPage() {
         document_hash: response.data.document_hash,
         session_id: response.data.session_id,
       });
+
+      setShowCourseModal(false);
     } catch (error) {
       setApiError(getApiErrorMessage(error));
     } finally {
@@ -687,144 +447,128 @@ export default function EditorPage() {
     }
   };
 
-  const handleNewSession = () => {
-    setAnalysisResult(null);
+  const newSession = () => {
     setTitle("");
     setText("");
     setSelectedCourseId(null);
+    setAnalysisResult(null);
     setApiError(null);
     resetCapture();
   };
 
-  if (analysisResult) {
-    const courseName = selectedCourseId
-      ? enrolledCourses.find((course) => course.id === selectedCourseId)
-          ?.course_name || null
-      : null;
-
-    return (
-      <AnalysisScreen
-        result={analysisResult}
-        courseName={courseName}
-        onNewSession={handleNewSession}
-      />
-    );
-  }
-
   return (
-    <div
-      className="flex h-screen flex-col overflow-hidden font-sans"
-      style={{ background: focusMode ? "#FFFFFF" : colors.surface[50] }}
+    <main
+      className="min-h-screen pb-20"
+      style={{ background: colors.surface[100] }}
     >
       <header
-        className="flex h-12 shrink-0 items-center gap-3 border-b bg-white px-4"
+        className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur"
         style={{ borderColor: colors.surface[200] }}
       >
-        {!focusMode && (
-          <Link
-            to={ROUTES.DASHBOARD}
-            className="rounded-md px-2 py-1 text-[12px] font-medium transition-colors"
-            style={{ color: colors.text.secondary }}
-          >
-            Back to dashboard
-          </Link>
-        )}
+        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-5 py-3">
+          <div className="flex items-center gap-5">
+            <Link to={ROUTES.DASHBOARD} className="flex items-center">
+              <img
+                src="/Logo.png"
+                alt="TypeTrace"
+                className="h-[30px] w-auto object-contain"
+              />
+            </Link>
 
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="Untitled Document"
-          className="min-w-0 flex-1 bg-transparent text-[14px] font-semibold outline-none"
-          style={{ color: colors.text.primary }}
-        />
+            <div
+              className="hidden h-7 w-px md:block"
+              style={{ background: colors.surface[200] }}
+            />
 
-        <button
-          type="button"
-          onClick={() => setFocusMode((current) => !current)}
-          className="rounded-md border px-3 py-1.5 text-[12px] font-semibold"
-          style={{
-            borderColor: colors.surface[200],
-            color: colors.text.secondary,
-            background: colors.surface[50],
-          }}
-        >
-          {focusMode ? "Exit focus" : "Focus"}
-        </button>
+            <div className="hidden md:block">
+              <p
+                className="text-[11px] font-bold uppercase tracking-[0.16em]"
+                style={{ color: colors.brand }}
+              >
+                Live writing workspace
+              </p>
+              <p
+                className="text-[13px] font-semibold"
+                style={{ color: colors.text.primary }}
+              >
+                Capture evidence while you write naturally
+              </p>
+            </div>
+          </div>
 
-        <button
-          type="button"
-          onClick={handleOpenAnalyzeModal}
-          disabled={!canAnalyze || isSubmitting}
-          className="rounded-md px-4 py-1.5 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ background: colors.brand }}
-        >
-          Analyze
-        </button>
+          <div className="flex items-center gap-2">
+            <Link
+              to={ROUTES.DASHBOARD}
+              className="rounded-md border px-3 py-2 text-[13px] font-semibold"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.primary,
+                background: colors.surface[50],
+              }}
+            >
+              Dashboard
+            </Link>
+
+            <button
+              type="button"
+              onClick={openAnalyzeModal}
+              disabled={!canAnalyze || isSubmitting}
+              className="rounded-md px-4 py-2 text-[13px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ background: colors.brand }}
+            >
+              Analyze
+            </button>
+          </div>
+        </div>
       </header>
 
-      <main className="flex min-h-0 flex-1">
-        {!focusMode && (
-          <aside
-            className="hidden w-72 shrink-0 border-r bg-white p-4 lg:block"
+      <section className="mx-auto grid max-w-[1500px] grid-cols-1 gap-5 px-5 py-5 xl:grid-cols-[1fr_360px]">
+        <div
+          className="overflow-hidden rounded-2xl border bg-white"
+          style={{
+            borderColor: colors.surface[200],
+            boxShadow: `0 24px 90px -58px ${colors.shadowStrong}`,
+          }}
+        >
+          <div
+            className="flex flex-col gap-4 border-b px-5 py-4 md:flex-row md:items-center md:justify-between"
             style={{ borderColor: colors.surface[200] }}
           >
-            <h2
-              className="text-[13px] font-semibold"
-              style={{ color: colors.text.primary }}
-            >
-              Live writing evidence
-            </h2>
+            <div className="min-w-0 flex-1">
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Untitled academic document"
+                className="w-full border-none bg-transparent text-[1.65rem] font-bold tracking-[-0.05em] outline-none"
+                style={{ color: colors.text.primary }}
+              />
 
-            <div className="mt-4 grid gap-3">
-              {[
-                ["Words", wordCount],
-                ["Characters", charCount],
-                ["WPM", liveStats.wpm],
-                ["Keystrokes", liveStats.keystrokes],
-                ["Deletions", liveStats.deletions],
-                ["Pauses", liveStats.pauses],
-                ["Avg IKI", `${liveStats.avgIki}ms`],
-                ["Duration", formatDuration(liveStats.sessionSeconds)],
-              ].map(([label, value]) => (
-                <div
-                  key={label}
-                  className="rounded-md border px-3 py-2"
-                  style={{ borderColor: colors.surface[200] }}
-                >
-                  <p
-                    className="text-[11px] font-semibold uppercase tracking-[0.12em]"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {label}
-                  </p>
-                  <p
-                    className="mt-1 text-[16px] font-semibold"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {value}
-                  </p>
-                </div>
-              ))}
+              <p
+                className="mt-1 text-[12px]"
+                style={{ color: colors.text.secondary }}
+              >
+                Every keystroke, pause, correction, and paste event is captured
+                as behavioral evidence.
+              </p>
             </div>
 
             <div
-              className="mt-4 rounded-md border px-3 py-3 text-[12px]"
+              className="rounded-md border px-3 py-2 text-[12px] font-semibold"
               style={{
                 borderColor: colors.surface[200],
-                background: colors.surface[50],
+                background: colors.surface[100],
                 color: colors.text.secondary,
               }}
             >
-              Keystroke capture records timing, pauses, deletions, paste events,
-              dwell time, and inter-key intervals while you write.
+              {liveStats.keystrokes < MINIMUM_KEYSTROKES
+                ? `${MINIMUM_KEYSTROKES - liveStats.keystrokes} more keys needed`
+                : "Ready for analysis"}
             </div>
-          </aside>
-        )}
+          </div>
 
-        <section className="flex min-w-0 flex-1 flex-col">
           {apiError && (
             <div
-              className="mx-auto mt-4 w-full max-w-4xl rounded-md border px-4 py-3 text-[13px]"
+              className="mx-5 mt-5 rounded-md border px-4 py-3 text-[13px]"
               style={{
                 borderColor: brand.aiAccent,
                 background: brand.aiBg,
@@ -835,82 +579,187 @@ export default function EditorPage() {
             </div>
           )}
 
-          <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-5 py-5">
+          <div className="p-5">
             <textarea
               value={text}
               onChange={(event) => setText(event.target.value)}
               onKeyDown={handleKeyDown}
               onKeyUp={handleKeyUp}
               onPaste={handlePaste}
-              placeholder="Start typing your assignment here. TypeTrace will capture your writing process as evidence of authorship."
-              spellCheck
-              className="min-h-0 flex-1 resize-none rounded-md border bg-white px-6 py-5 text-[16px] leading-8 outline-none transition-colors"
+              placeholder="Start writing here. TypeTrace will quietly capture your writing process in the background."
+              className="min-h-[calc(100vh-285px)] w-full resize-none rounded-xl border px-5 py-5 text-[16px] leading-8 outline-none transition focus:ring-2"
               style={{
                 borderColor: colors.surface[200],
+                background: colors.surface[50],
                 color: colors.text.primary,
-                boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
               }}
             />
           </div>
-        </section>
-      </main>
+        </div>
 
-      {!focusMode && (
-        <footer
-          className="flex h-9 shrink-0 items-center gap-4 border-t px-5"
-          style={{
-            borderColor: colors.surface[200],
-            background: colors.surface[50],
-          }}
-        >
-          <div
-            className="flex items-center gap-1.5 text-[11px] font-mono"
-            style={{ color: colors.text.secondary }}
-          >
-            <span
-              className="h-1.5 w-1.5 rounded-full"
+        <div className="space-y-5">
+          {analysisResult ? (
+            <ResultPanel result={analysisResult} onNewSession={newSession} />
+          ) : (
+            <aside
+              className="rounded-2xl border bg-white p-5"
               style={{
-                background:
-                  keystrokeLogRef.current.length > 0
-                    ? colors.green
-                    : colors.surface[200],
-                boxShadow:
-                  keystrokeLogRef.current.length > 0
-                    ? `0 0 4px ${colors.green}`
-                    : "none",
+                borderColor: colors.surface[200],
+                boxShadow: `0 22px 70px -48px ${colors.shadowStrong}`,
               }}
-            />
-            {liveStats.keystrokes} keys · {liveStats.deletions} deletions · IKI{" "}
-            {liveStats.avgIki}ms
+            >
+              <p
+                className="text-[11px] font-bold uppercase tracking-[0.16em]"
+                style={{ color: colors.brand }}
+              >
+                Live telemetry
+              </p>
+
+              <h2
+                className="mt-2 text-xl font-bold tracking-[-0.04em]"
+                style={{ color: colors.text.primary }}
+              >
+                Session signal quality
+              </h2>
+
+              <p
+                className="mt-2 text-[13px] leading-6"
+                style={{ color: colors.text.secondary }}
+              >
+                The system needs enough natural typing behavior before it can
+                generate a reliable authorship result.
+              </p>
+
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <MetricPill label="Words" value={wordCount} />
+                <MetricPill label="Characters" value={charCount} />
+                <MetricPill label="Keystrokes" value={liveStats.keystrokes} />
+                <MetricPill label="Deletions" value={liveStats.deletions} />
+                <MetricPill label="WPM" value={liveStats.wpm} />
+                <MetricPill
+                  label="Duration"
+                  value={formatDuration(liveStats.sessionSeconds)}
+                />
+                <MetricPill label="Pauses" value={liveStats.pauses} />
+                <MetricPill label="Avg IKI" value={`${liveStats.avgIki}ms`} />
+              </div>
+            </aside>
+          )}
+
+          <aside
+            className="rounded-2xl border bg-white p-5"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <p
+              className="text-[11px] font-bold uppercase tracking-[0.16em]"
+              style={{ color: colors.text.secondary }}
+            >
+              Writing evidence
+            </p>
+
+            <div className="mt-4 grid gap-3">
+              {[
+                [
+                  "Behavioral capture",
+                  "Keydown, keyup, dwell and flight timing",
+                ],
+                [
+                  "Integrity trail",
+                  "Session evidence prepared for certificate sealing",
+                ],
+                [
+                  "Replay ready",
+                  "Teachers can review suspicious sessions later",
+                ],
+              ].map(([titleValue, desc]) => (
+                <div
+                  key={titleValue}
+                  className="rounded-md border p-3"
+                  style={{
+                    borderColor: colors.surface[200],
+                    background: colors.surface[50],
+                  }}
+                >
+                  <p
+                    className="text-[13px] font-semibold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {titleValue}
+                  </p>
+                  <p
+                    className="mt-1 text-[12px] leading-5"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    {desc}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <footer
+        className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 backdrop-blur"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <div className="mx-auto flex max-w-[1500px] flex-col gap-3 px-5 py-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-md border text-[12px] font-bold"
+              style={{
+                borderColor: colors.surface[200],
+                background: colors.brandSoft,
+                color: colors.brand,
+              }}
+            >
+              {user?.first_name?.[0] || "S"}
+            </div>
+
+            <div className="min-w-0">
+              <p
+                className="text-[10px] font-bold uppercase tracking-[0.16em]"
+                style={{ color: colors.text.secondary }}
+              >
+                Student workspace
+              </p>
+              <p
+                className="truncate text-[13px] font-semibold"
+                style={{ color: colors.text.primary }}
+              >
+                {fullName}
+              </p>
+              <p
+                className="truncate text-[12px]"
+                style={{ color: colors.text.secondary }}
+              >
+                {user?.email}
+              </p>
+            </div>
           </div>
 
-          <div className="flex-1" />
-
-          <span
-            className="text-[11px] font-mono"
-            style={{ color: colors.text.secondary }}
-          >
-            {charCount} chars
-          </span>
-          <span
-            className="text-[11px] font-mono"
-            style={{ color: colors.text.secondary }}
-          >
-            ~{Math.max(1, Math.ceil(wordCount / 200))} min read
-          </span>
-        </footer>
-      )}
+          <div className="grid grid-cols-4 gap-2 md:flex">
+            <MetricPill label="Words" value={wordCount} />
+            <MetricPill label="Keys" value={liveStats.keystrokes} />
+            <MetricPill label="WPM" value={liveStats.wpm} />
+            <MetricPill
+              label="Time"
+              value={formatDuration(liveStats.sessionSeconds)}
+            />
+          </div>
+        </div>
+      </footer>
 
       {showCourseModal && (
         <CourseSelectorModal
           courses={enrolledCourses}
           selectedCourseId={selectedCourseId}
           onSelect={setSelectedCourseId}
-          onConfirm={handleConfirmSubmit}
           onCancel={() => setShowCourseModal(false)}
+          onConfirm={confirmSubmit}
           isSubmitting={isSubmitting}
         />
       )}
-    </div>
+    </main>
   );
 }

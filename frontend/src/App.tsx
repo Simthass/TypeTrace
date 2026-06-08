@@ -26,7 +26,7 @@ import HelpDocsPage from "./pages/HelpDocsPage";
 import HomePage from "./pages/HomePage";
 import HowItWorksPage from "./pages/HowItWorksPage";
 import LoginPage from "./pages/LoginPage";
-import PlaceholderPage from "./pages/PlaceholderPage";
+import NotFoundPage from "./pages/NotFoundPage";
 import RegisterPage from "./pages/RegisterPage";
 import ReplayPage from "./pages/ReplayPage";
 import SessionsPage from "./pages/SessionsPage";
@@ -80,14 +80,16 @@ export default function App() {
           </Route>
 
           <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
+            {/* Editor is now a standalone SaaS workspace, not inside DashboardLayout */}
+            <Route path={ROUTES.EDITOR} element={<EditorPage />} />
+            <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
+
             <Route element={<DashboardLayout />}>
               <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
               <Route
                 path={ROUTES.STUDENT_SETTINGS}
                 element={<SettingsPage />}
               />
-              <Route path={ROUTES.EDITOR} element={<EditorPage />} />
-              <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
               <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
               <Route
                 path={ROUTES.CERTIFICATES}
@@ -131,15 +133,7 @@ export default function App() {
             </Route>
           </Route>
 
-          <Route
-            path={ROUTES.NOT_FOUND}
-            element={
-              <PlaceholderPage
-                title="Page not found"
-                description="The page you are looking for does not exist or has been moved."
-              />
-            }
-          />
+          <Route path={ROUTES.NOT_FOUND} element={<NotFoundPage />} />
         </Routes>
       </ToastProvider>
     </BrowserRouter>
