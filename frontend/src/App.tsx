@@ -80,7 +80,6 @@ export default function App() {
           </Route>
 
           <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
-            {/* Editor is now a standalone SaaS workspace, not inside DashboardLayout */}
             <Route path={ROUTES.EDITOR} element={<EditorPage />} />
             <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
 

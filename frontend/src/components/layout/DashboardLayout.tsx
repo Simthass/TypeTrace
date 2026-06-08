@@ -1,8 +1,10 @@
 // frontend/src/components/layout/DashboardLayout.tsx
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 
+import { ButtonLink } from "../ui/Button";
+import { Badge } from "../ui/Badge";
 import { ROUTES } from "../../constants/routes";
 import { brand, colors } from "../../styles/colors";
 import { useAuthStore } from "../../store/authStore";
@@ -57,6 +59,20 @@ function Icon({ type }: { type: string }) {
         <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 1 1 7.1 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1z" />
       </>
     ),
+    menu: (
+      <>
+        <path d="M4 6h16" />
+        <path d="M4 12h16" />
+        <path d="M4 18h16" />
+      </>
+    ),
+    close: (
+      <>
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </>
+    ),
+    collapse: <path d="m15 18-6-6 6-6" />,
   };
 
   return (
@@ -76,17 +92,42 @@ function Icon({ type }: { type: string }) {
   );
 }
 
-const navItems = [
-  { label: "Overview", path: ROUTES.DASHBOARD, icon: "dashboard" },
-  { label: "New Session", path: ROUTES.EDITOR_NEW, icon: "editor" },
-  { label: "Sessions", path: ROUTES.SESSIONS, icon: "sessions" },
-  { label: "Certificates", path: ROUTES.CERTIFICATES, icon: "certificates" },
-  { label: "Analytics", path: ROUTES.ANALYTICS, icon: "analytics" },
-  { label: "Join Course", path: ROUTES.JOIN_COURSE, icon: "course" },
-  { label: "Settings", path: ROUTES.STUDENT_SETTINGS, icon: "settings" },
+const navSections = [
+  {
+    label: "Workspace",
+    items: [
+      { label: "Overview", path: ROUTES.DASHBOARD, icon: "dashboard" },
+      { label: "New Session", path: ROUTES.EDITOR_NEW, icon: "editor" },
+    ],
+  },
+  {
+    label: "Evidence",
+    items: [
+      { label: "Sessions", path: ROUTES.SESSIONS, icon: "sessions" },
+      {
+        label: "Certificates",
+        path: ROUTES.CERTIFICATES,
+        icon: "certificates",
+      },
+      { label: "Analytics", path: ROUTES.ANALYTICS, icon: "analytics" },
+    ],
+  },
+  {
+    label: "Academic",
+    items: [
+      { label: "Join Course", path: ROUTES.JOIN_COURSE, icon: "course" },
+      { label: "Settings", path: ROUTES.STUDENT_SETTINGS, icon: "settings" },
+    ],
+  },
 ];
 
-export default function DashboardLayout() {
+function SidebarContent({
+  collapsed,
+  onClose,
+}: {
+  collapsed: boolean;
+  onClose?: () => void;
+}) {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
 
@@ -95,138 +136,247 @@ export default function DashboardLayout() {
 
   const handleLogout = () => {
     logout();
+    onClose?.();
     navigate(ROUTES.LOGIN);
   };
 
   return (
-    <div className="min-h-screen" style={{ background: colors.surface[50] }}>
-      <aside
-        className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r bg-white px-4 py-5 lg:block"
-        style={{ borderColor: colors.surface[200] }}
-      >
-        <Link to={ROUTES.DASHBOARD} className="flex items-center px-2">
-          <img
-            src="/Logo.png"
-            alt="TypeTrace"
-            className="h-[30px] w-auto object-contain"
-          />
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          to={ROUTES.DASHBOARD}
+          onClick={onClose}
+          className="flex min-w-0 items-center px-1"
+        >
+          {!collapsed ? (
+            <img
+              src="/Logo.png"
+              alt="TypeTrace"
+              className="h-[30px] w-auto object-contain"
+            />
+          ) : (
+            <span
+              className="flex h-9 w-9 items-center justify-center rounded-md border text-[13px] font-bold"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.brand,
+                background: colors.brandSoft,
+              }}
+            >
+              TT
+            </span>
+          )}
         </Link>
+      </div>
 
+      <nav className="mt-7 grid gap-6">
+        {navSections.map((section) => (
+          <div key={section.label}>
+            {!collapsed && (
+              <p
+                className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em]"
+                style={{ color: colors.text.muted }}
+              >
+                {section.label}
+              </p>
+            )}
+
+            <div className="grid gap-1">
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  title={collapsed ? item.label : undefined}
+                  onClick={onClose}
+                  className="relative flex items-center gap-3 rounded-md px-3 py-2.5 text-[13px] font-bold transition"
+                  style={({ isActive }) => ({
+                    background: isActive ? brand.bgNavActive : "transparent",
+                    color: isActive ? colors.brand : colors.text.secondary,
+                  })}
+                >
+                  {({ isActive }) => (
+                    <>
+                      <span
+                        className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full"
+                        style={{
+                          background: isActive ? colors.brand : "transparent",
+                        }}
+                      />
+                      <Icon type={item.icon} />
+                      {!collapsed && <span>{item.label}</span>}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      <div className="mt-auto pt-6">
         <div
-          className="mt-5 rounded-md border px-3 py-3"
+          className="rounded-md border p-3"
           style={{
             borderColor: colors.surface[200],
             background: colors.surface[100],
           }}
         >
-          <p
-            className="text-[11px] font-semibold uppercase tracking-[0.14em]"
-            style={{ color: colors.text.secondary }}
-          >
-            Student workspace
-          </p>
-
-          <p
-            className="mt-1 truncate text-[14px] font-semibold"
-            style={{ color: colors.text.primary }}
-          >
-            {fullName}
-          </p>
-
-          <p
-            className="mt-0.5 truncate text-[12px]"
-            style={{ color: colors.text.secondary }}
-          >
-            {user?.email}
-          </p>
-        </div>
-
-        <nav className="mt-7 grid gap-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className="flex items-center gap-3 rounded-md px-3 py-2.5 text-[13px] font-semibold transition"
-              style={({ isActive }) => ({
-                background: isActive ? brand.bgNavActive : "transparent",
-                color: isActive ? colors.brand : colors.text.secondary,
-              })}
+          <div className="flex items-center justify-between gap-3">
+            <p
+              className="text-[10px] font-bold uppercase tracking-[0.16em]"
+              style={{ color: colors.text.secondary }}
             >
-              <Icon type={item.icon} />
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+              {!collapsed ? "Student workspace" : "Student"}
+            </p>
+
+            {!collapsed && <Badge tone="verified">Verified</Badge>}
+          </div>
+
+          {!collapsed && (
+            <>
+              <p
+                className="mt-2 truncate text-[14px] font-bold"
+                style={{ color: colors.text.primary }}
+              >
+                {fullName}
+              </p>
+              <p
+                className="mt-0.5 truncate text-[12px]"
+                style={{ color: colors.text.secondary }}
+              >
+                {user?.email}
+              </p>
+            </>
+          )}
+        </div>
 
         <button
           type="button"
           onClick={handleLogout}
-          className="absolute bottom-5 left-4 right-4 rounded-md border px-4 py-2.5 text-[13px] font-semibold transition"
+          className="mt-3 w-full rounded-md border px-4 py-2.5 text-[13px] font-bold transition hover:opacity-80"
           style={{
             borderColor: colors.surface[200],
             color: brand.aiAccent,
             background: colors.surface[50],
           }}
         >
-          Sign out
+          {collapsed ? "Out" : "Sign out"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardLayout() {
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const sidebarWidth = collapsed ? "lg:w-[88px]" : "lg:w-72";
+  const pagePadding = collapsed ? "lg:pl-[88px]" : "lg:pl-72";
+
+  return (
+    <div className="min-h-screen" style={{ background: colors.surface[50] }}>
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 hidden border-r bg-white px-4 py-5 transition-all duration-200 lg:block ${sidebarWidth}`}
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <div className="absolute right-3 top-5">
+          <button
+            type="button"
+            onClick={() => setCollapsed((value) => !value)}
+            className="flex h-8 w-8 items-center justify-center rounded-md border transition"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.secondary,
+              background: colors.surface[50],
+              transform: collapsed ? "rotate(180deg)" : "rotate(0deg)",
+            }}
+            aria-label="Toggle sidebar"
+          >
+            <Icon type="collapse" />
+          </button>
+        </div>
+
+        <SidebarContent collapsed={collapsed} />
       </aside>
 
-      <div className="lg:pl-72">
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            className="absolute inset-0"
+            style={{ background: "rgba(15, 23, 42, 0.42)" }}
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close menu"
+          />
+
+          <aside
+            className="absolute inset-y-0 left-0 w-[84%] max-w-[320px] border-r bg-white px-4 py-5"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <div className="absolute right-4 top-5">
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-md border"
+                style={{
+                  borderColor: colors.surface[200],
+                  color: colors.text.secondary,
+                }}
+                aria-label="Close navigation"
+              >
+                <Icon type="close" />
+              </button>
+            </div>
+
+            <SidebarContent
+              collapsed={false}
+              onClose={() => setMobileOpen(false)}
+            />
+          </aside>
+        </div>
+      )}
+
+      <div className={pagePadding}>
         <header
           className="sticky top-0 z-30 border-b bg-white/95 px-4 py-3 backdrop-blur md:px-8"
           style={{ borderColor: colors.surface[200] }}
         >
           <div className="flex items-center justify-between gap-4">
-            <Link to={ROUTES.DASHBOARD} className="flex items-center lg:hidden">
-              <img
-                src="/Logo.png"
-                alt="TypeTrace"
-                className="h-[28px] w-auto object-contain"
-              />
-            </Link>
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="flex h-10 w-10 items-center justify-center rounded-md border lg:hidden"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.primary,
+                background: colors.surface[50],
+              }}
+              aria-label="Open navigation"
+            >
+              <Icon type="menu" />
+            </button>
 
-            <div className="hidden lg:block">
+            <div>
               <p
-                className="text-[12px] font-semibold uppercase tracking-[0.14em]"
+                className="text-[12px] font-bold uppercase tracking-[0.14em]"
                 style={{ color: colors.text.secondary }}
               >
                 Student console
               </p>
 
               <p
-                className="text-[15px] font-semibold"
+                className="text-[15px] font-bold"
                 style={{ color: colors.text.primary }}
               >
                 Authorship verification workspace
               </p>
             </div>
 
-            <Link
-              to={ROUTES.EDITOR_NEW}
-              className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
-              style={{ background: colors.brand }}
-            >
+            <ButtonLink to={ROUTES.EDITOR_NEW} size="md">
               New Session
-            </Link>
+            </ButtonLink>
           </div>
-
-          <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className="whitespace-nowrap rounded-md border px-3 py-2 text-[12px] font-semibold"
-                style={({ isActive }) => ({
-                  borderColor: isActive ? colors.brand : colors.surface[200],
-                  color: isActive ? colors.brand : colors.text.secondary,
-                  background: isActive ? brand.bgNavActive : colors.surface[50],
-                })}
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
         </header>
 
         <main className="px-4 py-8 md:px-8">
