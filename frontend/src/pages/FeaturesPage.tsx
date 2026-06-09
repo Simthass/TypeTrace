@@ -6,7 +6,6 @@ import { brand, colors } from "../styles/colors";
 
 // --- SVG Mockups ---
 // spending way too much time making these svgs look good instead of generic images.
-// i removed all the hardcoded hex colors becos it breaks our design system. strictly using brand object now!
 
 function Feature1Art() {
   return (

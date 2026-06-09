@@ -1,38 +1,3 @@
-"""
-TypeTrace ML Training Pipeline v5.0
-=====================================
-MAJOR FIXES from v4.2:
-
-  FIX 1 — ACCURACY INFLATION: Fallback synthetic data had near-zero ft_std
-           (mean=30ms), making it trivially separable from human data. Now uses
-           realistic synthetic distributions based on González et al. (2022)
-           findings, with overlapping feature ranges that force the model to
-           learn subtle differences rather than obvious artefacts.
-
-  FIX 2 — DB LABELLING BUG: All DB sessions were unconditionally labelled
-           "HUMAN". This inflates human-class representation with potentially
-           synthetic or adversarial sessions. DB sessions are now subjected to
-           a conservative heuristic filter before being accepted as HUMAN.
-           Sessions that fail the filter are labelled UNCERTAIN and excluded.
-
-  FIX 3 — DATASET IMBALANCE: González has ~1,971 HUMAN vs ~48,800 SYNTHETIC.
-           Training on this raw ratio biases the model toward SYNTHETIC even
-           with class_weight="balanced". We now cap the synthetic class at
-           10× the human count before SMOTE, then apply SMOTE conservatively.
-
-  FIX 4 — OVER-REGULARISED HYPERPARAMETERS: max_depth=14, n_estimators=300
-           on a near-linearly-separable dataset drives accuracy toward 1.0.
-           New defaults are deliberately more constrained to reflect real-world
-           difficulty: max_depth=8, min_samples_leaf=10.
-
-  FIX 5 — MODEL METADATA HONESTY: metadata now records per-class counts,
-           class ratio, expected accuracy range, and limitations statement.
-
-  FIX 6 — CROSS-VALIDATION: Added mandatory 5-fold stratified CV. The saved
-           accuracy is now the CV mean ± std, not a single train/test split.
-
-Dataset: González et al. (2022) — https://doi.org/10.17632/y2s8f7xkg7.2
-"""
 
 import os
 import json
@@ -276,9 +241,6 @@ def load_gonzalez_dataset(data_dir: str) -> pd.DataFrame:
     return pd.DataFrame(rows) if rows else pd.DataFrame()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 3. TYPETRACE DB LOADER  ← FIX 2: conservative HUMAN acceptance filter
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _is_plausible_human_session(feats: dict) -> bool:
     """
@@ -323,13 +285,8 @@ def load_typetrace_db_sessions() -> pd.DataFrame:
     """
     Loads sessions from the TypeTrace PostgreSQL database.
 
-    CRITICAL FIX: Previous versions labelled all DB sessions as HUMAN
-    unconditionally. This inflates human-class representation and contaminates
-    the training set with potential synthetic or adversarial sessions.
+    Earlier training versions labelled all DB sessions as HUMAN.
 
-    Sessions are now passed through _is_plausible_human_session() before
-    acceptance. Only sessions that pass the heuristic filter are included.
-    Rejected sessions are logged but not added to training data.
     """
     from dotenv import load_dotenv
     from sqlalchemy import create_engine, text
@@ -393,7 +350,6 @@ def load_typetrace_db_sessions() -> pd.DataFrame:
                 rejected_nodata += 1
                 continue
 
-            # ── FIX 2: Only accept sessions that pass the human plausibility filter ──
             if not _is_plausible_human_session(feats):
                 rejected_mechanical += 1
                 log.debug(
@@ -428,9 +384,6 @@ def load_typetrace_db_sessions() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 4. FALLBACK DATA  ← FIX 1: realistic overlapping distributions
-# ─────────────────────────────────────────────────────────────────────────────
 
 def generate_fallback_human_data(n: int = 600) -> pd.DataFrame:
     """
@@ -447,7 +400,7 @@ def generate_fallback_human_data(n: int = 600) -> pd.DataFrame:
     rows = []
     for _ in range(n):
         ft_m = max(80, rng.normal(180, 60))
-        ft_s = max(35, rng.normal(90, 30))    # FIXED: was max(40, N(90,30)) — identical, but downstream
+        ft_s = max(35, rng.normal(90, 30))  
         ht_m = max(60, rng.normal(120, 35))
         ht_s = max(20, rng.normal(55, 18))
 
@@ -490,52 +443,42 @@ def generate_fallback_synthetic_data(n: int = 600) -> pd.DataFrame:
     Generates simulated synthetic (forgery) sessions based on González et al.
     (2022) observed characteristics of keystroke forgeries.
 
-    CRITICAL FIX from v4.2:
-    - Previous version used ft_std = N(30, 20), which barely overlaps with
-      human ft_std = N(90, 30). This trivial separation caused 99%+ accuracy.
-    - New version uses ft_std = N(55, 20): lower than human but overlapping,
-      reflecting real forgery behaviour where attackers introduce some variance
-      to avoid detection. This forces the model to learn subtle combined-feature
-      patterns rather than a single std threshold.
-    - pause_ratio is now drawn from a wider range reflecting that some forgery
-      methods do introduce pauses (within-subject high-knowledge profiles).
-    - burst_ratio overlap with human is intentional — fast humans and some
-      forgeries both exhibit burst typing.
+    Synthetic fallback data is intentionally generated with overlapping distributions.
     """
     rng = np.random.default_rng(123)
     rows = []
     for _ in range(n):
         ft_m = max(80, rng.normal(175, 55))
-        ft_s = max(12, rng.normal(55, 20))    # FIXED: was N(30,20) — now realistically overlapping
+        ft_s = max(12, rng.normal(55, 20))  
         ht_m = max(60, rng.normal(125, 40))
-        ht_s = max(8,  rng.normal(38, 15))    # FIXED: was N(25,15) — slightly higher variance
+        ht_s = max(8,  rng.normal(38, 15))   
 
         rows.append({
             "ht_mean":          ht_m,
             "ht_std":           ht_s,
             "ht_cv":            ht_s / max(ht_m, 1),
             "ht_median":        max(50, rng.normal(115, 35)),
-            "ht_iqr":           max(5,  rng.normal(42, 18)),  # FIXED: was N(30,15)
-            "ht_skew":          rng.normal(0.4, 0.4),         # FIXED: was N(0.3,0.3) — slightly more realistic
-            "ht_kurt":          max(0, rng.normal(0.8, 0.6)), # FIXED: was N(0.5,0.5)
+            "ht_iqr":           max(5,  rng.normal(42, 18)), 
+            "ht_skew":          rng.normal(0.4, 0.4),       
+            "ht_kurt":          max(0, rng.normal(0.8, 0.6)), 
             "ht_p10":           max(40, ht_m - 0.7 * ht_s),
             "ht_p90":           min(600, ht_m + 0.7 * ht_s),
-            "ht_entropy":       max(0.5, rng.normal(1.6, 0.5)), # FIXED: was N(1.2,0.5)
+            "ht_entropy":       max(0.5, rng.normal(1.6, 0.5)),
             "ft_mean":          ft_m,
             "ft_std":           ft_s,
             "ft_cv":            ft_s / max(ft_m, 1),
             "ft_median":        max(50, rng.normal(165, 50)),
-            "ft_iqr":           max(8,  rng.normal(50, 22)),  # FIXED: was N(35,18)
+            "ft_iqr":           max(8,  rng.normal(50, 22)),
             "ft_skew":          rng.normal(0.3, 0.4),
             "ft_kurt":          max(0, rng.normal(0.6, 0.5)),
             "ft_p10":           max(30, ft_m - 0.7 * ft_s),
             "ft_p90":           min(600, ft_m + 0.7 * ft_s),
-            "ft_entropy":       max(0.6, rng.normal(1.9, 0.5)), # FIXED: was N(1.5,0.5) — narrowed gap
-            "ft_autocorr":      max(0, rng.normal(0.18, 0.12)), # FIXED: was N(0.22,0.10)
-            "ft_diff_std":      max(5,  rng.normal(38, 15)),   # FIXED: was N(25,12)
+            "ft_entropy":       max(0.6, rng.normal(1.9, 0.5)), 
+            "ft_autocorr":      max(0, rng.normal(0.18, 0.12)), 
+            "ft_diff_std":      max(5,  rng.normal(38, 15)),
             "burst_ratio":      float(np.clip(rng.normal(0.015, 0.015), 0, 0.08)),
-            "pause_ratio":      float(np.clip(rng.normal(0.02,  0.02),  0, 0.12)), # FIXED: wider range
-            "ht_ft_correlation": rng.normal(0.45, 0.18),        # FIXED: was N(0.55,0.15)
+            "pause_ratio":      float(np.clip(rng.normal(0.02,  0.02),  0, 0.12)), 
+            "ht_ft_correlation": rng.normal(0.45, 0.18),       
             "net_wpm":          max(15, rng.normal(60, 22)),
             "key_diversity":    max(0.2, rng.normal(0.40, 0.12)),
             "total_keys":       float(np.log1p(rng.integers(40, 300))),
@@ -544,9 +487,6 @@ def generate_fallback_synthetic_data(n: int = 600) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 5. CLASS BALANCING HELPER  ← FIX 3: cap synthetic before SMOTE
-# ─────────────────────────────────────────────────────────────────────────────
 
 def cap_class_imbalance(df: pd.DataFrame, max_ratio: float = MAX_SYNTH_RATIO) -> pd.DataFrame:
     """
@@ -579,9 +519,6 @@ def cap_class_imbalance(df: pd.DataFrame, max_ratio: float = MAX_SYNTH_RATIO) ->
     return df
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 6. MODEL TRAINING  ← FIX 4: constrained hyperparameters
-# ─────────────────────────────────────────────────────────────────────────────
 
 def build_and_train_ensemble(X_train, y_train, X_test, y_test, feature_cols):
     from sklearn.ensemble import RandomForestClassifier, VotingClassifier
@@ -596,14 +533,12 @@ def build_and_train_ensemble(X_train, y_train, X_test, y_test, feature_cols):
     y_train_enc = le.fit_transform(y_train)
     y_test_enc  = le.transform(y_test)
 
-    # FIX 4: max_depth=8 instead of 14, min_samples_leaf=10 instead of 3.
-    # These constraints prevent the model from memorising training samples
-    # and force it to learn generalisable patterns.
+
     rf = RandomForestClassifier(
         n_estimators=200,
-        max_depth=8,           # FIXED: was 14
-        min_samples_split=12,  # FIXED: was 4
-        min_samples_leaf=10,   # FIXED: was 3
+        max_depth=8,        
+        min_samples_split=12, 
+        min_samples_leaf=10, 
         max_features="sqrt",
         class_weight="balanced",
         random_state=42,
@@ -614,11 +549,11 @@ def build_and_train_ensemble(X_train, y_train, X_test, y_test, feature_cols):
         import xgboost as xgb
         xgb_m = xgb.XGBClassifier(
             n_estimators=150,
-            max_depth=4,           # FIXED: was 6
+            max_depth=4,          
             learning_rate=0.05,
             subsample=0.8,
             colsample_bytree=0.8,
-            min_child_weight=10,   # NEW: equivalent of min_samples_leaf
+            min_child_weight=10,   
             random_state=42,
             n_jobs=-1,
             eval_metric="logloss",
@@ -710,9 +645,7 @@ def build_and_train_ensemble(X_train, y_train, X_test, y_test, feature_cols):
     return model, le, accuracy, auc, imp_df
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 7. MAIN ENTRY POINT  ← FIX 5: CV-based accuracy + honest metadata
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def train_typetrace_model(data_dir: str = None, output_dir: str = None):
     from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
@@ -771,7 +704,6 @@ def train_typetrace_model(data_dir: str = None, output_dir: str = None):
         log.error("Only one class present — cannot train. Check dataset paths.")
         return
 
-    # ── FIX 3: Cap class imbalance before splitting ──────────────────────────
     full_df = cap_class_imbalance(full_df, max_ratio=MAX_SYNTH_RATIO)
 
     X = full_df[feature_cols].values.astype(float)
@@ -856,7 +788,6 @@ def train_typetrace_model(data_dir: str = None, output_dir: str = None):
     meta = {
         "version": "5.0",
 
-        # CRITICAL: Use CV accuracy, not single-split accuracy
         # Single-split accuracy inflates due to test set randomness
         "accuracy": round(reportable_accuracy, 6),
         "accuracy_std": round(cv_std, 6),

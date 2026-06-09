@@ -1,9 +1,9 @@
 # backend/migrations/env.py
 
 import asyncio
+import sys
 from logging.config import fileConfig
 from pathlib import Path
-import sys
 
 from alembic import context
 from sqlalchemy import pool
@@ -20,6 +20,9 @@ from app.models import Certificate, Course, CourseStudent, TypingSession, User
 
 config = context.config
 
+if not settings.DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is required for Alembic migrations.")
+
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 if config.config_file_name is not None:
@@ -29,10 +32,8 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    url = settings.DATABASE_URL
-
     context.configure(
-        url=url,
+        url=settings.DATABASE_URL,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={

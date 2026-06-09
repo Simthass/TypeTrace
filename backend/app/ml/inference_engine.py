@@ -18,12 +18,11 @@ from app.ml.behavioral_analysis import (
     compute_behavioral_summary,
 )
 
-from train_model import (
+from app.ml.train_model import (
     FEATURE_COLUMNS,
     MINIMUM_KEYS_PER_SESSION,
     extract_features_from_keystroke_array,
 )
-
 
 log = logging.getLogger("TypeTrace-InferenceEngine")
 

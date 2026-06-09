@@ -1,8 +1,6 @@
 # backend/app/main.py
 
 import logging
-import sys
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,11 +9,6 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
-
-
-ML_DIR = Path(__file__).resolve().parent / "ml"
-if str(ML_DIR) not in sys.path:
-    sys.path.insert(0, str(ML_DIR))
 
 
 logging.basicConfig(
@@ -56,13 +49,15 @@ def create_application() -> FastAPI:
             },
         )
 
-    from app.api.routes.health import router as health_router
     from app.api.routes.auth import router as auth_router
-    from app.api.routes.sessions import router as sessions_router
     from app.api.routes.certificates import router as certificates_router
+    from app.api.routes.courses import router as courses_router
+    from app.api.routes.health import router as health_router
+    from app.api.routes.model import router as model_router
+    from app.api.routes.replay import router as replay_router
+    from app.api.routes.sessions import router as sessions_router
     from app.api.routes.student import router as student_router
     from app.api.routes.teacher import router as teacher_router
-    from app.api.routes.replay import router as replay_router
     from app.api.routes.user import router as user_router
 
     app.include_router(
@@ -78,15 +73,21 @@ def create_application() -> FastAPI:
     )
 
     app.include_router(
-        replay_router,
+        model_router,
         prefix=settings.API_V1_PREFIX,
-        tags=["Replay Audit"],
+        tags=["ML Model"],
     )
 
     app.include_router(
         sessions_router,
         prefix=f"{settings.API_V1_PREFIX}/sessions",
-        tags=["Sessions"],
+        tags=["Writing Sessions"],
+    )
+
+    app.include_router(
+        replay_router,
+        prefix=settings.API_V1_PREFIX,
+        tags=["Replay Audit"],
     )
 
     app.include_router(
@@ -101,7 +102,12 @@ def create_application() -> FastAPI:
         tags=["Teacher"],
     )
 
-    # Register clean user/account settings router before legacy ML router.
+    app.include_router(
+        courses_router,
+        prefix=settings.API_V1_PREFIX,
+        tags=["Courses"],
+    )
+
     app.include_router(
         user_router,
         prefix=settings.API_V1_PREFIX,
@@ -113,21 +119,6 @@ def create_application() -> FastAPI:
         prefix=settings.API_V1_PREFIX,
         tags=["Certificates"],
     )
-
-    try:
-        from app.ml.ml_service import router as ml_router
-        from app.ml.ml_service import limiter as ml_limiter
-
-        app.state.limiter = ml_limiter
-
-        app.include_router(
-            ml_router,
-            tags=["TypeTrace Legacy ML API"],
-        )
-        logger.info("ML routes loaded successfully.")
-
-    except Exception as exc:
-        logger.warning("ML routes were not loaded: %s", exc)
 
     logger.info("TypeTrace API started successfully.")
     return app

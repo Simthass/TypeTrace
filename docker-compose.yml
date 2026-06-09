@@ -1,23 +1,26 @@
-# TYPETRACE/docker-compose.yml
+# docker-compose.yml
+
 version: "3.8"
 
 services:
   postgres_db:
     image: postgres:15-alpine
+    container_name: typetrace_postgres
     environment:
-      POSTGRES_USER: typetrace_admin
-      POSTGRES_PASSWORD: secure_password_123
-      POSTGRES_DB: typetracedb
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
   redis_cache:
     image: redis:7-alpine
+    container_name: typetrace_redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     restart: unless-stopped
 
 volumes:

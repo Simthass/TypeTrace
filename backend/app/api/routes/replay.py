@@ -410,13 +410,16 @@ async def get_replay_audit(
 
 
 @router.get("/sessions/{session_id}/replay")
-async def get_legacy_replay_compatible(
+async def get_session_replay_compatible(
     session_id: int,
     current_user: User = Depends(get_current_user),
 ):
     """
-    Compatibility route for existing frontend links.
+    Compatibility route for frontend replay links.
 
     Returns the same payload as /api/v1/replay/{session_id}.
     """
-    return await get_replay_audit(session_id=session_id, current_user=current_user)
+    return await get_replay_audit(
+        session_id=session_id,
+        current_user=current_user,
+    )

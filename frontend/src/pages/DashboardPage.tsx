@@ -3,20 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { Badge, classificationTone } from "../components/ui/Badge";
-import { ButtonLink } from "../components/ui/Button";
-import { Card, CardBody, CardHeader } from "../components/ui/Card";
-import {
-  EmptyState,
-  FirstRunEmptyState,
-  LoadingState,
-  PageHeader,
-} from "../components/ui/PageState";
 import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/ToastProvider";
 import { brand, colors } from "../styles/colors";
 import { useAuthStore } from "../store/authStore";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface StudentSummary {
   total_sessions: number;
@@ -76,69 +69,371 @@ interface DashboardResponse {
   courses: CourseBreakdown[];
 }
 
-function formatSeconds(value: number) {
-  const safe = Math.max(0, Math.round(value || 0));
+// ─── Utilities ────────────────────────────────────────────────────────────────
+
+function formatSeconds(value: number): string {
+  const safe = Math.max(0, Math.round(value ?? 0));
   const hours = Math.floor(safe / 3600);
   const minutes = Math.floor((safe % 3600) / 60);
-
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
 }
 
-function percentage(value: number, total: number) {
+function pct(value: number, total: number): number {
   if (!total) return 0;
   return Math.round((value / total) * 100);
 }
+
+function classificationStyle(bucket: string) {
+  const b = bucket?.toUpperCase();
+  if (b === "HUMAN")
+    return {
+      bg: brand.humanBg,
+      text: brand.humanText,
+      border: brand.humanAccent,
+      dot: colors.green,
+      label: "Human",
+    };
+  if (b === "SUSPICIOUS")
+    return {
+      bg: brand.suspiciousBg,
+      text: brand.suspiciousText,
+      border: brand.suspiciousAccent,
+      dot: colors.amber,
+      label: "Suspicious",
+    };
+  return {
+    bg: brand.aiBg,
+    text: brand.aiText,
+    border: brand.aiAccent,
+    dot: colors.red,
+    label: "High Risk",
+  };
+}
+
+function reviewStyle(status: string) {
+  const s = status?.toUpperCase();
+  if (s === "APPROVED")
+    return { bg: brand.humanBg, text: brand.humanText, label: "Approved" };
+  if (s === "FLAGGED")
+    return { bg: brand.aiBg, text: brand.aiText, label: "Flagged" };
+  return {
+    bg: colors.surface[150],
+    text: colors.text.secondary,
+    label: "Pending",
+  };
+}
+
+// ─── Skeleton loader ──────────────────────────────────────────────────────────
+
+function Skeleton({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`animate-pulse rounded-md ${className}`}
+      style={{ background: colors.surface[200] }}
+    />
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Page header skeleton */}
+      <div className="space-y-2">
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-4 w-96 max-w-full" />
+      </div>
+
+      {/* Health bar skeleton */}
+      <div
+        className="rounded-xl border p-6 space-y-4"
+        style={{
+          borderColor: colors.surface[200],
+          background: colors.surface[50],
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+        <Skeleton className="h-8 w-full rounded-full" />
+        <div className="flex gap-4">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+      </div>
+
+      {/* Metric cards skeleton */}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="rounded-xl border p-5 space-y-3"
+            style={{
+              borderColor: colors.surface[200],
+              background: colors.surface[50],
+            }}
+          >
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-9 w-20" />
+            <Skeleton className="h-3 w-32" />
+          </div>
+        ))}
+      </div>
+
+      {/* Activity + courses skeleton */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_340px]">
+        <div
+          className="rounded-xl border p-5 space-y-4"
+          style={{
+            borderColor: colors.surface[200],
+            background: colors.surface[50],
+          }}
+        >
+          <Skeleton className="h-4 w-32" />
+          <div className="flex gap-2 h-16">
+            {Array.from({ length: 14 }).map((_, i) => (
+              <Skeleton key={i} className="flex-1" />
+            ))}
+          </div>
+        </div>
+        <div
+          className="rounded-xl border p-5 space-y-4"
+          style={{
+            borderColor: colors.surface[200],
+            background: colors.surface[50],
+          }}
+        >
+          <Skeleton className="h-4 w-28" />
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Metric card ──────────────────────────────────────────────────────────────
 
 function MetricCard({
   label,
   value,
   helper,
-  tone = "brand",
+  accentColor,
+  trend,
 }: {
   label: string;
   value: string | number;
   helper: string;
-  tone?: "brand" | "human" | "warning" | "danger";
+  accentColor?: string;
+  trend?: { value: string; positive: boolean } | null;
 }) {
-  const accent =
-    tone === "human"
-      ? brand.humanAccent
-      : tone === "warning"
-        ? brand.suspiciousAccent
-        : tone === "danger"
-          ? brand.aiAccent
-          : colors.brand;
-
   return (
-    <Card className="relative overflow-hidden p-6">
-      <div
-        className="absolute right-[-32px] top-[-32px] h-24 w-24 rounded-full"
-        style={{ background: `${accent}16` }}
-      />
-
+    <div
+      className="flex flex-col rounded-xl border bg-white p-5 transition-shadow duration-150 hover:shadow-md"
+      style={{ borderColor: colors.surface[200] }}
+    >
       <p
-        className="text-[11px] font-bold uppercase tracking-[0.16em]"
-        style={{ color: colors.text.secondary }}
+        className="text-[10px] font-bold uppercase tracking-[0.18em]"
+        style={{ color: colors.text.muted }}
       >
         {label}
       </p>
 
       <p
-        className="mt-4 text-[2rem] font-bold tracking-[-0.05em]"
-        style={{ color: colors.text.primary }}
+        className="mt-3 text-[2rem] font-bold leading-none tracking-[-0.04em]"
+        style={{ color: accentColor ?? colors.text.primary }}
       >
         {value}
       </p>
 
-      <p className="mt-1 text-[13px]" style={{ color: colors.text.secondary }}>
-        {helper}
-      </p>
-    </Card>
+      <div className="mt-2 flex items-center gap-2">
+        <p className="text-[12px]" style={{ color: colors.text.secondary }}>
+          {helper}
+        </p>
+        {trend && (
+          <span
+            className="text-[11px] font-semibold"
+            style={{ color: trend.positive ? colors.green : colors.red }}
+          >
+            {trend.value}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
-function OnboardingChecklist({
+// ─── Authorship health bar — signature element ────────────────────────────────
+// A single segmented bar that shows human / suspicious / risk split at a glance.
+// Far more information-dense and memorable than the blurred gradient hero.
+
+function AuthorshipHealthBar({ summary }: { summary: StudentSummary }) {
+  const total = summary.total_sessions;
+  const humanPct = pct(summary.human_sessions, total);
+  const suspiciousPct = pct(summary.suspicious_sessions, total);
+  const riskPct = pct(summary.synthetic_sessions, total);
+
+  const pendingReview =
+    (summary.pending_count ?? 0) + (summary.flagged_count ?? 0);
+
+  return (
+    <div
+      className="rounded-xl border bg-white p-6"
+      style={{ borderColor: colors.surface[200] }}
+    >
+      {/* Header row */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.18em]"
+            style={{ color: colors.brand }}
+          >
+            Authorship health
+          </p>
+          <h2
+            className="mt-1 text-[1.75rem] font-bold tracking-[-0.04em] leading-none"
+            style={{ color: colors.text.primary }}
+          >
+            {total === 0 ? "—" : `${humanPct}%`}
+            <span
+              className="ml-2 text-[14px] font-medium tracking-normal"
+              style={{ color: colors.text.secondary }}
+            >
+              {total === 0 ? "No sessions yet" : "classified as human writing"}
+            </span>
+          </h2>
+        </div>
+
+        {/* Review queue pill */}
+        {pendingReview > 0 && (
+          <div
+            className="flex shrink-0 items-center gap-2 self-start rounded-lg border px-3 py-[7px]"
+            style={{
+              borderColor: brand.suspiciousAccent,
+              background: brand.suspiciousBg,
+            }}
+          >
+            <span
+              className="h-[7px] w-[7px] animate-pulse rounded-full"
+              style={{ background: colors.amber }}
+            />
+            <span
+              className="text-[12px] font-semibold"
+              style={{ color: brand.suspiciousText }}
+            >
+              {pendingReview} pending review
+            </span>
+          </div>
+        )}
+      </div>
+
+      {total > 0 && (
+        <div className="mt-5">
+          <div
+            className="flex h-[10px] w-full overflow-hidden rounded-full"
+            style={{ background: colors.surface[200] }}
+            title={`${humanPct}% human · ${suspiciousPct}% suspicious · ${riskPct}% high risk`}
+          >
+            {summary.human_sessions > 0 && (
+              <div
+                className="h-full transition-all duration-700"
+                style={{
+                  width: `${humanPct}%`,
+                  background: colors.green,
+                  borderRadius:
+                    summary.suspicious_sessions === 0 &&
+                    summary.synthetic_sessions === 0
+                      ? "999px"
+                      : "999px 0 0 999px",
+                }}
+              />
+            )}
+            {summary.suspicious_sessions > 0 && (
+              <div
+                className="h-full transition-all duration-700"
+                style={{
+                  width: `${suspiciousPct}%`,
+                  background: colors.amber,
+                  borderRadius:
+                    summary.synthetic_sessions === 0 ? "0 999px 999px 0" : "0",
+                  marginLeft: summary.human_sessions > 0 ? 2 : 0,
+                }}
+              />
+            )}
+            {summary.synthetic_sessions > 0 && (
+              <div
+                className="h-full transition-all duration-700"
+                style={{
+                  width: `${riskPct}%`,
+                  background: colors.red,
+                  borderRadius: "0 999px 999px 0",
+                  marginLeft: 2,
+                }}
+              />
+            )}
+          </div>
+
+          {/* Legend */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+            {[
+              {
+                label: "Human",
+                count: summary.human_sessions,
+                color: colors.green,
+                pct: humanPct,
+              },
+              {
+                label: "Suspicious",
+                count: summary.suspicious_sessions,
+                color: colors.amber,
+                pct: suspiciousPct,
+              },
+              {
+                label: "High risk",
+                count: summary.synthetic_sessions,
+                color: colors.red,
+                pct: riskPct,
+              },
+            ].map(({ label, count, color, pct: p }) => (
+              <div key={label} className="flex items-center gap-[6px]">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: color }}
+                />
+                <span
+                  className="text-[12px] font-medium tabular-nums"
+                  style={{ color: colors.text.secondary }}
+                >
+                  <span style={{ color: colors.text.primary, fontWeight: 600 }}>
+                    {count}
+                  </span>{" "}
+                  {label} ({p}%)
+                </span>
+              </div>
+            ))}
+            <div className="flex items-center gap-[6px] ml-auto">
+              <span
+                className="text-[12px] font-medium"
+                style={{ color: colors.text.muted }}
+              >
+                {summary.certificate_count} certificate
+                {summary.certificate_count !== 1 ? "s" : ""} issued
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Getting started checklist ────────────────────────────────────────────────
+
+function GettingStarted({
   totalSessions,
   certificates,
   courses,
@@ -147,275 +442,473 @@ function OnboardingChecklist({
   certificates: number;
   courses: number;
 }) {
-  const items = [
+  const steps = [
     {
       label: "Write your first session",
+      description: "Open the editor and begin typing",
       done: totalSessions > 0,
-      action: ROUTES.EDITOR_NEW,
+      to: ROUTES.EDITOR_NEW,
     },
     {
-      label: "Generate an authorship certificate",
+      label: "Generate a certificate",
+      description: "Prove your authorship with a verifiable cert",
       done: certificates > 0,
-      action: ROUTES.CERTIFICATES,
+      to: ROUTES.CERTIFICATES,
     },
     {
-      label: "Join or link a course",
+      label: "Join a course",
+      description: "Link sessions to your academic modules",
       done: courses > 0,
-      action: ROUTES.JOIN_COURSE,
+      to: ROUTES.JOIN_COURSE,
     },
   ];
 
-  const completed = items.filter((item) => item.done).length;
+  const doneCount = steps.filter((s) => s.done).length;
+  const allDone = doneCount === steps.length;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2
-              className="text-[15px] font-bold"
-              style={{ color: colors.text.primary }}
-            >
-              Getting started
-            </h2>
-            <p
-              className="mt-1 text-[12px]"
-              style={{ color: colors.text.secondary }}
-            >
-              Complete these steps to prepare your authorship evidence workflow.
-            </p>
-          </div>
-
-          <Badge tone={completed === items.length ? "human" : "brand"}>
-            {completed}/{items.length}
-          </Badge>
-        </div>
-      </CardHeader>
-
-      <CardBody className="space-y-3">
-        {items.map((item) => (
-          <Link
-            key={item.label}
-            to={item.action}
-            className="flex items-center justify-between gap-4 rounded-md border p-3 transition hover:-translate-y-0.5"
-            style={{
-              borderColor: colors.surface[200],
-              background: item.done ? brand.humanBg : colors.surface[50],
-            }}
+    <div
+      className="rounded-xl border bg-white"
+      style={{ borderColor: colors.surface[200] }}
+    >
+      <div
+        className="flex items-center justify-between border-b px-5 py-4"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <div>
+          <p
+            className="text-[13px] font-semibold"
+            style={{ color: colors.text.primary }}
           >
-            <div className="flex items-center gap-3">
-              <span
-                className="flex h-8 w-8 items-center justify-center rounded-md border"
-                style={{
-                  borderColor: item.done
-                    ? brand.humanAccent
-                    : colors.surface[200],
-                  background: item.done
-                    ? brand.humanAccent
-                    : colors.surface[100],
-                  color: item.done ? colors.text.light : colors.text.secondary,
-                }}
-              >
-                {item.done ? (
-                  <svg
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.6"
-                  >
-                    <path d="m5 12 4 4L19 6" />
-                  </svg>
-                ) : (
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ background: colors.brand }}
-                  />
-                )}
-              </span>
+            Getting started
+          </p>
+          <p
+            className="text-[11px] mt-[2px]"
+            style={{ color: colors.text.muted }}
+          >
+            Complete your evidence workflow setup
+          </p>
+        </div>
+        <span
+          className="rounded-md border px-2 py-[3px] text-[11px] font-bold tabular-nums"
+          style={{
+            borderColor: allDone ? brand.humanAccent : colors.surface[200],
+            background: allDone ? brand.humanBg : colors.surface[100],
+            color: allDone ? brand.humanText : colors.text.secondary,
+          }}
+        >
+          {doneCount}/{steps.length}
+        </span>
+      </div>
 
-              <span
-                className="text-[13px] font-bold"
-                style={{ color: colors.text.primary }}
-              >
-                {item.label}
-              </span>
+      <div className="divide-y" style={{ borderColor: colors.surface[200] }}>
+        {steps.map((step) => (
+          <Link
+            key={step.label}
+            to={step.to}
+            className="flex items-center gap-4 px-5 py-[14px] transition-colors hover:bg-gray-50/60"
+          >
+            {/* Check circle */}
+            <div
+              className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border transition-colors"
+              style={{
+                borderColor: step.done
+                  ? brand.humanAccent
+                  : colors.surface[300],
+                background: step.done ? brand.humanAccent : "transparent",
+              }}
+            >
+              {step.done && (
+                <svg
+                  width="10"
+                  height="8"
+                  viewBox="0 0 10 8"
+                  fill="none"
+                  aria-hidden
+                >
+                  <path
+                    d="M1 4L3.5 6.5L9 1"
+                    stroke="white"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
             </div>
 
-            <span
-              className="text-[12px] font-semibold"
-              style={{ color: item.done ? brand.humanText : colors.brand }}
-            >
-              {item.done ? "Done" : "Open"}
-            </span>
+            <div className="flex-1 min-w-0">
+              <p
+                className="text-[13px] font-medium"
+                style={{
+                  color: step.done
+                    ? colors.text.secondary
+                    : colors.text.primary,
+                  textDecoration: step.done ? "line-through" : "none",
+                  textDecorationColor: colors.text.muted,
+                }}
+              >
+                {step.label}
+              </p>
+              {!step.done && (
+                <p
+                  className="text-[11px] mt-[1px]"
+                  style={{ color: colors.text.muted }}
+                >
+                  {step.description}
+                </p>
+              )}
+            </div>
+
+            {!step.done && (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                style={{ color: colors.text.muted, flexShrink: 0 }}
+                aria-hidden
+              >
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            )}
           </Link>
         ))}
-      </CardBody>
-    </Card>
+      </div>
+    </div>
   );
 }
+
+// ─── Activity trend ───────────────────────────────────────────────────────────
 
 function ActivityTrend({ trend }: { trend: TrendPoint[] }) {
-  const maxSessions = Math.max(...trend.map((point) => point.session_count), 1);
+  const maxSessions = Math.max(...trend.map((p) => p.session_count), 1);
+  const totalInPeriod = trend.reduce((sum, p) => sum + p.session_count, 0);
+  const activeDays = trend.filter((p) => p.session_count > 0).length;
 
   return (
-    <Card>
-      <CardHeader>
-        <h2
-          className="text-[15px] font-bold"
-          style={{ color: colors.text.primary }}
-        >
-          14-day writing activity
-        </h2>
-        <p
-          className="mt-1 text-[12px]"
-          style={{ color: colors.text.secondary }}
-        >
-          Activity is scaled against your busiest day, not a fixed fake
-          multiplier.
-        </p>
-      </CardHeader>
+    <div
+      className="rounded-xl border bg-white"
+      style={{ borderColor: colors.surface[200] }}
+    >
+      <div
+        className="flex items-center justify-between border-b px-5 py-4"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <div>
+          <p
+            className="text-[13px] font-semibold"
+            style={{ color: colors.text.primary }}
+          >
+            14-day activity
+          </p>
+          <p
+            className="text-[11px] mt-[2px]"
+            style={{ color: colors.text.muted }}
+          >
+            {activeDays > 0
+              ? `${totalInPeriod} sessions across ${activeDays} active days`
+              : "No activity yet"}
+          </p>
+        </div>
+        {totalInPeriod > 0 && (
+          <span
+            className="rounded-md border px-2 py-[3px] text-[11px] font-bold tabular-nums"
+            style={{
+              borderColor: colors.surface[200],
+              background: colors.surface[100],
+              color: colors.text.secondary,
+            }}
+          >
+            {totalInPeriod} total
+          </span>
+        )}
+      </div>
 
-      <CardBody>
-        {!trend.length ? (
-          <EmptyState
-            compact
-            icon="session"
-            title="No activity yet"
-            description="Start a writing session to build your activity history and authorship trail."
-            action={
-              <ButtonLink to={ROUTES.EDITOR_NEW} size="sm">
-                Start session
-              </ButtonLink>
-            }
-          />
+      <div className="px-5 py-5">
+        {trend.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <p
+              className="text-[13px] font-medium"
+              style={{ color: colors.text.secondary }}
+            >
+              No activity in the past 14 days
+            </p>
+            <Link
+              to={ROUTES.EDITOR_NEW}
+              className="mt-3 text-[12px] font-semibold"
+              style={{ color: colors.brand }}
+            >
+              Start your first session →
+            </Link>
+          </div>
         ) : (
-          <div className="grid grid-cols-7 gap-2 md:grid-cols-14">
-            {trend.map((point) => {
-              const intensity = Math.max(
-                12,
-                Math.round((point.session_count / maxSessions) * 100),
-              );
+          <>
+            <div className="flex items-end gap-[5px] h-[72px]">
+              {trend.map((point) => {
+                // Proper relative height: scaled against actual max, min 4px for empty
+                const heightPct =
+                  point.session_count > 0
+                    ? Math.max(12, (point.session_count / maxSessions) * 100)
+                    : 0;
 
-              return (
-                <div key={point.day} className="space-y-2">
+                return (
                   <div
-                    className="h-16 rounded-md border"
-                    title={`${point.day}: ${point.session_count} sessions`}
-                    style={{
-                      borderColor: colors.surface[200],
-                      background:
-                        point.session_count > 0
-                          ? `linear-gradient(to top, ${colors.brand} ${intensity}%, ${colors.brandSoft} ${intensity}%)`
-                          : colors.surface[100],
-                    }}
-                  />
+                    key={point.day}
+                    className="group relative flex-1"
+                    title={`${point.day.slice(5)}: ${point.session_count} session${point.session_count !== 1 ? "s" : ""}`}
+                  >
+                    {/* Tooltip */}
+                    <div
+                      className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded px-2 py-1 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 z-10"
+                      style={{ background: colors.text.primary }}
+                    >
+                      {point.session_count}
+                    </div>
 
-                  <p
-                    className="truncate text-center text-[10px]"
+                    {/* Bar */}
+                    <div className="flex h-full items-end">
+                      <div
+                        className="w-full rounded-sm transition-all duration-300 hover:brightness-95"
+                        style={{
+                          height:
+                            point.session_count > 0 ? `${heightPct}%` : "3px",
+                          background:
+                            point.session_count > 0
+                              ? colors.brand
+                              : colors.surface[200],
+                          minHeight: "3px",
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Day labels */}
+            <div className="mt-2 flex gap-[5px]">
+              {trend.map((point) => (
+                <div key={point.day} className="flex-1 text-center">
+                  <span
+                    className="text-[9px] tabular-nums"
                     style={{ color: colors.text.muted }}
                   >
-                    {point.day.slice(5)}
-                  </p>
+                    {point.day.slice(8)}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          </>
         )}
-      </CardBody>
-    </Card>
+      </div>
+    </div>
   );
 }
 
-function RecentSessionCard({ session }: { session: StudentSession }) {
-  const tone = classificationTone(
+// ─── Recent session card ───────────────────────────────────────────────────────
+
+function SessionCard({ session }: { session: StudentSession }) {
+  const cls = classificationStyle(
     session.classification_bucket || session.classification,
   );
+  const rev = reviewStyle(session.review_status);
 
   return (
     <Link
       to={ROUTES.REPLAY.replace(":sessionId", String(session.id))}
-      className="block rounded-xl border bg-white p-4 transition hover:-translate-y-0.5"
-      style={{
-        borderColor: colors.surface[200],
-        boxShadow: `0 14px 46px -38px ${colors.shadowStrong}`,
-      }}
+      className="block rounded-xl border bg-white transition-all duration-150 hover:-translate-y-[1px] hover:shadow-md"
+      style={{ borderColor: colors.surface[200] }}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      {/* Top: title + badge */}
+      <div className="flex items-start justify-between gap-3 p-4 pb-3">
+        <div className="min-w-0 flex-1">
           <p
-            className="text-[14px] font-bold"
+            className="truncate text-[13px] font-semibold"
             style={{ color: colors.text.primary }}
           >
             {session.title || "Untitled Document"}
           </p>
-
           <p
-            className="mt-1 text-[12px]"
-            style={{ color: colors.text.secondary }}
+            className="mt-[3px] text-[11px]"
+            style={{ color: colors.text.muted }}
           >
-            {session.course_code || "Personal"} · {session.created_at}
+            {session.course_code ?? "Personal"} · {session.created_at}
           </p>
         </div>
 
-        <Badge tone={tone}>
-          {session.classification_bucket || session.classification}
-        </Badge>
+        {/* Classification badge */}
+        <span
+          className="shrink-0 rounded-md border px-2 py-[3px] text-[10px] font-bold uppercase tracking-[0.1em]"
+          style={{
+            borderColor: cls.border,
+            background: cls.bg,
+            color: cls.text,
+          }}
+        >
+          {cls.label}
+        </span>
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-3">
-        <div>
-          <p
-            className="text-[10px] font-bold uppercase tracking-[0.14em]"
-            style={{ color: colors.text.secondary }}
-          >
-            Confidence
-          </p>
-          <p
-            className="mt-1 text-[14px] font-bold"
-            style={{ color: colors.text.primary }}
-          >
-            {session.confidence}%
-          </p>
-        </div>
+      {/* Divider */}
+      <div style={{ borderTop: `1px solid ${colors.surface[200]}` }} />
 
-        <div>
-          <p
-            className="text-[10px] font-bold uppercase tracking-[0.14em]"
-            style={{ color: colors.text.secondary }}
-          >
-            WPM
-          </p>
-          <p
-            className="mt-1 text-[14px] font-bold"
-            style={{ color: colors.text.primary }}
-          >
-            {session.wpm}
-          </p>
-        </div>
-
-        <div>
-          <p
-            className="text-[10px] font-bold uppercase tracking-[0.14em]"
-            style={{ color: colors.text.secondary }}
-          >
-            Words
-          </p>
-          <p
-            className="mt-1 text-[14px] font-bold"
-            style={{ color: colors.text.primary }}
-          >
-            {session.word_count}
-          </p>
-        </div>
+      {/* Stats row */}
+      <div
+        className="grid grid-cols-4 divide-x px-0"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        {[
+          { label: "Confidence", value: `${session.confidence}%` },
+          { label: "WPM", value: session.wpm },
+          { label: "Words", value: session.word_count },
+          {
+            label: "Review",
+            value: rev.label,
+            valueStyle: { color: rev.text, background: rev.bg },
+          },
+        ].map(({ label, value, valueStyle }) => (
+          <div key={label} className="flex flex-col items-center py-3 px-2">
+            <span
+              className="text-[9px] font-bold uppercase tracking-[0.14em]"
+              style={{ color: colors.text.muted }}
+            >
+              {label}
+            </span>
+            <span
+              className="mt-1 text-[12px] font-bold tabular-nums"
+              style={valueStyle ?? { color: colors.text.primary }}
+            >
+              {value}
+            </span>
+          </div>
+        ))}
       </div>
     </Link>
   );
 }
 
+// ─── Course breakdown ──────────────────────────────────────────────────────────
+
+function CoursePanel({ courses }: { courses: CourseBreakdown[] }) {
+  return (
+    <div
+      className="rounded-xl border bg-white"
+      style={{ borderColor: colors.surface[200] }}
+    >
+      <div
+        className="flex items-center justify-between border-b px-5 py-4"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <div>
+          <p
+            className="text-[13px] font-semibold"
+            style={{ color: colors.text.primary }}
+          >
+            Course breakdown
+          </p>
+          <p
+            className="text-[11px] mt-[2px]"
+            style={{ color: colors.text.muted }}
+          >
+            Evidence grouped by academic module
+          </p>
+        </div>
+      </div>
+
+      {courses.length === 0 ? (
+        <div className="flex flex-col items-center py-10 px-5 text-center">
+          <p
+            className="text-[13px] font-medium"
+            style={{ color: colors.text.secondary }}
+          >
+            No courses linked
+          </p>
+          <p className="mt-1 text-[11px]" style={{ color: colors.text.muted }}>
+            Join a course to submit evidence to your teacher's workspace.
+          </p>
+          <Link
+            to={ROUTES.JOIN_COURSE}
+            className="mt-4 rounded-md border px-4 py-2 text-[12px] font-semibold transition-colors hover:brightness-95"
+            style={{
+              borderColor: colors.brand,
+              background: colors.brandSoft,
+              color: colors.brand,
+            }}
+          >
+            Join a course
+          </Link>
+        </div>
+      ) : (
+        <div className="divide-y" style={{ borderColor: colors.surface[200] }}>
+          {courses.map((course) => {
+            const humanPct = pct(course.human_count, course.session_count);
+            return (
+              <div key={course.course_code} className="px-5 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p
+                      className="truncate text-[13px] font-semibold"
+                      style={{ color: colors.text.primary }}
+                    >
+                      {course.course_name}
+                    </p>
+                    <p
+                      className="mt-[2px] font-mono text-[11px]"
+                      style={{ color: colors.text.muted }}
+                    >
+                      {course.course_code}
+                    </p>
+                  </div>
+                  <span
+                    className="shrink-0 rounded-md border px-2 py-[3px] text-[11px] font-bold tabular-nums"
+                    style={{
+                      borderColor: colors.surface[200],
+                      background: colors.surface[100],
+                      color: colors.text.secondary,
+                    }}
+                  >
+                    {course.session_count}
+                  </span>
+                </div>
+
+                {/* Human rate mini-bar — properly uses course.human_count / session_count */}
+                <div className="mt-3 flex items-center gap-3">
+                  <div
+                    className="flex-1 h-[4px] overflow-hidden rounded-full"
+                    style={{ background: colors.surface[200] }}
+                  >
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${humanPct}%`,
+                        background: colors.green,
+                      }}
+                    />
+                  </div>
+                  <span
+                    className="shrink-0 text-[11px] font-semibold tabular-nums"
+                    style={{ color: colors.text.muted }}
+                  >
+                    {humanPct}% human
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
 export default function DashboardPage() {
-  const toast = useToast();
+  const { showToast } = useToast();
   const { user } = useAuthStore();
 
   const [data, setData] = useState<DashboardResponse | null>(null);
@@ -424,272 +917,260 @@ export default function DashboardPage() {
   useEffect(() => {
     let mounted = true;
 
-    async function loadDashboard() {
+    async function load() {
       setIsLoading(true);
-
       try {
-        const response = await api.get<DashboardResponse>("/student/dashboard");
-
+        const res = await api.get<DashboardResponse>("/student/dashboard");
         if (!mounted) return;
-        setData(response.data);
+        setData(res.data);
       } catch (error) {
         if (!mounted) return;
-        toast.error("Dashboard failed to load", getApiErrorMessage(error));
+        showToast({
+          type: "error",
+          title: "Dashboard failed to load",
+          message: getApiErrorMessage(error),
+        });
       } finally {
         if (mounted) setIsLoading(false);
       }
     }
 
-    loadDashboard();
-
+    load();
     return () => {
       mounted = false;
     };
-  }, [toast]);
+  }, [showToast]);
 
   const summary = data?.summary;
 
   const humanRate = useMemo(() => {
     if (!summary) return 0;
-    return percentage(summary.human_sessions, summary.total_sessions);
+    return pct(summary.human_sessions, summary.total_sessions);
   }, [summary]);
 
+  // ── Loading skeleton ──────────────────────────────────────────────────────
   if (isLoading) {
-    return <LoadingState label="Loading student dashboard..." />;
+    return <DashboardSkeleton />;
   }
 
+  // ── Error / empty data state ──────────────────────────────────────────────
   if (!data || !summary) {
     return (
-      <EmptyState
-        icon="session"
-        title="Dashboard data is unavailable"
-        description="The dashboard could not load your writing history. Try refreshing the page."
-        action={
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="rounded-md px-4 py-2 text-[13px] font-bold"
-            style={{ background: colors.brand, color: colors.text.light }}
-          >
-            Reload dashboard
-          </button>
-        }
-      />
+      <div
+        className="rounded-xl border bg-white px-6 py-14 text-center"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <p
+          className="text-[15px] font-semibold"
+          style={{ color: colors.text.primary }}
+        >
+          Dashboard data unavailable
+        </p>
+        <p
+          className="mt-2 text-[13px]"
+          style={{ color: colors.text.secondary }}
+        >
+          Your writing history could not be loaded. Try refreshing.
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="mt-5 rounded-md px-4 py-2 text-[13px] font-semibold text-white transition hover:brightness-110"
+          style={{ background: colors.brand }}
+        >
+          Reload
+        </button>
+      </div>
     );
   }
 
   const hasNoActivity = summary.total_sessions === 0;
 
   return (
-    <div className="space-y-8">
-      <PageHeader
-        eyebrow="Student workspace"
-        title={`Welcome back, ${user?.first_name || "student"}.`}
-        description="Track your authorship evidence, writing quality, certificates, and course-linked submissions from one workspace."
-        action={
-          <ButtonLink to={ROUTES.EDITOR_NEW}>New writing session</ButtonLink>
-        }
-      />
-
-      {hasNoActivity ? <FirstRunEmptyState /> : null}
-
-      <section
-        className="relative overflow-hidden rounded-2xl border bg-white p-6"
-        style={{
-          borderColor: colors.surface[200],
-          boxShadow: `0 24px 90px -58px ${colors.shadowStrong}`,
-        }}
-      >
-        <div
-          className="absolute right-[-80px] top-[-120px] h-72 w-72 rounded-full"
-          style={{
-            background: colors.brandSoft,
-            filter: "blur(30px)",
-          }}
-        />
-
-        <div className="relative grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-          <div>
-            <p
-              className="text-[11px] font-bold uppercase tracking-[0.18em]"
-              style={{ color: colors.brand }}
-            >
-              Authorship health
-            </p>
-
-            <h2
-              className="mt-3 text-[2.6rem] font-bold tracking-[-0.06em]"
-              style={{ color: colors.text.primary }}
-            >
-              {humanRate}% human pattern rate
-            </h2>
-
-            <p
-              className="mt-3 max-w-2xl text-[14px] leading-6"
-              style={{ color: colors.text.secondary }}
-            >
-              This score summarizes how many of your writing sessions were
-              classified as human writing patterns. Use replay and certificates
-              to prove your process when needed.
-            </p>
-
-            <div className="mt-6 flex flex-wrap gap-2">
-              <Badge tone="human">{summary.human_sessions} human</Badge>
-              <Badge tone="suspicious">
-                {summary.suspicious_sessions} review
-              </Badge>
-              <Badge tone="danger">
-                {summary.synthetic_sessions} high risk
-              </Badge>
-              <Badge tone="brand">
-                {summary.certificate_count} certificates
-              </Badge>
-            </div>
-          </div>
-
-          <OnboardingChecklist
-            totalSessions={summary.total_sessions}
-            certificates={summary.certificate_count}
-            courses={data.courses.length}
-          />
+    <div className="space-y-6">
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.18em]"
+            style={{ color: colors.brand }}
+          >
+            Student workspace
+          </p>
+          <h1
+            className="mt-1 text-[1.75rem] font-bold tracking-[-0.04em]"
+            style={{ color: colors.text.primary }}
+          >
+            {user?.first_name
+              ? `Welcome back, ${user.first_name}.`
+              : "Your dashboard"}
+          </h1>
+          <p
+            className="mt-1 text-[13px]"
+            style={{ color: colors.text.secondary }}
+          >
+            Track authorship evidence, certificates, and writing analytics.
+          </p>
         </div>
-      </section>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Link
+          to={ROUTES.EDITOR_NEW}
+          className="flex shrink-0 items-center gap-2 self-start rounded-md px-4 py-[9px] text-[13px] font-semibold text-white transition-all duration-150 hover:brightness-110 active:scale-[0.98]"
+          style={{ background: colors.brand }}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            aria-hidden
+          >
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </svg>
+          New writing session
+        </Link>
+      </div>
+
+      {/* ── Authorship health bar ────────────────────────────────────────── */}
+      <AuthorshipHealthBar summary={summary} />
+
+      {/* ── First-run prompt ─────────────────────────────────────────────── */}
+      {hasNoActivity && (
+        <div
+          className="rounded-xl border px-6 py-8 text-center"
+          style={{
+            borderColor: colors.surface[200],
+            background: colors.brandSoft,
+          }}
+        >
+          <p className="text-[15px] font-bold" style={{ color: colors.brand }}>
+            Start building your authorship trail
+          </p>
+          <p
+            className="mt-2 text-[13px]"
+            style={{ color: colors.text.secondary }}
+          >
+            Write your first session to generate behavioral evidence that proves
+            human authorship — keystroke timing, pauses, and revision patterns
+            AI cannot replicate.
+          </p>
+          <Link
+            to={ROUTES.EDITOR_NEW}
+            className="mt-5 inline-flex items-center gap-2 rounded-md px-5 py-[10px] text-[13px] font-semibold text-white transition hover:brightness-110"
+            style={{ background: colors.brand }}
+          >
+            Open editor
+          </Link>
+        </div>
+      )}
+
+      {/* ── Metric cards ──────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <MetricCard
-          label="Total sessions"
+          label="Sessions"
           value={summary.total_sessions}
           helper="Captured writing trails"
         />
         <MetricCard
-          label="Average WPM"
+          label="Avg WPM"
           value={summary.avg_wpm}
-          helper="Across completed sessions"
-          tone="human"
+          helper="Across all sessions"
+          accentColor={colors.brand}
         />
         <MetricCard
           label="Avg confidence"
           value={`${summary.avg_confidence}%`}
-          helper="ML-assisted classification"
+          helper="ML classification score"
+          accentColor={humanRate >= 70 ? colors.green : colors.amber}
         />
         <MetricCard
           label="Writing time"
           value={formatSeconds(summary.total_seconds)}
           helper="Total captured duration"
-          tone="warning"
         />
-      </section>
+      </div>
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_380px]">
+      {/* ── Activity trend + Getting started ────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
         <ActivityTrend trend={data.trend} />
+        <GettingStarted
+          totalSessions={summary.total_sessions}
+          certificates={summary.certificate_count}
+          courses={data.courses.length}
+        />
+      </div>
 
-        <Card>
-          <CardHeader>
-            <h2
-              className="text-[15px] font-bold"
-              style={{ color: colors.text.primary }}
-            >
-              Course breakdown
-            </h2>
-            <p
-              className="mt-1 text-[12px]"
-              style={{ color: colors.text.secondary }}
-            >
-              Evidence grouped by academic context.
-            </p>
-          </CardHeader>
+      {/* ── Course breakdown ─────────────────────────────────────────────── */}
+      <CoursePanel courses={data.courses} />
 
-          <CardBody>
-            {!data.courses.length ? (
-              <EmptyState
-                compact
-                icon="course"
-                title="No course linked yet"
-                description="Join a course to submit evidence directly to a teacher workspace."
-                action={
-                  <ButtonLink to={ROUTES.JOIN_COURSE} size="sm">
-                    Join course
-                  </ButtonLink>
-                }
-              />
-            ) : (
-              <div className="space-y-3">
-                {data.courses.map((course) => (
-                  <div
-                    key={`${course.course_code}-${course.course_name}`}
-                    className="rounded-md border p-3"
-                    style={{
-                      borderColor: colors.surface[200],
-                      background: colors.surface[50],
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p
-                          className="text-[13px] font-bold"
-                          style={{ color: colors.text.primary }}
-                        >
-                          {course.course_name}
-                        </p>
-                        <p
-                          className="mt-1 text-[12px]"
-                          style={{ color: colors.text.secondary }}
-                        >
-                          {course.course_code}
-                        </p>
-                      </div>
-
-                      <Badge tone="brand">
-                        {course.session_count} sessions
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardBody>
-        </Card>
-      </section>
-
-      <section>
-        <div className="mb-4 flex items-end justify-between gap-4">
+      {/* ── Recent sessions ──────────────────────────────────────────────── */}
+      <div>
+        <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <p
-              className="text-[11px] font-bold uppercase tracking-[0.16em]"
+              className="text-[10px] font-bold uppercase tracking-[0.18em]"
               style={{ color: colors.brand }}
             >
               Recent evidence
             </p>
             <h2
-              className="mt-2 text-xl font-bold tracking-[-0.04em]"
+              className="mt-1 text-[16px] font-bold tracking-[-0.03em]"
               style={{ color: colors.text.primary }}
             >
               Latest writing sessions
             </h2>
           </div>
-
-          <ButtonLink to={ROUTES.SESSIONS} variant="secondary" size="sm">
-            View all sessions
-          </ButtonLink>
+          <Link
+            to={ROUTES.SESSIONS}
+            className="rounded-md border px-3 py-[7px] text-[12px] font-semibold transition-colors hover:brightness-95"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.secondary,
+              background: colors.surface[50],
+            }}
+          >
+            View all
+          </Link>
         </div>
 
-        {!data.recent_sessions.length ? (
-          <EmptyState
-            icon="session"
-            title="No sessions captured yet"
-            description="Start your first writing session to generate behavioral authorship evidence."
-            action={
-              <ButtonLink to={ROUTES.EDITOR_NEW}>Start writing</ButtonLink>
-            }
-          />
+        {data.recent_sessions.length === 0 ? (
+          <div
+            className="rounded-xl border bg-white px-6 py-12 text-center"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <p
+              className="text-[14px] font-semibold"
+              style={{ color: colors.text.primary }}
+            >
+              No sessions yet
+            </p>
+            <p
+              className="mt-2 text-[13px]"
+              style={{ color: colors.text.secondary }}
+            >
+              Start a writing session to generate your first behavioral
+              authorship evidence trail.
+            </p>
+            <Link
+              to={ROUTES.EDITOR_NEW}
+              className="mt-5 inline-flex items-center gap-2 rounded-md px-4 py-[9px] text-[13px] font-semibold text-white transition hover:brightness-110"
+              style={{ background: colors.brand }}
+            >
+              Start writing
+            </Link>
+          </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
             {data.recent_sessions.map((session) => (
-              <RecentSessionCard key={session.id} session={session} />
+              <SessionCard key={session.id} session={session} />
             ))}
           </div>
         )}
-      </section>
+      </div>
     </div>
   );
 }
