@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 
 import {
   AuthButton,
@@ -25,6 +25,7 @@ interface LoginResponse {
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuthStore();
 
   const [email, setEmail] = useState("");
@@ -32,6 +33,10 @@ export default function LoginPage() {
 
   const [apiError, setApiError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  function getDashboardPath(role?: string): string {
+    return role === "TEACHER" ? ROUTES.TEACHER_DASHBOARD : ROUTES.DASHBOARD;
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -53,12 +58,11 @@ export default function LoginPage() {
 
       login(response.data.user, response.data.access_token);
 
-      const next =
-        response.data.user.role === "TEACHER"
-          ? ROUTES.TEACHER_DASHBOARD
-          : ROUTES.DASHBOARD;
+      const state = location.state as { from?: string } | null;
+      const redirectTo =
+        state?.from || getDashboardPath(response.data.user.role);
 
-      navigate(next, { replace: true });
+      navigate(redirectTo, { replace: true });
     } catch (error) {
       setApiError(getApiErrorMessage(error));
     } finally {

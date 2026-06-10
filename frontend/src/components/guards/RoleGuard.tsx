@@ -9,9 +9,17 @@ interface RoleGuardProps {
   allowedRoles: UserRole[];
 }
 
+function getDashboardPath(role?: UserRole): string {
+  return role === "TEACHER" ? ROUTES.TEACHER_DASHBOARD : ROUTES.DASHBOARD;
+}
+
 export default function RoleGuard({ allowedRoles }: RoleGuardProps) {
   const location = useLocation();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, hasHydrated } = useAuthStore();
+
+  if (!hasHydrated) {
+    return null;
+  }
 
   if (!isAuthenticated || !user) {
     return (
@@ -20,10 +28,7 @@ export default function RoleGuard({ allowedRoles }: RoleGuardProps) {
   }
 
   if (!allowedRoles.includes(user.role)) {
-    const redirectTo =
-      user.role === "TEACHER" ? ROUTES.TEACHER_DASHBOARD : ROUTES.DASHBOARD;
-
-    return <Navigate to={redirectTo} replace />;
+    return <Navigate to={getDashboardPath(user.role)} replace />;
   }
 
   return <Outlet />;

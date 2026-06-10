@@ -1,3 +1,5 @@
+// frontend/src/store/authStore.ts
+
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -20,11 +22,13 @@ interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   pendingEmail: string | null;
+  hasHydrated: boolean;
 
   login: (user: AuthUser, token: string) => void;
   logout: () => void;
   setPendingEmail: (email: string | null) => void;
   setUser: (user: AuthUser | null) => void;
+  setHydrated: (value: boolean) => void;
 
   isStudent: () => boolean;
   isTeacher: () => boolean;
@@ -39,6 +43,11 @@ function normalizeUser(user: AuthUser): AuthUser {
     ...user,
     id: String(user.id),
     role: normalizeRole(user.role),
+    last_name: user.last_name ?? "",
+    student_id: user.student_id ?? null,
+    university_name: user.university_name ?? null,
+    department: user.department ?? null,
+    is_verified: Boolean(user.is_verified ?? true),
   };
 }
 
@@ -49,6 +58,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       isAuthenticated: false,
       pendingEmail: null,
+      hasHydrated: false,
 
       login: (user: AuthUser, token: string) => {
         const safeUser = normalizeUser(user);
@@ -90,6 +100,10 @@ export const useAuthStore = create<AuthState>()(
         });
       },
 
+      setHydrated: (value: boolean) => {
+        set({ hasHydrated: value });
+      },
+
       isStudent: () => get().user?.role === "STUDENT",
 
       isTeacher: () => get().user?.role === "TEACHER",
@@ -102,6 +116,9 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
         pendingEmail: state.pendingEmail,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated(true);
+      },
     },
   ),
 );

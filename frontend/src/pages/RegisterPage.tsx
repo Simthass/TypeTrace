@@ -1,3 +1,5 @@
+// frontend/src/pages/RegisterPage.tsx
+
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -150,6 +152,7 @@ export default function RegisterPage() {
         API_ROUTES.auth.register,
         payload,
       );
+
       setPendingEmail(response.data.email);
       navigate(ROUTES.VERIFY_OTP, { replace: true });
     } catch (error) {

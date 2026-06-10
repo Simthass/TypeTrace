@@ -42,7 +42,9 @@ export default function VerifyOtpPage() {
     setApiError(null);
     setSuccessMsg(null);
 
-    if (!cleanEmail || otp.trim().length !== 6) {
+    const cleanOtp = otp.trim();
+
+    if (!cleanEmail || cleanOtp.length !== 6) {
       setApiError("Enter your email and the 6-digit verification code.");
       return;
     }
@@ -52,7 +54,7 @@ export default function VerifyOtpPage() {
     try {
       const response = await api.post<VerifyOtpResponse>(
         API_ROUTES.auth.verifyOtp,
-        { email: cleanEmail, otp: otp.trim() },
+        { email: cleanEmail, otp: cleanOtp },
       );
 
       login(response.data.user, response.data.access_token);

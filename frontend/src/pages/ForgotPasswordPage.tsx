@@ -38,7 +38,6 @@ export default function ForgotPasswordPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const cleanEmail = email.trim().toLowerCase();
-  const cleanOtp = otp.trim();
 
   const requestCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -71,6 +70,8 @@ export default function ForgotPasswordPage() {
 
     setApiError(null);
     setSuccessMsg(null);
+
+    const cleanOtp = otp.trim();
 
     if (!cleanEmail || cleanOtp.length !== 6) {
       setApiError("Enter your email and 6-digit reset code.");
