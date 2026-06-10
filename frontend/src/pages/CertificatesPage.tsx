@@ -13,6 +13,7 @@ import { useCertificateDownload } from "../hooks/useCertificateDownload";
 import { api, getApiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/ToastProvider";
 import { colors } from "../styles/colors";
+import { API_ROUTES } from "../constants/apiRoutes";
 
 interface CertificateItem {
   session_id: number;
@@ -240,7 +241,9 @@ export default function CertificatesPage() {
       setIsLoading(true);
 
       try {
-        const response = await api.get<CertificatesResponse>("/certificates");
+        const response = await api.get<CertificatesResponse>(
+          API_ROUTES.certificates.list,
+        );
 
         if (!mounted) return;
         setCertificates(response.data.certificates || []);

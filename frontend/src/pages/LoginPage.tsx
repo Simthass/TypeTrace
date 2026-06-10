@@ -15,6 +15,7 @@ import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
 import { useAuthStore, type AuthUser } from "../store/authStore";
 import { colors } from "../styles/colors";
+import { API_ROUTES } from "../constants/apiRoutes";
 
 interface LoginResponse {
   message: string;
@@ -45,7 +46,7 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await api.post<LoginResponse>("/auth/login", {
+      const response = await api.post<LoginResponse>(API_ROUTES.auth.login, {
         email: email.trim().toLowerCase(),
         password,
       });

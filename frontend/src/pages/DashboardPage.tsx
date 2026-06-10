@@ -8,6 +8,7 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/ToastProvider";
 import { brand, colors } from "../styles/colors";
 import { useAuthStore } from "../store/authStore";
+import { API_ROUTES } from "../constants/apiRoutes";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -920,7 +921,9 @@ export default function DashboardPage() {
     async function load() {
       setIsLoading(true);
       try {
-        const res = await api.get<DashboardResponse>("/student/dashboard");
+        const res = await api.get<DashboardResponse>(
+          API_ROUTES.student.dashboard,
+        );
         if (!mounted) return;
         setData(res.data);
       } catch (error) {

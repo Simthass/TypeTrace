@@ -14,6 +14,7 @@ import {
 import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
 import { colors } from "../styles/colors";
+import { API_ROUTES } from "../constants/apiRoutes";
 
 type Step = "request" | "verify" | "reset";
 
@@ -37,6 +38,7 @@ export default function ForgotPasswordPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const cleanEmail = email.trim().toLowerCase();
+  const cleanOtp = otp.trim();
 
   const requestCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -52,7 +54,9 @@ export default function ForgotPasswordPage() {
     setIsSubmitting(true);
 
     try {
-      await api.post("/auth/password-reset/request", { email: cleanEmail });
+      await api.post(API_ROUTES.auth.passwordResetRequest, {
+        email: cleanEmail,
+      });
       setSuccessMsg("If that account exists, a reset code has been sent.");
       setStep("verify");
     } catch (error) {
@@ -68,7 +72,7 @@ export default function ForgotPasswordPage() {
     setApiError(null);
     setSuccessMsg(null);
 
-    if (!cleanEmail || otp.trim().length !== 6) {
+    if (!cleanEmail || cleanOtp.length !== 6) {
       setApiError("Enter your email and 6-digit reset code.");
       return;
     }
@@ -77,10 +81,10 @@ export default function ForgotPasswordPage() {
 
     try {
       const response = await api.post<ResetVerifyResponse>(
-        "/auth/password-reset/verify",
+        API_ROUTES.auth.passwordResetVerify,
         {
           email: cleanEmail,
-          otp: otp.trim(),
+          otp: cleanOtp,
         },
       );
 
@@ -120,7 +124,7 @@ export default function ForgotPasswordPage() {
     setIsSubmitting(true);
 
     try {
-      await api.post("/auth/password-reset/confirm", {
+      await api.post(API_ROUTES.auth.passwordResetConfirm, {
         email: cleanEmail,
         reset_token: resetToken,
         new_password: newPassword,

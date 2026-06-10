@@ -1,7 +1,6 @@
-// frontend/src/hooks/useCertificateDownload.ts
-
 import { useState } from "react";
 
+import { API_ROUTES } from "../constants/apiRoutes";
 import { api, getApiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/ToastProvider";
 
@@ -18,9 +17,12 @@ export function useCertificateDownload() {
     setDownloadingId(certificateId);
 
     try {
-      const response = await api.get(`/certificates/${certificateId}/pdf`, {
-        responseType: "blob",
-      });
+      const response = await api.get(
+        API_ROUTES.certificates.pdf(certificateId),
+        {
+          responseType: "blob",
+        },
+      );
 
       const blob = new Blob([response.data], {
         type: "application/pdf",

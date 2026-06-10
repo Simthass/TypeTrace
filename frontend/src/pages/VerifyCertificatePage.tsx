@@ -7,6 +7,7 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
 import type { PublicCertificateVerification } from "../types/certificate";
+import { API_ROUTES } from "../constants/apiRoutes";
 
 function statusStyle(status: string | undefined) {
   if (status === "VALID") {
@@ -59,7 +60,7 @@ export default function VerifyCertificatePage() {
 
       try {
         const response = await api.get<PublicCertificateVerification>(
-          `/verify/${encodeURIComponent(certId)}`,
+          API_ROUTES.certificates.verifyPublic(certId),
         );
 
         if (!mounted) return;

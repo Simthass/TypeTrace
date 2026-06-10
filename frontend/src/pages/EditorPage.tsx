@@ -9,6 +9,7 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/ToastProvider";
 import { useAuthStore } from "../store/authStore";
 import { brand, colors } from "../styles/colors";
+import { API_ROUTES } from "../constants/apiRoutes";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -788,7 +789,7 @@ export default function EditorPage() {
     setIsSubmitting(true);
     try {
       const finalStats = getStats();
-      const response = await api.post("/sessions/analyze", {
+      const response = await api.post(API_ROUTES.sessions.analyze, {
         title: title.trim() || "Untitled Document",
         text_content: text,
         keystroke_array: keystrokeLogRef.current,

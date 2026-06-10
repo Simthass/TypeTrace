@@ -12,6 +12,7 @@ import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/ToastProvider";
 import { colors } from "../styles/colors";
+import { API_ROUTES } from "../constants/apiRoutes";
 
 interface SessionItem {
   id: number;
@@ -184,11 +185,14 @@ export default function SessionsPage() {
       setIsLoading(true);
 
       try {
-        const response = await api.get<SessionsResponse>("/student/sessions", {
-          params: {
-            limit: 100,
+        const response = await api.get<SessionsResponse>(
+          API_ROUTES.student.sessions,
+          {
+            params: {
+              limit: 100,
+            },
           },
-        });
+        );
 
         if (!mounted) return;
         setSessions(response.data.sessions || []);

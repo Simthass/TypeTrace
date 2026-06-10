@@ -1,0 +1,74 @@
+// frontend/src/constants/apiRoutes.ts
+
+export const API_ROUTES = {
+  health: {
+    check: "/health",
+  },
+
+  auth: {
+    register: "/auth/register",
+    login: "/auth/login",
+    me: "/auth/me",
+    verifyToken: "/auth/verify-token",
+    logout: "/auth/logout",
+    verifyOtp: "/auth/verify-otp",
+    resendOtp: "/auth/resend-otp",
+    passwordResetRequest: "/auth/password-reset/request",
+    passwordResetVerify: "/auth/password-reset/verify",
+    passwordResetConfirm: "/auth/password-reset/confirm",
+  },
+
+  student: {
+    dashboard: "/student/dashboard",
+    analytics: "/student/analytics",
+    sessions: "/student/sessions",
+  },
+
+  sessions: {
+    analyze: "/sessions/analyze",
+    replay: (sessionId: string | number) => `/sessions/${sessionId}/replay`,
+  },
+
+  replay: {
+    detail: (sessionId: string | number) => `/replay/${sessionId}`,
+  },
+
+  certificates: {
+    list: "/certificates",
+    detail: (certificateId: string) => `/certificates/${certificateId}`,
+    pdf: (certificateId: string) => `/certificates/${certificateId}/pdf`,
+    verifyPublic: (certificateId: string) => `/verify/${certificateId}`,
+  },
+
+  verify: {
+    publicCertificate: (certificateId: string) => `/verify/${certificateId}`,
+  },
+
+  user: {
+    profile: "/user/profile",
+    changePassword: "/user/change-password",
+    dataExport: "/user/data-export",
+    account: "/user/account",
+  },
+
+  teacher: {
+    dashboard: "/teacher/dashboard",
+    courses: "/teacher/courses",
+    courseDetail: (courseId: string | number) => `/teacher/courses/${courseId}`,
+    submissions: "/teacher/submissions",
+    submissionDetail: (sessionId: string | number) =>
+      `/teacher/submissions/${sessionId}`,
+    review: (sessionId: string | number) => `/teacher/review/${sessionId}`,
+    students: "/teacher/students",
+  },
+
+  courses: {
+    join: "/courses/join",
+    enrolled: "/courses/enrolled",
+  },
+
+  model: {
+    status: "/model/status",
+    reload: "/model/reload",
+  },
+} as const;

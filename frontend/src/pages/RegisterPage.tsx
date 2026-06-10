@@ -14,6 +14,7 @@ import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
 import { useAuthStore, type UserRole } from "../store/authStore";
 import { brand, colors } from "../styles/colors";
+import { API_ROUTES } from "../constants/apiRoutes";
 
 interface RegisterResponse {
   message: string;
@@ -146,10 +147,9 @@ export default function RegisterPage() {
             };
 
       const response = await api.post<RegisterResponse>(
-        "/auth/register",
+        API_ROUTES.auth.register,
         payload,
       );
-
       setPendingEmail(response.data.email);
       navigate(ROUTES.VERIFY_OTP, { replace: true });
     } catch (error) {

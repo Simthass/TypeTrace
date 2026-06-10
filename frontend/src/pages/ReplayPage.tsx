@@ -12,6 +12,7 @@ import type {
   ReplaySegment,
   ReplayTimelineMarker,
 } from "../types/replay";
+import { API_ROUTES } from "../constants/apiRoutes";
 
 function PlayIcon() {
   return (
@@ -359,8 +360,9 @@ export default function ReplayPage() {
       setApiError(null);
 
       try {
-        const response = await api.get<ReplayResponse>(`/replay/${sessionId}`);
-
+        const response = await api.get<ReplayResponse>(
+          API_ROUTES.sessions.replay(sessionId),
+        );
         if (!mounted) return;
 
         setData(response.data);

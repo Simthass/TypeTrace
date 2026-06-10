@@ -15,6 +15,7 @@ import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
 import { useAuthStore, type AuthUser } from "../store/authStore";
 import { colors } from "../styles/colors";
+import { API_ROUTES } from "../constants/apiRoutes";
 
 interface VerifyOtpResponse {
   message: string;
@@ -49,10 +50,10 @@ export default function VerifyOtpPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await api.post<VerifyOtpResponse>("/auth/verify-otp", {
-        email: cleanEmail,
-        otp: otp.trim(),
-      });
+      const response = await api.post<VerifyOtpResponse>(
+        API_ROUTES.auth.verifyOtp,
+        { email: cleanEmail, otp: otp.trim() },
+      );
 
       login(response.data.user, response.data.access_token);
       setPendingEmail(null);
@@ -82,7 +83,9 @@ export default function VerifyOtpPage() {
     setIsResending(true);
 
     try {
-      await api.post("/auth/resend-otp", { email: cleanEmail });
+      await api.post(API_ROUTES.auth.resendOtp, {
+        email: cleanEmail,
+      });
       setSuccessMsg("A new verification code has been sent.");
     } catch (error) {
       setApiError(getApiErrorMessage(error));

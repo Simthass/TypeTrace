@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { colors, brand } from "../styles/colors";
 import { ROUTES } from "../constants/routes";
+import { API_ROUTES } from "../constants/apiRoutes";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -740,7 +741,7 @@ export default function VerifyLookupPage() {
 
     try {
       const res = await api.get<VerifyResult>(
-        `/verify/${encodeURIComponent(trimmed)}`,
+        `${API_ROUTES.certificates.verifyPublic(trimmed)}`,
       );
 
       /**

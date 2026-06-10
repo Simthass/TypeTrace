@@ -11,6 +11,7 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/ToastProvider";
 import { useAuthStore } from "../store/authStore";
 import { brand, colors } from "../styles/colors";
+import { API_ROUTES } from "../constants/apiRoutes";
 
 type SettingsTab = "profile" | "security" | "privacy" | "export" | "danger";
 
@@ -47,7 +48,7 @@ export default function SettingsPage() {
     setIsSaving(true);
 
     try {
-      const response = await api.patch("/user/profile", profile);
+      const response = await api.patch(API_ROUTES.user.profile, profile);
       setUser(response.data.user || response.data);
       toast.success(
         "Profile updated",
@@ -80,7 +81,7 @@ export default function SettingsPage() {
     setIsSaving(true);
 
     try {
-      await api.post("/user/change-password", {
+      await api.post(API_ROUTES.user.changePassword, {
         current_password: passwordForm.current_password,
         new_password: passwordForm.new_password,
       });
@@ -106,7 +107,7 @@ export default function SettingsPage() {
     setIsExporting(true);
 
     try {
-      const response = await api.get("/user/data-export");
+      const response = await api.get(API_ROUTES.user.dataExport);
       const blob = new Blob([JSON.stringify(response.data, null, 2)], {
         type: "application/json",
       });
@@ -141,7 +142,7 @@ export default function SettingsPage() {
     if (!confirmed) return;
 
     try {
-      await api.delete("/user/account");
+      await api.delete(API_ROUTES.user.account);
       logout();
       toast.success(
         "Account deleted",

@@ -7,6 +7,7 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
 import type { StudentAnalyticsResponse } from "../types/student";
+import { API_ROUTES } from "../constants/apiRoutes";
 
 function formatDuration(seconds: number): string {
   const safe = Math.max(0, Math.round(seconds));
@@ -68,8 +69,9 @@ export default function AnalyticsPage() {
       setApiError(null);
 
       try {
-        const response =
-          await api.get<StudentAnalyticsResponse>("/student/analytics");
+        const response = await api.get<StudentAnalyticsResponse>(
+          API_ROUTES.student.analytics,
+        );
 
         if (!mounted) return;
         setData(response.data);
