@@ -739,9 +739,19 @@ export default function EditorPage() {
   // Autosave state
   useEffect(() => {
     if (!text && !title) return;
-    setSaveState("saving");
-    const t = window.setTimeout(() => setSaveState("saved"), 800);
-    return () => window.clearTimeout(t);
+
+    const savingTimer = window.setTimeout(() => {
+      setSaveState("saving");
+    }, 0);
+
+    const savedTimer = window.setTimeout(() => {
+      setSaveState("saved");
+    }, 800);
+
+    return () => {
+      window.clearTimeout(savingTimer);
+      window.clearTimeout(savedTimer);
+    };
   }, [text, title]);
 
   // Cleanup typing timeout

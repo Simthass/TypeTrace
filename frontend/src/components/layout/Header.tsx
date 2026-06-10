@@ -4,9 +4,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import { PUBLIC_NAV, ROUTES } from "../../constants/routes";
+import { ROUTES } from "../../constants/routes";
 import { brand, colors } from "../../styles/colors";
-import { useAuthStore } from "../../store/authStore";
+import { useAuthStore, type AuthUser } from "../../store/authStore";
 
 export const HEADER_HEIGHT = 60;
 
@@ -855,12 +855,7 @@ const ProfileDropdown = React.forwardRef<
     onToggle: () => void;
     onLogout: () => void;
     initials: string;
-    user: {
-      first_name: string;
-      last_name?: string;
-      email: string;
-      role?: string;
-    };
+    user: Pick<AuthUser, "first_name" | "last_name" | "email" | "role">;
     dashboardPath: string;
     primaryActionPath: string;
     primaryActionLabel: string;
@@ -1207,12 +1202,7 @@ function MobileMenu({
   primaryActionPath,
   primaryActionLabel,
 }: {
-  user: {
-    first_name: string;
-    last_name?: string;
-    email: string;
-    role?: string;
-  } | null;
+  user: Pick<AuthUser, "first_name" | "last_name" | "email" | "role"> | null;
   onLogout: () => void;
   pathname: string;
   dashboardPath: string;
@@ -1266,8 +1256,7 @@ function MobileMenu({
             </p>
             {group.items.map((item, i) => {
               const active =
-                pathname === item.path ||
-                (item.path !== "/" && pathname.startsWith(item.path));
+                pathname === item.path || pathname.startsWith(`${item.path}/`);
               return (
                 <motion.div
                   key={item.path}
@@ -1652,7 +1641,7 @@ export default function Header() {
             {simpleNavItems.map((item) => {
               const active =
                 location.pathname === item.path ||
-                (item.path !== "/" && location.pathname.startsWith(item.path));
+                location.pathname.startsWith(`${item.path}/`);
               return <NavLink key={item.path} item={item} active={active} />;
             })}
           </nav>

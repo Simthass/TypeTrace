@@ -1,7 +1,6 @@
 // frontend/src/pages/CertificatesPage.tsx
 
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 
 import { Badge, classificationTone } from "../components/ui/Badge";
 import { Button, ButtonLink } from "../components/ui/Button";

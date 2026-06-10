@@ -1,6 +1,7 @@
 // frontend/src/pages/teacher/TeacherCoursesPage.tsx
 
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { api, getApiErrorMessage } from "../../lib/api";

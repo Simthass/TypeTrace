@@ -1,8 +1,4 @@
-// src/pages/student/JoinCoursePage.tsx
-// Student enters an invite code from their teacher to enrol in a course.
-// Accessible from the student dashboard sidebar.
-
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/api";
 import { colors } from "../../styles/colors";

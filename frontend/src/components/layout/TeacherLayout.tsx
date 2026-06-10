@@ -84,7 +84,19 @@ function Icon({ type }: { type: string }) {
   );
 }
 
-const navSections = [
+type TeacherNavItem = {
+  label: string;
+  path: string;
+  icon: string;
+  badge?: string;
+};
+
+type TeacherNavSection = {
+  label: string;
+  items: TeacherNavItem[];
+};
+
+const navSections: TeacherNavSection[] = [
   {
     label: "Review",
     items: [

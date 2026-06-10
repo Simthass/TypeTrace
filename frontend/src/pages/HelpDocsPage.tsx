@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { ROUTES } from "../constants/routes";
-import { colors, brand } from "../styles/colors";
+import { colors } from "../styles/colors";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 function SearchIcon() {
