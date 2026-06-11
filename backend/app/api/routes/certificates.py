@@ -186,11 +186,6 @@ def _authorize_certificate_audit(record: Dict[str, Any], user: User) -> None:
             detail="Access denied for this certificate.",
         )
 
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Access denied for this certificate.",
-    )
-
 
 def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dict[str, Any]:
     verify_url = str(request.url_for("verify_certificate_public", cert_id=record["certificate_id"]))
@@ -442,10 +437,10 @@ def _build_certificate_pdf(record: Dict[str, Any], verify_url: str) -> bytes:
 
     pdf.setFillColor(pdf_colors.white)
     pdf.setFont("Helvetica-Bold", 22)
-    pdf.drawString(margin, height - 48, "TypeTrace Certificate of Authenticity")
+    pdf.drawString(margin, height - 48, "TypeTrace Writing Evidence Certificate")
 
     pdf.setFont("Helvetica", 10)
-    pdf.drawString(margin, height - 68, "Behavioral authorship verification for academic writing")
+    pdf.drawString(margin, height - 68, "Behavioral writing evidence for academic review")
 
     y -= 70
 
@@ -541,9 +536,11 @@ def _build_certificate_pdf(record: Dict[str, Any], verify_url: str) -> bytes:
     pdf.setFillColor(pdf_colors.HexColor("#6B7280"))
     pdf.setFont("Helvetica", 8)
     footer_text = (
-        "This certificate verifies the writing process using TypeTrace keystroke dynamics, "
-        "behavioral biometrics, cryptographic hashing, and ML-assisted authorship analysis. "
-        "It should be used alongside institutional academic integrity procedures."
+        "This certificate summarizes a recorded TypeTrace writing session using "
+        "keystroke dynamics, behavioral timing signals, cryptographic hashing, "
+        "and ML-assisted authorship analysis. It provides supporting evidence for "
+        "academic review and should be interpreted alongside institutional academic "
+        "integrity procedures."
     )
     _draw_wrapped_text(pdf, footer_text, margin, y, max_chars=105, line_height=10)
 

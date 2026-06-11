@@ -741,7 +741,7 @@ export default function VerifyLookupPage() {
 
     try {
       const res = await api.get<VerifyResult>(
-        `${API_ROUTES.certificates.verifyPublic(trimmed)}`,
+        API_ROUTES.certificates.verifyPublic(trimmed),
       );
 
       /**

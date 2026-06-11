@@ -1,3 +1,5 @@
+// frontend/src/hooks/useCertificateDownload.ts
+
 import { useState } from "react";
 
 import { API_ROUTES } from "../constants/apiRoutes";
@@ -24,20 +26,17 @@ export function useCertificateDownload() {
         },
       );
 
-      const blob = new Blob([response.data], {
-        type: "application/pdf",
-      });
-
-      const fileUrl = window.URL.createObjectURL(blob);
+      const safeCertificateId = certificateId.replace(/[^a-zA-Z0-9-_]/g, "");
+      const url = window.URL.createObjectURL(response.data);
       const link = document.createElement("a");
 
-      link.href = fileUrl;
-      link.download = `TypeTrace_Certificate_${certificateId}.pdf`;
+      link.href = url;
+      link.download = `TypeTrace_Certificate_${safeCertificateId}.pdf`;
       document.body.appendChild(link);
       link.click();
-
       link.remove();
-      window.URL.revokeObjectURL(fileUrl);
+
+      window.URL.revokeObjectURL(url);
 
       toast.success(
         "Certificate downloaded",

@@ -49,7 +49,9 @@ export default function VerifyCertificatePage() {
     let mounted = true;
 
     async function verify() {
-      if (!certId) {
+      const cleanCertId = certId?.trim();
+
+      if (!cleanCertId) {
         setApiError("Certificate ID is missing.");
         setIsLoading(false);
         return;
@@ -57,23 +59,35 @@ export default function VerifyCertificatePage() {
 
       setIsLoading(true);
       setApiError(null);
+      setResult(null);
 
       try {
         const response = await api.get<PublicCertificateVerification>(
-          API_ROUTES.certificates.verifyPublic(certId),
+          API_ROUTES.certificates.verifyPublic(cleanCertId),
         );
 
         if (!mounted) return;
+
         setResult(response.data);
+
+        if (!response.data.valid) {
+          setApiError(
+            response.data.reason ||
+              "Certificate ID was not found in the TypeTrace verification ledger.",
+          );
+        }
       } catch (error) {
         if (!mounted) return;
         setApiError(getApiErrorMessage(error));
+        setResult(null);
       } finally {
-        if (mounted) setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     }
 
-    verify();
+    void verify();
 
     return () => {
       mounted = false;
@@ -255,6 +269,33 @@ export default function VerifyCertificatePage() {
                   style={{ color: colors.text.secondary }}
                 >
                   Review status: {result.review_status}
+                </p>
+              </div>
+
+              <div
+                className="mt-6 rounded-md border p-5"
+                style={{
+                  borderColor: colors.surface[200],
+                  background: colors.surface[50],
+                }}
+              >
+                <p
+                  className="text-[13px] font-bold uppercase tracking-[0.14em]"
+                  style={{ color: colors.text.secondary }}
+                >
+                  Interpretation guidance
+                </p>
+
+                <p
+                  className="mt-3 text-[14px] leading-7"
+                  style={{ color: colors.text.secondary }}
+                >
+                  This certificate confirms that TypeTrace recorded a writing
+                  session and associated behavioral evidence for the listed
+                  document. It should be treated as supporting authorship
+                  evidence, not as absolute proof of authorship or misconduct.
+                  Academic decisions should consider this record alongside
+                  institutional review procedures and other available evidence.
                 </p>
               </div>
 
