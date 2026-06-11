@@ -27,6 +27,8 @@ export const API_ROUTES = {
   sessions: {
     analyze: "/sessions/analyze",
     replay: (sessionId: string | number) => `/sessions/${sessionId}/replay`,
+    certificateData: (sessionId: string | number) =>
+      `/sessions/${sessionId}/certificate-data`,
   },
 
   replay: {

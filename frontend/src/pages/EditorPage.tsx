@@ -721,17 +721,25 @@ export default function EditorPage() {
     typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 1200);
   };
 
-  // Load enrolled courses
   useEffect(() => {
     let mounted = true;
-    api
-      .get("/courses/enrolled")
-      .then((r) => {
-        if (mounted) setEnrolledCourses(r.data?.courses ?? []);
-      })
-      .catch(() => {
-        if (mounted) setEnrolledCourses([]);
-      });
+
+    async function loadEnrolledCourses() {
+      try {
+        const response = await api.get(API_ROUTES.courses.enrolled);
+
+        if (!mounted) return;
+
+        setEnrolledCourses(response.data?.courses ?? []);
+      } catch {
+        if (!mounted) return;
+
+        setEnrolledCourses([]);
+      }
+    }
+
+    void loadEnrolledCourses();
+
     return () => {
       mounted = false;
     };
@@ -763,6 +771,24 @@ export default function EditorPage() {
     [],
   );
 
+  useEffect(() => {
+    const hasActiveDraft =
+      Boolean(text.trim()) && !analysisResult && liveStats.keystrokes > 0;
+
+    if (!hasActiveDraft) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [text, analysisResult, liveStats.keystrokes]);
+
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const openAnalyzeModal = () => {
@@ -786,16 +812,52 @@ export default function EditorPage() {
   };
 
   const confirmSubmit = async () => {
+    if (isSubmitting) return;
+
+    const finalText = text.trim();
+    const finalTitle = title.trim() || "Untitled Document";
+    const finalStats = getStats();
+    const evidence = keystrokeLogRef.current;
+
+    if (!finalText) {
+      showToast({
+        type: "error",
+        title: "Nothing to analyze",
+        message: "Write something in the editor before running analysis.",
+      });
+      return;
+    }
+
+    if (finalStats.keystrokes < MINIMUM_KEYSTROKES) {
+      showToast({
+        type: "warning",
+        title: "More typing required",
+        message: `Need ${MINIMUM_KEYSTROKES} keystrokes minimum. Currently at ${finalStats.keystrokes}.`,
+      });
+      return;
+    }
+
+    if (!Array.isArray(evidence) || evidence.length === 0) {
+      showToast({
+        type: "error",
+        title: "Keystroke evidence missing",
+        message:
+          "TypeTrace could not find the captured writing events for this session. Start a new session and try again.",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
+
     try {
-      const finalStats = getStats();
       const response = await api.post(API_ROUTES.sessions.analyze, {
-        title: title.trim() || "Untitled Document",
-        text_content: text,
-        keystroke_array: keystrokeLogRef.current,
+        title: finalTitle,
+        text_content: finalText,
+        keystroke_array: evidence,
         stats: finalStats,
         course_id: selectedCourseId,
       });
+
       setAnalysisResult({
         classification: response.data.classification,
         confidence: response.data.confidence_score,
@@ -806,7 +868,10 @@ export default function EditorPage() {
         document_hash: response.data.document_hash,
         session_id: response.data.session_id,
       });
+
       setShowCourseModal(false);
+      setSaveState("saved");
+
       showToast({
         type: "success",
         title: "Analysis complete",
@@ -828,7 +893,10 @@ export default function EditorPage() {
     setText("");
     setSelectedCourseId(null);
     setAnalysisResult(null);
+    setShowCourseModal(false);
+    setSaveState("saved");
     resetCapture();
+
     showToast({
       type: "info",
       title: "New session started",
