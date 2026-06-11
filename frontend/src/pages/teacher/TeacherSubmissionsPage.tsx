@@ -10,6 +10,7 @@ import type {
   TeacherSubmission,
   TeacherSubmissionsResponse,
 } from "../../types/teacher";
+import { API_ROUTES } from "../../constants/apiRoutes";
 
 function SearchIcon() {
   return (
@@ -205,7 +206,7 @@ export default function TeacherSubmissionsPage() {
 
       try {
         const response = await api.get<TeacherSubmissionsResponse>(
-          `/teacher/sessions?${queryParams}`,
+          `${API_ROUTES.teacher.sessions}?${queryParams}`,
         );
         if (!mounted) return;
         setSubmissions(response.data.sessions || []);

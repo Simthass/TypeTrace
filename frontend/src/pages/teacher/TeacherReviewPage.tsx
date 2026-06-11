@@ -11,6 +11,7 @@ import type {
   TeacherSubmissionDetailResponse,
   TeacherReviewStatus,
 } from "../../types/teacher";
+import { API_ROUTES } from "../../constants/apiRoutes";
 
 function getBadge(submission: TeacherSubmission) {
   if (submission.classification_bucket === "HUMAN") {
@@ -67,7 +68,7 @@ export default function TeacherReviewPage() {
 
       try {
         const response = await api.get<TeacherSubmissionDetailResponse>(
-          `/teacher/sessions/${sessionId}`,
+          API_ROUTES.teacher.sessionDetail(sessionId),
         );
         if (!mounted) return;
 
@@ -100,7 +101,7 @@ export default function TeacherReviewPage() {
     setSuccessMsg(null);
 
     try {
-      await api.patch(`/teacher/sessions/${sessionId}/review`, {
+      await api.patch(API_ROUTES.teacher.sessionReview(sessionId), {
         status,
         notes: reviewNotes.trim(),
       });

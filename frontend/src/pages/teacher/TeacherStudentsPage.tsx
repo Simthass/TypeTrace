@@ -10,6 +10,7 @@ import type {
   TeacherStudent,
   TeacherStudentsResponse,
 } from "../../types/teacher";
+import { API_ROUTES } from "../../constants/apiRoutes";
 
 function SearchIcon() {
   return (
@@ -41,8 +42,9 @@ export default function TeacherStudentsPage() {
       setApiError(null);
 
       try {
-        const response =
-          await api.get<TeacherStudentsResponse>("/teacher/students");
+        const response = await api.get<TeacherStudentsResponse>(
+          API_ROUTES.teacher.students,
+        );
         if (!mounted) return;
         setStudents(response.data.students || []);
       } catch (error) {

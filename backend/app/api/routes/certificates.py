@@ -109,6 +109,7 @@ def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
 
                     c.course_name AS course_name,
                     c.course_code AS course_code,
+                    c.teacher_id AS teacher_id,
 
                     cert.id AS ledger_id,
                     cert.generated_at AS ledger_generated_at,
@@ -131,6 +132,8 @@ def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
 
     return {
         "session_id": row["session_id"],
+        "user_id": row["user_id"],
+        "teacher_id": row["teacher_id"],
         "title": row["title"] or "Untitled Document",
         "student_name": f"{row['first_name']} {row['last_name'] or ''}".strip(),
         "student_id": row["student_id"] or "",
@@ -159,6 +162,34 @@ def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
         "verification_notes": row["verification_notes"] or "",
         "status": _certificate_status(row["classification_result"]),
     }
+
+
+def _authorize_certificate_audit(record: Dict[str, Any], user: User) -> None:
+    role = str(user.role).upper()
+    user_id = str(user.id)
+
+    if role == "STUDENT":
+        if str(record.get("user_id")) == user_id:
+            return
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied for this certificate.",
+        )
+
+    if role == "TEACHER":
+        if record.get("teacher_id") and str(record.get("teacher_id")) == user_id:
+            return
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied for this certificate.",
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Access denied for this certificate.",
+    )
 
 
 def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dict[str, Any]:
@@ -286,7 +317,7 @@ async def get_certificate_audit(
     Authenticated certificate audit endpoint.
 
     Students can access their own certificates.
-    Teachers can access certificates for review/demo flow.
+    Teachers can access certificates only for sessions in their own courses.
     """
     record = _fetch_certificate_record(cert_id)
 
@@ -296,11 +327,7 @@ async def get_certificate_audit(
             detail="Certificate not found.",
         )
 
-    if current_user.role == "STUDENT" and str(record["student_id"]) != str(current_user.student_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied for this certificate.",
-        )
+    _authorize_certificate_audit(record, current_user)
 
     payload = _public_certificate_payload(record, request)
     payload.update(

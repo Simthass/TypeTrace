@@ -12,6 +12,7 @@ import { ROUTES } from "../../constants/routes";
 import { api, getApiErrorMessage } from "../../lib/api";
 import { useToast } from "../../components/ui/ToastProvider";
 import { brand, colors } from "../../styles/colors";
+import { API_ROUTES } from "../../constants/apiRoutes";
 
 interface TeacherSummary {
   total_courses: number;
@@ -279,8 +280,9 @@ export default function TeacherDashboard() {
       setIsLoading(true);
 
       try {
-        const response =
-          await api.get<TeacherDashboardResponse>("/teacher/dashboard");
+        const response = await api.get<TeacherDashboardResponse>(
+          API_ROUTES.teacher.dashboard,
+        );
 
         if (!mounted) return;
         setData(response.data);

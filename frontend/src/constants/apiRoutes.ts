@@ -55,11 +55,12 @@ export const API_ROUTES = {
     dashboard: "/teacher/dashboard",
     courses: "/teacher/courses",
     courseDetail: (courseId: string | number) => `/teacher/courses/${courseId}`,
-    submissions: "/teacher/submissions",
-    submissionDetail: (sessionId: string | number) =>
-      `/teacher/submissions/${sessionId}`,
-    review: (sessionId: string | number) => `/teacher/review/${sessionId}`,
     students: "/teacher/students",
+    sessions: "/teacher/sessions",
+    sessionDetail: (sessionId: string | number) =>
+      `/teacher/sessions/${sessionId}`,
+    sessionReview: (sessionId: string | number) =>
+      `/teacher/sessions/${sessionId}/review`,
   },
 
   courses: {

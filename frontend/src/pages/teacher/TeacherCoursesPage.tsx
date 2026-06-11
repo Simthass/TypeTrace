@@ -12,6 +12,7 @@ import type {
   TeacherCourseDetailResponse,
   TeacherCoursesResponse,
 } from "../../types/teacher";
+import { API_ROUTES } from "../../constants/apiRoutes";
 
 function CopyIcon() {
   return (
@@ -147,7 +148,7 @@ function CourseDetail() {
 
       try {
         const response = await api.get<TeacherCourseDetailResponse>(
-          `/teacher/courses/${courseId}`,
+          API_ROUTES.teacher.courseDetail(courseId),
         );
         if (!mounted) return;
         setData(response.data);
@@ -383,8 +384,9 @@ export default function TeacherCoursesPage() {
     setApiError(null);
 
     try {
-      const response =
-        await api.get<TeacherCoursesResponse>("/teacher/courses");
+      const response = await api.get<TeacherCoursesResponse>(
+        API_ROUTES.teacher.courses,
+      );
       setCourses(response.data.courses || []);
     } catch (error) {
       setApiError(getApiErrorMessage(error));
@@ -414,7 +416,7 @@ export default function TeacherCoursesPage() {
     setSuccessMsg(null);
 
     try {
-      await api.post("/teacher/courses", {
+      await api.post(API_ROUTES.teacher.courses, {
         course_name: courseName.trim(),
         course_code: courseCode.trim(),
       });

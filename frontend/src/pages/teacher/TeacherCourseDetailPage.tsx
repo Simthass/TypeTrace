@@ -6,6 +6,7 @@ import { Link, useParams } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
 import { api, getApiErrorMessage } from "../../lib/api";
 import { brand, colors } from "../../styles/colors";
+import { API_ROUTES } from "../../constants/apiRoutes";
 
 interface TeacherCourse {
   id: number;
@@ -146,7 +147,7 @@ export default function TeacherCourseDetailPage() {
 
       try {
         const response = await api.get<CourseDetailResponse>(
-          `/teacher/courses/${courseId}`,
+          API_ROUTES.teacher.courseDetail(courseId),
         );
 
         if (!mounted) return;
