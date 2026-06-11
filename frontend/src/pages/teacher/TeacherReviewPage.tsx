@@ -94,19 +94,38 @@ export default function TeacherReviewPage() {
   }, [sessionId]);
 
   const saveReview = async (status: TeacherReviewStatus) => {
-    if (!sessionId) return;
+    if (!sessionId || isSaving) return;
 
     setIsSaving(true);
     setApiError(null);
     setSuccessMsg(null);
 
     try {
-      await api.patch(API_ROUTES.teacher.sessionReview(sessionId), {
-        status,
-        notes: reviewNotes.trim(),
-      });
+      const response = await api.patch(
+        API_ROUTES.teacher.sessionReview(sessionId),
+        {
+          status,
+          notes: reviewNotes.trim(),
+        },
+      );
 
-      setReviewStatus(status);
+      const nextStatus = response.data?.review_status || status;
+
+      const nextNotes = response.data?.review_notes ?? reviewNotes.trim();
+
+      setReviewStatus(nextStatus as TeacherReviewStatus);
+      setReviewNotes(nextNotes);
+
+      setSubmission((current) =>
+        current
+          ? {
+              ...current,
+              review_status: nextStatus,
+              review_notes: nextNotes,
+            }
+          : current,
+      );
+
       setSuccessMsg("Review saved successfully.");
     } catch (error) {
       setApiError(getApiErrorMessage(error));
@@ -256,6 +275,39 @@ export default function TeacherReviewPage() {
                       </p>
                     </div>
                   ))}
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <Link
+                    to={ROUTES.REPLAY.replace(
+                      ":sessionId",
+                      String(submission.id),
+                    )}
+                    className="rounded-md border px-4 py-2 text-[13px] font-bold transition hover:opacity-80"
+                    style={{
+                      borderColor: colors.surface[200],
+                      color: colors.text.primary,
+                      background: colors.surface[50],
+                    }}
+                  >
+                    Open replay audit
+                  </Link>
+
+                  {submission.certificate_id && (
+                    <Link
+                      to={ROUTES.VERIFY.replace(
+                        ":certId",
+                        submission.certificate_id,
+                      )}
+                      className="rounded-md px-4 py-2 text-[13px] font-bold transition hover:opacity-90"
+                      style={{
+                        color: colors.text.light,
+                        background: colors.brand,
+                      }}
+                    >
+                      Verify certificate
+                    </Link>
+                  )}
                 </div>
               </div>
 

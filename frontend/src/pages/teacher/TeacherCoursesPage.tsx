@@ -1,15 +1,12 @@
-// frontend/src/pages/teacher/TeacherCoursesPage.tsx
-
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { api, getApiErrorMessage } from "../../lib/api";
 import { ROUTES } from "../../constants/routes";
 import { colors, brand } from "../../styles/colors";
 import type {
   TeacherCourse,
-  TeacherCourseDetailResponse,
   TeacherCoursesResponse,
 } from "../../types/teacher";
 import { API_ROUTES } from "../../constants/apiRoutes";
@@ -121,7 +118,10 @@ function CourseCard({ course }: { course: TeacherCourse }) {
             {copied ? "Copied" : "Copy"}
           </button>
           <Link
-            to={`/teacher/courses/${course.id}`}
+            to={ROUTES.TEACHER_COURSE_DETAIL.replace(
+              ":courseId",
+              String(course.id),
+            )}
             className="rounded-md px-3 py-2 text-[12px] font-semibold text-white"
             style={{ background: colors.brand }}
           >
@@ -133,244 +133,7 @@ function CourseCard({ course }: { course: TeacherCourse }) {
   );
 }
 
-function CourseDetail() {
-  const { courseId } = useParams<{ courseId: string }>();
-  const [data, setData] = useState<TeacherCourseDetailResponse | null>(null);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadCourse() {
-      setIsLoading(true);
-      setApiError(null);
-
-      try {
-        const response = await api.get<TeacherCourseDetailResponse>(
-          API_ROUTES.teacher.courseDetail(courseId),
-        );
-        if (!mounted) return;
-        setData(response.data);
-      } catch (error) {
-        if (!mounted) return;
-        setApiError(getApiErrorMessage(error));
-      } finally {
-        if (mounted) setIsLoading(false);
-      }
-    }
-
-    loadCourse();
-
-    return () => {
-      mounted = false;
-    };
-  }, [courseId]);
-
-  return (
-    <div
-      className="min-h-screen px-6 py-8"
-      style={{ background: colors.surface[50] }}
-    >
-      <div className="mx-auto max-w-7xl">
-        <Link
-          to={ROUTES.TEACHER_COURSES}
-          className="text-[13px] font-semibold"
-          style={{ color: colors.brand }}
-        >
-          Back to courses
-        </Link>
-
-        {apiError && (
-          <div
-            className="mt-6 rounded-md border px-4 py-3 text-[13px]"
-            style={{
-              borderColor: brand.aiAccent,
-              background: brand.aiBg,
-              color: brand.aiText,
-            }}
-          >
-            {apiError}
-          </div>
-        )}
-
-        {isLoading ? (
-          <div
-            className="mt-6 rounded-md border bg-white px-5 py-10 text-center text-[13px]"
-            style={{
-              borderColor: colors.surface[200],
-              color: colors.text.secondary,
-            }}
-          >
-            Loading course...
-          </div>
-        ) : data ? (
-          <>
-            <div
-              className="mt-4 rounded-md border bg-white p-5 shadow-sm"
-              style={{ borderColor: colors.surface[200] }}
-            >
-              <h1
-                className="text-2xl font-semibold"
-                style={{ color: colors.text.primary }}
-              >
-                {data.course.course_name}
-              </h1>
-              <p
-                className="mt-2 text-[14px]"
-                style={{ color: colors.text.secondary }}
-              >
-                {data.course.course_code} · Invite code{" "}
-                {data.course.invite_code}
-              </p>
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-4">
-                {[
-                  ["Students", data.course.student_count],
-                  ["Submissions", data.course.submission_count],
-                  ["Pending Reviews", data.course.pending_count],
-                  ["Avg Confidence", `${data.course.avg_confidence}%`],
-                ].map(([label, value]) => (
-                  <div
-                    key={label}
-                    className="rounded-md border px-3 py-2"
-                    style={{ borderColor: colors.surface[200] }}
-                  >
-                    <p
-                      className="text-[10px] font-semibold uppercase tracking-[0.12em]"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      {label}
-                    </p>
-                    <p
-                      className="mt-1 text-[14px] font-semibold"
-                      style={{ color: colors.text.primary }}
-                    >
-                      {value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-4 lg:grid-cols-2">
-              <div
-                className="rounded-md border bg-white p-5 shadow-sm"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <h2
-                  className="text-[15px] font-semibold"
-                  style={{ color: colors.text.primary }}
-                >
-                  Enrolled students
-                </h2>
-
-                <div className="mt-4 space-y-3">
-                  {data.students.length ? (
-                    data.students.map((student) => (
-                      <div
-                        key={student.id}
-                        className="rounded-md border px-3 py-3"
-                        style={{ borderColor: colors.surface[200] }}
-                      >
-                        <p
-                          className="text-[13px] font-semibold"
-                          style={{ color: colors.text.primary }}
-                        >
-                          {student.student_name}
-                        </p>
-                        <p
-                          className="mt-1 text-[12px]"
-                          style={{ color: colors.text.secondary }}
-                        >
-                          {student.student_id} · {student.email}
-                        </p>
-                        <p
-                          className="mt-2 text-[12px]"
-                          style={{ color: colors.text.secondary }}
-                        >
-                          {student.submission_count} submissions ·{" "}
-                          {student.avg_confidence}% avg confidence
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p
-                      className="text-[13px]"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      No students joined yet.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div
-                className="rounded-md border bg-white p-5 shadow-sm"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <h2
-                  className="text-[15px] font-semibold"
-                  style={{ color: colors.text.primary }}
-                >
-                  Latest submissions
-                </h2>
-
-                <div className="mt-4 space-y-3">
-                  {data.submissions.length ? (
-                    data.submissions.map((submission) => (
-                      <div
-                        key={submission.id}
-                        className="rounded-md border px-3 py-3"
-                        style={{ borderColor: colors.surface[200] }}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p
-                              className="text-[13px] font-semibold"
-                              style={{ color: colors.text.primary }}
-                            >
-                              {submission.title}
-                            </p>
-                            <p
-                              className="mt-1 text-[12px]"
-                              style={{ color: colors.text.secondary }}
-                            >
-                              {submission.student_name} ·{" "}
-                              {submission.created_at}
-                            </p>
-                          </div>
-                          <Link
-                            to={`/teacher/review/${submission.id}`}
-                            className="text-[12px] font-semibold"
-                            style={{ color: colors.brand }}
-                          >
-                            Review
-                          </Link>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p
-                      className="text-[13px]"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      No submissions yet.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 export default function TeacherCoursesPage() {
-  const { courseId } = useParams<{ courseId?: string }>();
-
   const [courses, setCourses] = useState<TeacherCourse[]>([]);
   const [courseName, setCourseName] = useState("");
   const [courseCode, setCourseCode] = useState("");
@@ -379,7 +142,7 @@ export default function TeacherCoursesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
 
-  const loadCourses = async () => {
+  const loadCourses = useCallback(async () => {
     setIsLoading(true);
     setApiError(null);
 
@@ -387,43 +150,57 @@ export default function TeacherCoursesPage() {
       const response = await api.get<TeacherCoursesResponse>(
         API_ROUTES.teacher.courses,
       );
-      setCourses(response.data.courses || []);
+
+      setCourses(response.data.courses ?? []);
     } catch (error) {
       setApiError(getApiErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (!courseId) loadCourses();
-  }, [courseId]);
+    let mounted = true;
 
-  if (courseId) {
-    return <CourseDetail />;
-  }
+    async function loadInitialCourses() {
+      if (!mounted) return;
+      await loadCourses();
+    }
 
-  const handleCreateCourse = async (event: FormEvent) => {
+    void loadInitialCourses();
+
+    return () => {
+      mounted = false;
+    };
+  }, [loadCourses]);
+
+  const handleCreateCourse = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!courseName.trim() || !courseCode.trim()) {
+    const cleanCourseName = courseName.trim();
+    const cleanCourseCode = courseCode.trim().toUpperCase();
+
+    if (!cleanCourseName || !cleanCourseCode) {
       setApiError("Course name and course code are required.");
       return;
     }
+
+    if (isCreating) return;
 
     setIsCreating(true);
     setApiError(null);
     setSuccessMsg(null);
 
     try {
-      await api.post(API_ROUTES.teacher.courses, {
-        course_name: courseName.trim(),
-        course_code: courseCode.trim(),
+      const response = await api.post(API_ROUTES.teacher.courses, {
+        course_name: cleanCourseName,
+        course_code: cleanCourseCode,
       });
 
       setCourseName("");
       setCourseCode("");
-      setSuccessMsg("Course created successfully.");
+      setSuccessMsg(response.data?.message || "Course created successfully.");
+
       await loadCourses();
     } catch (error) {
       setApiError(getApiErrorMessage(error));

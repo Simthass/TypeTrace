@@ -1,5 +1,3 @@
-// frontend/src/pages/teacher/TeacherCourseDetailPage.tsx
-
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 

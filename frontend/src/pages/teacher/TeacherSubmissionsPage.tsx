@@ -1,5 +1,3 @@
-// frontend/src/pages/teacher/TeacherSubmissionsPage.tsx
-
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -185,16 +183,25 @@ export default function TeacherSubmissionsPage() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const queryParams = useMemo(() => {
-    const params = new URLSearchParams();
-    params.set("limit", "100");
-    params.set("offset", "0");
+  const requestParams = useMemo(() => {
+    const params: Record<string, string> = {
+      limit: "100",
+      offset: "0",
+    };
 
-    if (reviewStatus !== "ALL") params.set("review_status", reviewStatus);
-    if (riskLevel !== "ALL") params.set("risk_level", riskLevel);
-    if (search.trim()) params.set("search", search.trim());
+    if (reviewStatus !== "ALL") {
+      params.review_status = reviewStatus;
+    }
 
-    return params.toString();
+    if (riskLevel !== "ALL") {
+      params.risk_level = riskLevel;
+    }
+
+    if (search.trim()) {
+      params.search = search.trim();
+    }
+
+    return params;
   }, [reviewStatus, riskLevel, search]);
 
   useEffect(() => {
@@ -206,7 +213,8 @@ export default function TeacherSubmissionsPage() {
 
       try {
         const response = await api.get<TeacherSubmissionsResponse>(
-          `${API_ROUTES.teacher.sessions}?${queryParams}`,
+          API_ROUTES.teacher.sessions,
+          { params: requestParams },
         );
         if (!mounted) return;
         setSubmissions(response.data.sessions || []);
@@ -224,7 +232,7 @@ export default function TeacherSubmissionsPage() {
     return () => {
       mounted = false;
     };
-  }, [queryParams]);
+  }, [requestParams]);
 
   return (
     <div

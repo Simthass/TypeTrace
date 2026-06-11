@@ -1,5 +1,3 @@
-// frontend/src/pages/teacher/TeacherStudentsPage.tsx
-
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -68,15 +66,17 @@ export default function TeacherStudentsPage() {
     if (!query) return students;
 
     return students.filter((student) => {
-      return (
-        student.student_name.toLowerCase().includes(query) ||
-        student.email.toLowerCase().includes(query) ||
-        String(student.student_id || "")
-          .toLowerCase()
-          .includes(query) ||
-        student.course_name.toLowerCase().includes(query) ||
-        student.course_code.toLowerCase().includes(query)
-      );
+      const haystack = [
+        student.student_name,
+        student.email,
+        student.student_id,
+        student.course_name,
+        student.course_code,
+      ]
+        .map((value) => String(value || "").toLowerCase())
+        .join(" ");
+
+      return haystack.includes(query);
     });
   }, [students, search]);
 
