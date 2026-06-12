@@ -20,6 +20,7 @@ sync_engine = create_engine(settings.sync_database_url, pool_pre_ping=True)
 
 LONG_PAUSE_THRESHOLD_MS = 2000
 COGNITIVE_PAUSE_THRESHOLD_MS = 5000
+MAX_REPLAY_EVENTS = 25000
 
 
 def _format_datetime(value: Any) -> str:
@@ -350,6 +351,12 @@ async def get_replay_audit(
     Students can replay their own sessions.
     Teachers can replay submissions linked to their courses.
     """
+    if session_id <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid session ID.",
+        )
+
     row = _fetch_replay_row(session_id)
 
     if row is None:
@@ -362,6 +369,11 @@ async def get_replay_audit(
 
     raw_events = _parse_raw_events(row.get("raw_keystroke_data"))
     events = _normalize_events(raw_events)
+    is_truncated = len(events) > MAX_REPLAY_EVENTS
+
+    if is_truncated:
+        events = events[:MAX_REPLAY_EVENTS]
+
     metrics = _compute_replay_metrics(events, row)
     timeline_markers = _build_timeline_markers(events)
 
@@ -405,6 +417,8 @@ async def get_replay_audit(
             "has_cognitive_pauses": metrics["cognitive_pause_count"] > 0,
             "has_deletions": metrics["deletion_count"] > 0,
             "integrity_hash": row.get("document_hash"),
+            "is_truncated": is_truncated,
+            "max_events_returned": MAX_REPLAY_EVENTS,
         },
     }
 

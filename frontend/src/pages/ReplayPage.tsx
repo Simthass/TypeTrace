@@ -1,5 +1,3 @@
-// frontend/src/pages/ReplayPage.tsx
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -334,7 +332,7 @@ export default function ReplayPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
 
-  const [data, setData] = useState<ReplayResponse | null>(null);
+  const [replay, setReplay] = useState<ReplayResponse | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -343,130 +341,160 @@ export default function ReplayPage() {
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [viewMode, setViewMode] = useState<"document" | "events">("document");
 
-  const animationRef = useRef<number | null>(null);
-  const lastTickRef = useRef<number>(0);
+  const playbackTimerRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
+  const loadReplay = useCallback(async () => {
+    const cleanSessionId = sessionId?.trim();
 
-    async function loadReplay() {
-      if (!sessionId) {
-        setApiError("Session ID is missing.");
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      setApiError(null);
-
-      try {
-        const response = await api.get<ReplayResponse>(
-          API_ROUTES.sessions.replay(sessionId),
-        );
-        if (!mounted) return;
-
-        setData(response.data);
-        setCurrentTimeMs(0);
-        setIsPlaying(false);
-      } catch (error) {
-        if (!mounted) return;
-        setApiError(getApiErrorMessage(error));
-      } finally {
-        if (mounted) setIsLoading(false);
-      }
+    if (!cleanSessionId) {
+      setApiError("Replay session ID is missing.");
+      setIsLoading(false);
+      return;
     }
 
-    loadReplay();
+    if (!/^\d+$/.test(cleanSessionId)) {
+      setApiError("Replay session ID is invalid.");
+      setIsLoading(false);
+      return;
+    }
 
-    return () => {
-      mounted = false;
-    };
+    setIsLoading(true);
+    setApiError(null);
+
+    try {
+      const response = await api.get<ReplayResponse>(
+        API_ROUTES.sessions.replay(cleanSessionId),
+      );
+
+      setReplay(response.data);
+      setIsPlaying(false);
+      setCurrentTimeMs(0);
+    } catch (error) {
+      setApiError(getApiErrorMessage(error));
+      setReplay(null);
+    } finally {
+      setIsLoading(false);
+    }
   }, [sessionId]);
 
+  useEffect(() => {
+    void loadReplay();
+  }, [loadReplay]);
+
+  useEffect(() => {
+    return () => {
+      if (playbackTimerRef.current) {
+        window.clearInterval(playbackTimerRef.current);
+        playbackTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setIsPlaying(false);
+    setCurrentTimeMs(0);
+
+    if (playbackTimerRef.current) {
+      window.clearInterval(playbackTimerRef.current);
+      playbackTimerRef.current = null;
+    }
+  }, [replay?.session.id]);
+
   const maxTimeMs = useMemo(() => {
-    if (!data) return 1000;
+    if (!replay) return 1000;
 
     const lastEventTime =
-      data.events.length > 0
-        ? data.events[data.events.length - 1].relative_time_ms
+      replay.events.length > 0
+        ? replay.events[replay.events.length - 1].relative_time_ms
         : 0;
 
-    return Math.max(data.session.duration_ms, lastEventTime, 1000);
-  }, [data]);
+    return Math.max(replay.session.duration_ms, lastEventTime, 1000);
+  }, [replay]);
+
+  const playbackProgress = useMemo(() => {
+    const replayDurationMs = Math.max(replay?.session.duration_ms ?? 0, 1);
+    return Math.min(100, Math.max(0, (currentTimeMs / replayDurationMs) * 100));
+  }, [currentTimeMs, replay]);
 
   const activeEventIndex = useMemo(() => {
-    if (!data) return 0;
-    return data.events.filter(
+    if (!replay) return 0;
+    return replay.events.filter(
       (event) => event.relative_time_ms <= currentTimeMs,
     ).length;
-  }, [data, currentTimeMs]);
+  }, [replay, currentTimeMs]);
 
   const activeEvent = useMemo(() => {
-    if (!data || activeEventIndex === 0) return null;
-    return data.events[Math.min(activeEventIndex - 1, data.events.length - 1)];
-  }, [data, activeEventIndex]);
+    if (!replay || activeEventIndex === 0) return null;
+    return replay.events[
+      Math.min(activeEventIndex - 1, replay.events.length - 1)
+    ];
+  }, [replay, activeEventIndex]);
 
   const visibleSegments = useMemo(() => {
-    if (!data) return [];
-    return buildSegments(data.events, currentTimeMs);
-  }, [data, currentTimeMs]);
+    if (!replay) return [];
+    return buildSegments(replay.events, currentTimeMs);
+  }, [replay, currentTimeMs]);
 
   const visibleEvents = useMemo(() => {
-    if (!data) return [];
-    return data.events.filter(
+    if (!replay) return [];
+    return replay.events.filter(
       (event) => event.relative_time_ms <= currentTimeMs,
     );
-  }, [data, currentTimeMs]);
+  }, [replay, currentTimeMs]);
 
-  const replayLoop = useCallback(
-    (timestamp: number) => {
-      if (lastTickRef.current === 0) {
-        lastTickRef.current = timestamp;
+  const togglePlayback = () => {
+    if (!replay || replay.events.length === 0) return;
+
+    if (isPlaying) {
+      if (playbackTimerRef.current) {
+        window.clearInterval(playbackTimerRef.current);
+        playbackTimerRef.current = null;
       }
 
-      const delta = timestamp - lastTickRef.current;
-      lastTickRef.current = timestamp;
+      setIsPlaying(false);
+      return;
+    }
 
-      setCurrentTimeMs((previous) => {
-        const next = previous + delta * playbackSpeed;
+    if (currentTimeMs >= maxTimeMs) {
+      setCurrentTimeMs(0);
+    }
+
+    setIsPlaying(true);
+
+    playbackTimerRef.current = window.setInterval(() => {
+      setCurrentTimeMs((current) => {
+        const next = current + 16 * playbackSpeed;
 
         if (next >= maxTimeMs) {
+          if (playbackTimerRef.current) {
+            window.clearInterval(playbackTimerRef.current);
+            playbackTimerRef.current = null;
+          }
+
           setIsPlaying(false);
           return maxTimeMs;
         }
 
         return next;
       });
-
-      animationRef.current = window.requestAnimationFrame(replayLoop);
-    },
-    [maxTimeMs, playbackSpeed],
-  );
-
-  useEffect(() => {
-    if (isPlaying) {
-      lastTickRef.current = 0;
-      animationRef.current = window.requestAnimationFrame(replayLoop);
-    } else if (animationRef.current !== null) {
-      window.cancelAnimationFrame(animationRef.current);
-      animationRef.current = null;
-    }
-
-    return () => {
-      if (animationRef.current !== null) {
-        window.cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, [isPlaying, replayLoop]);
+    }, 16);
+  };
 
   const handleScrub = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!replay) return;
+
     const rect = event.currentTarget.getBoundingClientRect();
     const percentage = (event.clientX - rect.left) / rect.width;
     const nextTime = Math.max(0, Math.min(maxTimeMs, percentage * maxTimeMs));
     setCurrentTimeMs(nextTime);
   };
 
-  const handleReset = () => {
+  const resetPlayback = () => {
+    if (playbackTimerRef.current) {
+      window.clearInterval(playbackTimerRef.current);
+      playbackTimerRef.current = null;
+    }
+
     setIsPlaying(false);
     setCurrentTimeMs(0);
   };
@@ -498,7 +526,7 @@ export default function ReplayPage() {
     );
   }
 
-  if (apiError || !data) {
+  if (apiError || !replay) {
     return (
       <div
         className="flex min-h-screen items-center justify-center px-6"
@@ -539,11 +567,7 @@ export default function ReplayPage() {
     );
   }
 
-  const badge = classificationStyle(data.session.classification_bucket);
-  const progress = Math.min(
-    100,
-    Math.max(0, (currentTimeMs / maxTimeMs) * 100),
-  );
+  const badge = classificationStyle(replay.session.classification_bucket);
 
   return (
     <div className="min-h-screen" style={{ background: colors.surface[50] }}>
@@ -572,7 +596,7 @@ export default function ReplayPage() {
                   className="text-[17px] font-semibold"
                   style={{ color: colors.text.primary }}
                 >
-                  Replay Audit: {data.session.title}
+                  Replay Audit: {replay.session.title}
                 </h1>
                 <span
                   className="rounded-md border px-2.5 py-1 text-[11px] font-semibold"
@@ -590,17 +614,20 @@ export default function ReplayPage() {
                 className="mt-1 text-[12px]"
                 style={{ color: colors.text.secondary }}
               >
-                {data.session.student_name || data.session.student_id} ·{" "}
-                {data.session.course_name || "Personal session"} ·{" "}
-                {data.session.created_at}
+                {replay.session.student_name || replay.session.student_id} ·{" "}
+                {replay.session.course_name || "Personal session"} ·{" "}
+                {replay.session.created_at}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {data.session.certificate_id && (
+            {replay.session.certificate_id && (
               <Link
-                to={`/verify/${data.session.certificate_id}`}
+                to={ROUTES.VERIFY.replace(
+                  ":certId",
+                  replay.session.certificate_id,
+                )}
                 className="rounded-md border px-3 py-2 text-[12px] font-semibold"
                 style={{
                   borderColor: colors.surface[200],
@@ -613,7 +640,7 @@ export default function ReplayPage() {
 
             <button
               type="button"
-              onClick={handleReset}
+              onClick={resetPlayback}
               className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-[12px] font-semibold"
               style={{
                 borderColor: colors.surface[200],
@@ -626,10 +653,7 @@ export default function ReplayPage() {
 
             <button
               type="button"
-              onClick={() => {
-                if (currentTimeMs >= maxTimeMs) setCurrentTimeMs(0);
-                setIsPlaying((previous) => !previous);
-              }}
+              onClick={togglePlayback}
               className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-[12px] font-semibold text-white"
               style={{ background: colors.brand }}
             >
@@ -642,6 +666,33 @@ export default function ReplayPage() {
 
       <main className="mx-auto grid max-w-7xl gap-5 px-6 py-6 lg:grid-cols-[1fr_340px]">
         <section className="space-y-5">
+          {replay?.audit.is_truncated && (
+            <div
+              className="rounded-md border p-4"
+              style={{
+                borderColor: brand.suspiciousAccent,
+                background: brand.suspiciousBg,
+              }}
+            >
+              <p
+                className="text-[13px] font-bold"
+                style={{ color: brand.suspiciousText }}
+              >
+                Replay truncated for performance
+              </p>
+
+              <p
+                className="mt-1 text-[12px] leading-5"
+                style={{ color: brand.suspiciousText }}
+              >
+                This session contains more events than the replay viewer can
+                safely render at once. The audit summary remains available, but
+                only the first {replay.audit.max_events_returned} events are
+                shown.
+              </p>
+            </div>
+          )}
+
           {activeEvent?.is_cognitive_pause && (
             <div
               className="rounded-md border px-4 py-3 text-[13px]"
@@ -703,7 +754,32 @@ export default function ReplayPage() {
               </div>
             </div>
 
-            {viewMode === "document" ? (
+            {replay.events.length === 0 ? (
+              <div
+                className="rounded-md border p-5"
+                style={{
+                  borderColor: colors.surface[200],
+                  background: colors.surface[100],
+                }}
+              >
+                <p
+                  className="text-[14px] font-bold"
+                  style={{ color: colors.text.primary }}
+                >
+                  No replayable keystroke events
+                </p>
+
+                <p
+                  className="mt-2 text-[13px] leading-6"
+                  style={{ color: colors.text.secondary }}
+                >
+                  This session exists, but TypeTrace could not find replayable
+                  event data. The summary metrics and certificate record may
+                  still be available, but playback cannot be reconstructed for
+                  this session.
+                </p>
+              </div>
+            ) : viewMode === "document" ? (
               <div
                 className="min-h-[440px] whitespace-pre-wrap rounded-md border p-5 font-mono text-[14px] leading-7"
                 style={{
@@ -790,7 +866,7 @@ export default function ReplayPage() {
                   borderColor: colors.surface[200],
                 }}
               >
-                {data.timeline_markers.map((marker) => (
+                {replay.timeline_markers.map((marker) => (
                   <span
                     key={`${marker.type}-${marker.event_index}-${marker.relative_time_ms}`}
                     className="absolute top-0 h-full"
@@ -806,7 +882,7 @@ export default function ReplayPage() {
                 <div
                   className="h-full"
                   style={{
-                    width: `${progress}%`,
+                    width: `${playbackProgress}%`,
                     background: colors.brand,
                   }}
                 />
@@ -815,7 +891,7 @@ export default function ReplayPage() {
               <div
                 className="absolute top-[9px] h-4 w-4 rounded-full shadow-sm"
                 style={{
-                  left: `calc(${progress}% - 8px)`,
+                  left: `calc(${playbackProgress}% - 8px)`,
                   background: colors.text.primary,
                 }}
               />
@@ -875,23 +951,23 @@ export default function ReplayPage() {
             <div className="mt-4 grid gap-3">
               <MetricCard
                 label="Confidence"
-                value={`${data.session.confidence}%`}
-                sub={data.session.risk_level}
+                value={`${replay.session.confidence}%`}
+                sub={replay.session.risk_level}
               />
               <MetricCard
                 label="Progress"
-                value={`${activeEventIndex}/${data.events.length}`}
+                value={`${activeEventIndex}/${replay.events.length}`}
                 sub="events replayed"
               />
               <MetricCard
                 label="WPM"
-                value={data.metrics.wpm}
-                sub={`${data.session.word_count} words`}
+                value={replay.metrics.wpm}
+                sub={`${replay.session.word_count} words`}
               />
               <MetricCard
                 label="Duration"
-                value={formatLongTime(data.session.duration_ms)}
-                sub={`${data.metrics.active_time_pct}% active intervals`}
+                value={formatLongTime(replay.session.duration_ms)}
+                sub={`${replay.metrics.active_time_pct}% active intervals`}
               />
             </div>
           </div>
@@ -909,23 +985,23 @@ export default function ReplayPage() {
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
               {[
-                ["Avg IKI", `${metricValue(data.metrics.avg_iki)}ms`],
-                ["Mean Dwell", `${metricValue(data.metrics.dwell_time)}ms`],
+                ["Avg IKI", `${metricValue(replay.metrics.avg_iki)}ms`],
+                ["Mean Dwell", `${metricValue(replay.metrics.dwell_time)}ms`],
                 [
                   "Mean Flight",
-                  `${metricValue(data.metrics.mean_flight_ms)}ms`,
+                  `${metricValue(replay.metrics.mean_flight_ms)}ms`,
                 ],
                 [
                   "Longest Pause",
-                  formatLongTime(data.metrics.longest_pause_ms),
+                  formatLongTime(replay.metrics.longest_pause_ms),
                 ],
-                ["Paste Events", data.metrics.paste_count],
-                ["Deletion Count", data.metrics.deletion_count],
+                ["Paste Events", replay.metrics.paste_count],
+                ["Deletion Count", replay.metrics.deletion_count],
                 [
                   "Deletion Ratio",
-                  `${Math.round(data.metrics.deletion_ratio * 100)}%`,
+                  `${Math.round(replay.metrics.deletion_ratio * 100)}%`,
                 ],
-                ["Cognitive Pauses", data.metrics.cognitive_pause_count],
+                ["Cognitive Pauses", replay.metrics.cognitive_pause_count],
               ].map(([label, value]) => (
                 <div
                   key={label}
@@ -961,8 +1037,8 @@ export default function ReplayPage() {
             </h2>
 
             <div className="mt-4 max-h-[300px] space-y-2 overflow-auto">
-              {data.timeline_markers.length ? (
-                data.timeline_markers.map((marker) => (
+              {replay.timeline_markers.length ? (
+                replay.timeline_markers.map((marker) => (
                   <div
                     key={`${marker.type}-${marker.event_index}`}
                     className="rounded-md border px-3 py-2"
@@ -1003,6 +1079,28 @@ export default function ReplayPage() {
               className="text-[15px] font-semibold"
               style={{ color: colors.text.primary }}
             >
+              Audit interpretation
+            </h2>
+
+            <p
+              className="mt-3 text-[14px] leading-7"
+              style={{ color: colors.text.secondary }}
+            >
+              This replay reconstructs the recorded writing-session event stream
+              using captured keystroke timing, pause, deletion, and paste
+              metadata. It should be interpreted as supporting behavioral
+              evidence, not as absolute proof of authorship or misconduct.
+            </p>
+          </div>
+
+          <div
+            className="rounded-md border bg-white p-5 shadow-sm"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <h2
+              className="text-[15px] font-semibold"
+              style={{ color: colors.text.primary }}
+            >
               Integrity
             </h2>
 
@@ -1010,13 +1108,16 @@ export default function ReplayPage() {
               className="mt-3 break-all font-mono text-[11px]"
               style={{ color: colors.text.secondary }}
             >
-              {data.session.document_hash || "No document hash available."}
+              {replay.session.document_hash || "No document hash available."}
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              {data.session.certificate_id && (
+              {replay.session.certificate_id && (
                 <Link
-                  to={`/verify/${data.session.certificate_id}`}
+                  to={ROUTES.VERIFY.replace(
+                    ":certId",
+                    replay.session.certificate_id,
+                  )}
                   className="rounded-md px-3 py-2 text-[12px] font-semibold text-white"
                   style={{ background: colors.brand }}
                 >
