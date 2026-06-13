@@ -2,14 +2,14 @@
 
 import { Outlet } from "react-router-dom";
 
-import Header from "./Header";
 import Footer from "./Footer";
+import Header from "./Header";
 import { colors } from "../../styles/colors";
 
 export default function RootLayout() {
   return (
     <div
-      className="flex min-h-dvh flex-col"
+      className="flex min-h-dvh flex-col antialiased"
       style={{ background: colors.surface[50] }}
     >
       <Header />

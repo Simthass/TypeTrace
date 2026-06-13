@@ -1,26 +1,5 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import {
-  AlertCircle,
-  ArrowRight,
-  Check,
-  CheckCircle2,
-  Clock3,
-  FileCheck2,
-  FileText,
-  GitBranch,
-  Keyboard,
-  LockKeyhole,
-  MessageSquare,
-  PlayCircle,
-  Plus,
-  QrCode,
-  ScanLine,
-  ShieldCheck,
-  Sparkles,
-  UserCheck,
-  Users,
-} from "lucide-react";
 import {
   AnimatePresence,
   motion,
@@ -32,6 +11,13 @@ import {
 
 import { ROUTES } from "../constants/routes";
 import { brand, colors } from "../styles/colors";
+import {
+  PublicCard,
+  PublicIcon,
+  PublicSection,
+  PublicShell,
+  SectionHeading,
+} from "../components/public/PublicVisualSystem";
 
 const DASHBOARD_PREVIEW_SRC = "/dashboard-mockup.png";
 
@@ -46,20 +32,24 @@ const IMAGE_PATHS = {
   studentTeacher: "/student-teacher-workflow.png",
 };
 
-function sa(hex: string, twoDigitHex: string) {
-  return `${hex}${twoDigitHex}`;
+type PublicIconName = ComponentProps<typeof PublicIcon>["name"];
+
+function withAlpha(hex: string, alpha: string) {
+  return `${hex}${alpha}`;
 }
 
 function HeroGridBackground() {
   const cols = 12;
   const rows = 7;
+
   const colPositions = Array.from(
     { length: cols + 1 },
-    (_, i) => `${(i / cols) * 100}%`,
+    (_, index) => `${(index / cols) * 100}%`,
   );
+
   const rowPositions = Array.from(
     { length: rows + 1 },
-    (_, i) => `${(i / rows) * 100}%`,
+    (_, index) => `${(index / rows) * 100}%`,
   );
 
   return (
@@ -71,7 +61,7 @@ function HeroGridBackground() {
         aria-hidden="true"
       >
         <defs>
-          <linearGradient id="hg-fade-y" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="home-grid-fade-y" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={colors.surface[50]} stopOpacity="0" />
             <stop offset="14%" stopColor={colors.surface[50]} stopOpacity="1" />
             <stop offset="74%" stopColor={colors.surface[50]} stopOpacity="1" />
@@ -81,7 +71,8 @@ function HeroGridBackground() {
               stopOpacity="0"
             />
           </linearGradient>
-          <radialGradient id="hg-center" cx="50%" cy="36%" r="54%">
+
+          <radialGradient id="home-grid-center" cx="50%" cy="36%" r="54%">
             <stop offset="0%" stopColor={colors.surface[50]} stopOpacity="1" />
             <stop
               offset="100%"
@@ -89,15 +80,16 @@ function HeroGridBackground() {
               stopOpacity="0"
             />
           </radialGradient>
-          <mask id="hg-mask">
-            <rect width="100%" height="100%" fill="url(#hg-fade-y)" />
+
+          <mask id="home-grid-mask">
+            <rect width="100%" height="100%" fill="url(#home-grid-fade-y)" />
           </mask>
         </defs>
 
-        <g mask="url(#hg-mask)" opacity="0.62">
-          {colPositions.map((x, i) => (
+        <g mask="url(#home-grid-mask)" opacity="0.62">
+          {colPositions.map((x, index) => (
             <line
-              key={`c${i}`}
+              key={`column-${index}`}
               x1={x}
               y1="0%"
               x2={x}
@@ -106,9 +98,10 @@ function HeroGridBackground() {
               strokeWidth="1"
             />
           ))}
-          {rowPositions.map((y, i) => (
+
+          {rowPositions.map((y, index) => (
             <line
-              key={`r${i}`}
+              key={`row-${index}`}
               x1="0%"
               y1={y}
               x2="100%"
@@ -117,9 +110,13 @@ function HeroGridBackground() {
               strokeWidth="1"
             />
           ))}
-          {colPositions.map((x, ci) =>
-            rowPositions.map((y, ri) => (
-              <g key={`${ci}-${ri}`} transform={`translate(${x}, ${y})`}>
+
+          {colPositions.map((x, columnIndex) =>
+            rowPositions.map((y, rowIndex) => (
+              <g
+                key={`cross-${columnIndex}-${rowIndex}`}
+                transform={`translate(${x}, ${y})`}
+              >
                 <line
                   x1="-4"
                   y1="0"
@@ -140,13 +137,17 @@ function HeroGridBackground() {
             )),
           )}
         </g>
-        <rect width="100%" height="100%" fill="url(#hg-center)" />
+
+        <rect width="100%" height="100%" fill="url(#home-grid-center)" />
       </svg>
 
       <div
         className="absolute left-1/2 top-[28%] h-[480px] w-[820px] -translate-x-1/2 -translate-y-1/2 rounded-full"
         style={{
-          background: `radial-gradient(ellipse at center, ${sa(colors.brand, "10")} 0%, transparent 68%)`,
+          background: `radial-gradient(ellipse at center, ${withAlpha(
+            colors.brand,
+            "10",
+          )} 0%, transparent 68%)`,
           filter: "blur(72px)",
         }}
       />
@@ -154,27 +155,27 @@ function HeroGridBackground() {
   );
 }
 
-function FloatCard({
+function FloatingCard({
   children,
-  posClass,
+  positionClass,
   rotate,
   delay,
   floatAmp = 8,
 }: {
   children: ReactNode;
-  posClass: string;
+  positionClass: string;
   rotate: number;
   delay: number;
   floatAmp?: number;
 }) {
-  const reduced = useReducedMotion();
+  const reducedMotion = useReducedMotion();
 
   return (
     <motion.div
-      className={`absolute hidden lg:block ${posClass}`}
+      className={`absolute hidden lg:block ${positionClass}`}
       initial={{ opacity: 0, y: 14 }}
       animate={
-        reduced
+        reducedMotion
           ? { opacity: 1, y: 0, rotate }
           : {
               opacity: 1,
@@ -183,7 +184,7 @@ function FloatCard({
             }
       }
       transition={
-        reduced
+        reducedMotion
           ? { duration: 0.5, delay }
           : {
               opacity: { duration: 0.6, delay },
@@ -198,8 +199,8 @@ function FloatCard({
       style={{
         background: colors.surface[50],
         border: `1px solid ${colors.surface[200]}`,
-        borderRadius: 14,
-        boxShadow: `0 8px 28px -8px ${sa(colors.text.primary, "1A")}, 0 2px 8px -4px ${sa(colors.text.primary, "0D")}`,
+        borderRadius: 12,
+        boxShadow: `0 18px 48px ${colors.shadow}`,
       }}
     >
       {children}
@@ -207,79 +208,87 @@ function FloatCard({
   );
 }
 
-function CardStudentMessage() {
+function StudentConcernCard() {
   return (
     <div className="flex w-[248px] flex-col gap-2.5 p-3.5">
       <div className="flex items-center gap-2">
         <div
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
-          style={{ background: brand.aiBg, color: brand.aiAccent }}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+          style={{ background: brand.aiBg, color: brand.aiText }}
         >
-          <AlertCircle size={12} strokeWidth={2.5} />
+          <PublicIcon name="shield" size={14} />
         </div>
+
         <span
           className="text-[10px] font-bold uppercase tracking-widest"
           style={{ color: colors.text.secondary }}
         >
-          Student message
+          Student concern
         </span>
       </div>
+
       <p
         className="text-[12.5px] font-semibold leading-snug"
         style={{ color: colors.text.primary }}
       >
-        "My essay was flagged even though I wrote every word myself."
+        “My essay was flagged even though I wrote every word myself.”
       </p>
+
       <div
         className="flex items-center justify-between border-t pt-2"
         style={{ borderColor: colors.surface[200] }}
       >
         <span className="text-[10px]" style={{ color: colors.text.secondary }}>
-          Academic integrity concern
+          Academic integrity review
         </span>
+
         <span
-          className="rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+          className="rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide"
           style={{ background: brand.aiBg, color: brand.aiText }}
         >
-          Flagged
+          Needs context
         </span>
       </div>
     </div>
   );
 }
 
-function CardTeacherReview() {
+function TeacherReviewCard() {
   return (
     <div className="flex w-[236px] flex-col gap-2.5 p-3.5">
       <div className="flex items-center gap-2">
         <div
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
-          style={{ background: colors.brandSoft, color: brand.action }}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+          style={{ background: colors.brandSoft, color: colors.brand }}
         >
-          <MessageSquare size={12} strokeWidth={2.5} />
+          <PublicIcon name="teacher" size={14} />
         </div>
+
         <span
           className="text-[10px] font-bold uppercase tracking-widest"
           style={{ color: colors.text.secondary }}
         >
-          Review notice
+          Teacher review
         </span>
       </div>
+
       <p
         className="text-[12.5px] font-semibold leading-snug"
         style={{ color: colors.text.primary }}
       >
-        "Can you prove how this draft was written?"
+        “Can you show how this draft was actually written?”
       </p>
+
       <div
         className="flex items-center justify-between border-t pt-2"
         style={{ borderColor: colors.surface[200] }}
       >
         <span className="text-[10px]" style={{ color: colors.text.secondary }}>
-          Teacher review
+          Review request
         </span>
+
         <span
-          className="rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+          className="rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide"
           style={{
             background: brand.suspiciousBg,
             color: brand.suspiciousText,
@@ -294,7 +303,7 @@ function CardTeacherReview() {
 
 function HeroDashboardPreview() {
   const ref = useRef<HTMLDivElement>(null);
-  const reduced = useReducedMotion();
+  const reducedMotion = useReducedMotion();
 
   const { scrollYProgress } = useScroll({
     target: ref,
@@ -304,14 +313,21 @@ function HeroDashboardPreview() {
   const rotateX = useTransform(
     scrollYProgress,
     [0, 1],
-    reduced ? [0, 0] : [14, 0],
+    reducedMotion ? [0, 0] : [14, 0],
   );
-  const y = useTransform(scrollYProgress, [0, 1], reduced ? [0, 0] : [56, 0]);
+
+  const y = useTransform(
+    scrollYProgress,
+    [0, 1],
+    reducedMotion ? [0, 0] : [56, 0],
+  );
+
   const scale = useTransform(
     scrollYProgress,
     [0, 1],
-    reduced ? [1, 1] : [0.95, 1],
+    reducedMotion ? [1, 1] : [0.95, 1],
   );
+
   const opacity = useTransform(scrollYProgress, [0, 0.38], [0.25, 1]);
 
   return (
@@ -323,33 +339,38 @@ function HeroDashboardPreview() {
       <div
         className="pointer-events-none absolute left-1/2 top-[30%] h-[300px] w-[82%] -translate-x-1/2 rounded-full"
         style={{
-          background: sa(colors.brand, "14"),
+          background: withAlpha(colors.brand, "14"),
           filter: "blur(80px)",
           opacity: 0.7,
         }}
       />
+
       <div
         className="pointer-events-none absolute bottom-[-12px] left-1/2 h-[60px] w-[72%] -translate-x-1/2 rounded-full"
         style={{
-          background: sa(colors.text.primary, "18"),
+          background: withAlpha(colors.text.primary, "18"),
           filter: "blur(32px)",
         }}
       />
 
       <motion.div
         initial={
-          reduced
+          reducedMotion
             ? { opacity: 1 }
             : { opacity: 0, y: 72, rotateX: 14, scale: 0.95 }
         }
         animate={
-          reduced
+          reducedMotion
             ? { opacity: 1 }
             : { opacity: 1, y: 0, rotateX: 14, scale: 0.95 }
         }
-        transition={{ duration: 1.1, delay: 0.42, ease: [0.16, 1, 0.3, 1] }}
+        transition={{
+          duration: 1.1,
+          delay: 0.42,
+          ease: [0.16, 1, 0.3, 1],
+        }}
         style={
-          reduced
+          reducedMotion
             ? undefined
             : {
                 rotateX,
@@ -360,7 +381,7 @@ function HeroDashboardPreview() {
                 transformOrigin: "center top",
               }
         }
-        className="relative w-full overflow-hidden rounded-xl border will-change-transform"
+        className="relative w-full overflow-hidden rounded-md border bg-white will-change-transform"
         aria-label="TypeTrace dashboard preview"
       >
         <div
@@ -371,14 +392,15 @@ function HeroDashboardPreview() {
           }}
         >
           <div className="flex gap-1.5">
-            {[colors.red, colors.amber, colors.green].map((c, i) => (
+            {[colors.red, colors.amber, colors.green].map((color) => (
               <div
-                key={i}
+                key={color}
                 className="h-3 w-3 rounded-full"
-                style={{ background: c }}
+                style={{ background: color }}
               />
             ))}
           </div>
+
           <div
             className="mx-auto flex h-6 max-w-[300px] flex-1 items-center justify-center gap-1.5 rounded-md border font-mono text-[11px]"
             style={{
@@ -387,9 +409,10 @@ function HeroDashboardPreview() {
               color: colors.text.secondary,
             }}
           >
-            <LockKeyhole size={10} strokeWidth={2.4} />
+            <PublicIcon name="privacy" size={10} />
             app.typetrace.com
           </div>
+
           <div className="w-12" />
         </div>
 
@@ -404,13 +427,20 @@ function HeroDashboardPreview() {
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-20"
           style={{
-            background: `linear-gradient(180deg, ${sa(colors.surface[50], "30")} 0%, transparent 100%)`,
+            background: `linear-gradient(180deg, ${withAlpha(
+              colors.surface[50],
+              "30",
+            )} 0%, transparent 100%)`,
           }}
         />
+
         <div
-          className="pointer-events-none absolute inset-0 rounded-xl"
+          className="pointer-events-none absolute inset-0 rounded-md"
           style={{
-            boxShadow: `inset 0 1px 0 ${sa(colors.text.light, "CC")}, inset 0 -1px 0 ${sa(colors.surface[200], "A0")}`,
+            boxShadow: `inset 0 1px 0 ${withAlpha(
+              colors.text.light,
+              "CC",
+            )}, inset 0 -1px 0 ${withAlpha(colors.surface[200], "A0")}`,
           }}
         />
       </motion.div>
@@ -419,92 +449,114 @@ function HeroDashboardPreview() {
 }
 
 function HeroSection() {
-  const reduced = useReducedMotion();
-  const t = (n: number) => (reduced ? 0 : n);
+  const reducedMotion = useReducedMotion();
+  const delay = (value: number) => (reducedMotion ? 0 : value);
 
   return (
     <section className="relative flex min-h-screen flex-col items-center overflow-hidden px-6 pb-28 pt-[min(10vh,96px)] text-center">
       <HeroGridBackground />
 
-      <FloatCard
-        posClass="left-[1%] top-[15%] xl:left-[5%] xl:top-[19%]"
+      <FloatingCard
+        positionClass="left-[1%] top-[15%] xl:left-[5%] xl:top-[19%]"
         rotate={-4}
-        delay={t(0.7)}
+        delay={delay(0.7)}
         floatAmp={9}
       >
-        <CardStudentMessage />
-      </FloatCard>
-      <FloatCard
-        posClass="right-[1%] top-[13%] xl:right-[5%] xl:top-[17%]"
+        <StudentConcernCard />
+      </FloatingCard>
+
+      <FloatingCard
+        positionClass="right-[1%] top-[13%] xl:right-[5%] xl:top-[17%]"
         rotate={3.5}
-        delay={t(0.85)}
+        delay={delay(0.85)}
         floatAmp={11}
       >
-        <CardTeacherReview />
-      </FloatCard>
+        <TeacherReviewCard />
+      </FloatingCard>
 
       <div className="relative z-10 flex w-full max-w-[920px] flex-col items-center">
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            duration: 0.58,
+            delay: delay(0.05),
+            ease: [0.22, 1, 0.36, 1],
+          }}
+          className="mb-6 inline-flex items-center gap-2 rounded-md border px-3 py-2 text-[12px] font-bold uppercase tracking-[0.14em]"
+          style={{
+            borderColor: colors.surface[200],
+            background: colors.surface[50],
+            color: colors.brand,
+          }}
+        >
+          <PublicIcon name="shield" size={15} />
+          Behavioral authorship evidence
+        </motion.div>
+
         <motion.h1
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
             duration: 0.68,
-            delay: t(0.14),
+            delay: delay(0.14),
             ease: [0.22, 1, 0.36, 1],
           }}
-          className="mb-7 max-w-[920px] text-[3.6rem] font-bold leading-[0.95] tracking-[-0.06em] sm:text-[5rem] lg:text-[5.8rem]"
+          className="mb-7 max-w-[940px] text-[3.55rem] font-semibold leading-[0.95] tracking-[-0.065em] sm:text-[5rem] lg:text-[5.8rem]"
         >
           <span style={{ color: colors.text.primary }}>
             Authorship evidence,
           </span>
           <br />
-          <span style={{ color: brand.action }}>built as you write.</span>
+          <span style={{ color: colors.brand }}>built as you write.</span>
         </motion.h1>
 
         <motion.p
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.62, delay: t(0.24) }}
-          className="mb-11 max-w-[560px] text-[17px] leading-[1.7]"
+          transition={{ duration: 0.62, delay: delay(0.24) }}
+          className="mb-11 max-w-[620px] text-[17px] leading-[1.75]"
           style={{ color: colors.text.secondary }}
         >
-          TypeTrace captures writing sessions and generates verifiable
-          authorship certificates before academic work is questioned.
+          TypeTrace captures keystroke dynamics, pauses, revisions, paste
+          activity, and timing signals to create reviewable writing evidence
+          before academic work is questioned.
         </motion.p>
 
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.58, delay: t(0.32) }}
+          transition={{ duration: 0.58, delay: delay(0.32) }}
           className="mb-9 flex flex-col items-center gap-3 sm:flex-row"
         >
           <Link
             to={ROUTES.REGISTER}
-            className="group flex items-center gap-2 rounded-md px-8 py-3.5 text-[14.5px] font-semibold transition-all duration-150 hover:opacity-95 active:scale-[0.98]"
+            className="group flex items-center gap-2 rounded-md px-8 py-3.5 text-[14.5px] font-bold transition-all duration-150 hover:opacity-95 active:scale-[0.98]"
             style={{
               color: colors.text.light,
-              background: brand.action,
-              boxShadow: `0 16px 42px -18px ${sa(colors.brand, "B0")}`,
+              background: colors.brand,
+              boxShadow: `0 18px 48px ${colors.shadowStrong}`,
             }}
           >
             Start a writing session
-            <ArrowRight
-              size={16}
-              strokeWidth={2.3}
+            <span
+              aria-hidden="true"
               className="transition-transform duration-150 group-hover:translate-x-0.5"
-            />
+            >
+              →
+            </span>
           </Link>
 
           <Link
             to={ROUTES.VERIFY_LOOKUP}
-            className="flex items-center gap-2 rounded-md border px-8 py-3.5 text-[14.5px] font-semibold transition-all duration-150"
+            className="flex items-center gap-2 rounded-md border px-8 py-3.5 text-[14.5px] font-bold transition-all duration-150 hover:opacity-80"
             style={{
               color: colors.text.primary,
               borderColor: colors.surface[200],
-              background: "transparent",
+              background: colors.surface[50],
             }}
           >
-            <ScanLine size={15} strokeWidth={2.3} />
+            <PublicIcon name="search" size={15} />
             Verify a certificate
           </Link>
         </motion.div>
@@ -514,17 +566,6 @@ function HeroSection() {
         <HeroDashboardPreview />
       </div>
     </section>
-  );
-}
-
-function SectionEyebrow({ children }: { children: ReactNode }) {
-  return (
-    <span
-      className="text-[11px] font-bold uppercase tracking-widest"
-      style={{ color: brand.action }}
-    >
-      {children}
-    </span>
   );
 }
 
@@ -539,13 +580,18 @@ function Reveal({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-60px" });
+  const reducedMotion = useReducedMotion();
 
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, y: 24 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.62, delay, ease: [0.22, 1, 0.36, 1] }}
+      initial={reducedMotion ? false : { opacity: 0, y: 24 }}
+      animate={reducedMotion ? undefined : inView ? { opacity: 1, y: 0 } : {}}
+      transition={{
+        duration: 0.62,
+        delay,
+        ease: [0.22, 1, 0.36, 1],
+      }}
       className={className}
     >
       {children}
@@ -563,21 +609,14 @@ function ImagePanel({
   className?: string;
 }) {
   return (
-    <div
-      className={`overflow-hidden rounded-md border ${className ?? ""}`}
-      style={{
-        background: colors.surface[50],
-        borderColor: colors.surface[200],
-        boxShadow: `0 24px 70px -46px ${sa(colors.text.primary, "66")}`,
-      }}
-    >
+    <PublicCard className={`overflow-hidden ${className ?? ""}`}>
       <img
         src={src}
         alt={alt}
         className="block h-full w-full object-cover object-center"
         loading="lazy"
       />
-    </div>
+    </PublicCard>
   );
 }
 
@@ -586,37 +625,33 @@ function StatCard({
   label,
   value,
 }: {
-  icon: ReactNode;
+  icon: PublicIconName;
   label: string;
   value: string;
 }) {
   return (
-    <div
-      className="rounded-md border p-5"
-      style={{
-        background: colors.surface[50],
-        borderColor: colors.surface[200],
-      }}
-    >
+    <PublicCard className="p-5">
       <div
-        className="mb-4 flex h-9 w-9 items-center justify-center rounded-md"
-        style={{ background: colors.brandSoft, color: brand.action }}
+        className="mb-4 flex h-10 w-10 items-center justify-center rounded-md"
+        style={{ background: colors.brandSoft, color: colors.brand }}
       >
-        {icon}
+        <PublicIcon name={icon} size={18} />
       </div>
+
       <p
         className="text-[13px] font-semibold"
         style={{ color: colors.text.secondary }}
       >
         {label}
       </p>
+
       <p
-        className="mt-1 text-xl font-bold tracking-tight"
+        className="mt-1 text-xl font-semibold tracking-[-0.03em]"
         style={{ color: colors.text.primary }}
       >
         {value}
       </p>
-    </div>
+    </PublicCard>
   );
 }
 
@@ -631,22 +666,22 @@ function ProofStatsSection() {
     >
       <div className="mx-auto grid max-w-[1200px] grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          icon={<Keyboard size={17} strokeWidth={2.4} />}
+          icon="keyboard"
           label="Evidence captured"
           value="Keystrokes, pauses, edits"
         />
         <StatCard
-          icon={<GitBranch size={17} strokeWidth={2.4} />}
+          icon="timeline"
           label="Workflow"
-          value="Write → Verify → Review"
+          value="Write → Analyze → Review"
         />
         <StatCard
-          icon={<ShieldCheck size={17} strokeWidth={2.4} />}
+          icon="shield"
           label="Integrity layer"
           value="Certificate + hash"
         />
         <StatCard
-          icon={<Users size={17} strokeWidth={2.4} />}
+          icon="teacher"
           label="User roles"
           value="Student and teacher"
         />
@@ -662,6 +697,7 @@ const JOURNEY_STEPS = [
     text: "Students write assignments inside a focused TypeTrace editor without changing their normal writing flow.",
     image: IMAGE_PATHS.journeyWrite,
     alt: "Student writing in TypeTrace editor",
+    icon: "document" as PublicIconName,
   },
   {
     number: "02",
@@ -669,6 +705,7 @@ const JOURNEY_STEPS = [
     text: "Keystrokes, pauses, corrections, paste events, and rhythm changes become structured behavioral evidence.",
     image: IMAGE_PATHS.journeyCapture,
     alt: "Behavioral keystroke capture visualization",
+    icon: "keyboard" as PublicIconName,
   },
   {
     number: "03",
@@ -676,6 +713,7 @@ const JOURNEY_STEPS = [
     text: "TypeTrace turns raw session behavior into review-safe authorship signals teachers can understand.",
     image: IMAGE_PATHS.journeyAnalyze,
     alt: "Behavioral authorship analytics dashboard",
+    icon: "model" as PublicIconName,
   },
   {
     number: "04",
@@ -683,93 +721,93 @@ const JOURNEY_STEPS = [
     text: "The final session can be sealed with a certificate, document hash, and public verification record.",
     image: IMAGE_PATHS.journeyCertificate,
     alt: "TypeTrace certificate illustration",
+    icon: "certificate" as PublicIconName,
   },
 ];
 
 function ProcessJourneySection() {
   return (
-    <section
-      className="relative overflow-hidden px-6 py-32 md:px-12"
-      style={{ background: colors.surface[50] }}
-    >
-      <div className="mx-auto max-w-[1180px]">
-        <Reveal className="mx-auto mb-20 max-w-3xl text-center">
-          <SectionEyebrow>How TypeTrace works</SectionEyebrow>
-          <h2
-            className="mt-5 text-[2.5rem] font-bold leading-[1.04] tracking-tight md:text-[4rem]"
-            style={{ color: colors.text.primary }}
-          >
-            A visual evidence trail from writing to verification.
-          </h2>
-          <p
-            className="mt-5 text-lg leading-relaxed"
-            style={{ color: colors.text.secondary }}
-          >
-            Instead of judging only the final text, TypeTrace records how the
-            work was created and turns that process into reviewable evidence.
-          </p>
-        </Reveal>
+    <PublicSection className="py-32">
+      <Reveal className="mx-auto mb-20 max-w-3xl text-center">
+        <SectionHeading
+          align="center"
+          eyebrow="How TypeTrace works"
+          title="A visual evidence trail from writing to verification."
+          description="Instead of judging only the final text, TypeTrace records how the work was created and turns that process into reviewable evidence."
+        />
+      </Reveal>
 
-        <div className="relative">
-          <div
-            className="absolute left-4 top-0 hidden h-full w-px md:left-1/2 md:block"
-            style={{
-              background: `linear-gradient(180deg, transparent 0%, ${colors.surface[200]} 8%, ${colors.surface[200]} 92%, transparent 100%)`,
-            }}
-          />
+      <div className="relative">
+        <div
+          className="absolute left-4 top-0 hidden h-full w-px md:left-1/2 md:block"
+          style={{
+            background: `linear-gradient(180deg, transparent 0%, ${colors.surface[200]} 8%, ${colors.surface[200]} 92%, transparent 100%)`,
+          }}
+        />
 
-          <div className="grid gap-20">
-            {JOURNEY_STEPS.map((step, index) => {
-              const flip = index % 2 === 1;
+        <div className="grid gap-20">
+          {JOURNEY_STEPS.map((step, index) => {
+            const flip = index % 2 === 1;
 
-              return (
-                <Reveal key={step.number}>
-                  <div className="relative grid grid-cols-1 items-center gap-10 md:grid-cols-2 md:gap-16">
-                    <div
-                      className={`absolute left-1/2 top-1/2 hidden h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 md:block`}
-                      style={{
-                        background: brand.action,
-                        borderColor: colors.surface[50],
-                        boxShadow: `0 0 0 1px ${colors.surface[200]}`,
-                      }}
-                    />
+            return (
+              <Reveal key={step.number}>
+                <div className="relative grid grid-cols-1 items-center gap-10 md:grid-cols-2 md:gap-16">
+                  <div
+                    className="absolute left-1/2 top-1/2 hidden h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 md:block"
+                    style={{
+                      background: colors.brand,
+                      borderColor: colors.surface[50],
+                      boxShadow: `0 0 0 1px ${colors.surface[200]}`,
+                    }}
+                  />
 
-                    <div className={flip ? "md:order-2" : ""}>
-                      <div className="max-w-[430px]">
-                        <span
-                          className="font-mono text-sm font-bold"
-                          style={{ color: brand.action }}
-                        >
-                          {step.number}
-                        </span>
-                        <h3
-                          className="mt-3 text-[2rem] font-bold tracking-tight md:text-[2.65rem]"
-                          style={{ color: colors.text.primary }}
-                        >
-                          {step.title}
-                        </h3>
-                        <p
-                          className="mt-4 text-[16px] leading-relaxed"
-                          style={{ color: colors.text.secondary }}
-                        >
-                          {step.text}
-                        </p>
+                  <div className={flip ? "md:order-2" : ""}>
+                    <div className="max-w-[430px]">
+                      <div
+                        className="mb-5 flex h-11 w-11 items-center justify-center rounded-md"
+                        style={{
+                          background: colors.brandSoft,
+                          color: colors.brand,
+                        }}
+                      >
+                        <PublicIcon name={step.icon} />
                       </div>
-                    </div>
 
-                    <ImagePanel
-                      src={step.image}
-                      alt={step.alt}
-                      className={flip ? "md:order-1" : ""}
-                    />
+                      <span
+                        className="font-mono text-sm font-bold"
+                        style={{ color: colors.brand }}
+                      >
+                        {step.number}
+                      </span>
+
+                      <h3
+                        className="mt-3 text-[2rem] font-semibold tracking-[-0.04em] md:text-[2.65rem]"
+                        style={{ color: colors.text.primary }}
+                      >
+                        {step.title}
+                      </h3>
+
+                      <p
+                        className="mt-4 text-[16px] leading-relaxed"
+                        style={{ color: colors.text.secondary }}
+                      >
+                        {step.text}
+                      </p>
+                    </div>
                   </div>
-                </Reveal>
-              );
-            })}
-          </div>
+
+                  <ImagePanel
+                    src={step.image}
+                    alt={step.alt}
+                    className={flip ? "md:order-1" : ""}
+                  />
+                </div>
+              </Reveal>
+            );
+          })}
         </div>
       </div>
-    </section>
+    </PublicSection>
   );
 }
 
@@ -784,43 +822,29 @@ function ComparisonSection() {
     >
       <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-14 lg:grid-cols-[0.9fr_1.1fr]">
         <Reveal>
-          <SectionEyebrow>Why it is different</SectionEyebrow>
-          <h2
-            className="mt-5 text-[2.55rem] font-bold leading-[1.05] tracking-tight md:text-[3.8rem]"
-            style={{ color: colors.text.primary }}
-          >
-            AI detectors guess from the final text.
-            <br />
-            <span style={{ color: brand.action }}>
-              TypeTrace shows the process.
-            </span>
-          </h2>
-          <p
-            className="mt-6 text-lg leading-relaxed"
-            style={{ color: colors.text.secondary }}
-          >
-            A polished essay can look suspicious even when it is authentic.
-            TypeTrace gives reviewers behavioral context: typing rhythm, pauses,
-            corrections, replay, and certificate integrity.
-          </p>
+          <SectionHeading
+            eyebrow="Why it is different"
+            title="AI detectors guess from the final text. TypeTrace shows the process."
+            description="A polished essay can look suspicious even when it is authentic. TypeTrace gives reviewers behavioral context: typing rhythm, pauses, corrections, replay, and certificate integrity."
+          />
 
           <div className="mt-8 grid gap-3">
             {[
-              "Final-text checks are reactive",
-              "Writing behavior is captured while it happens",
-              "Certificates support review without exposing private drafts",
+              "Final-text checks are reactive and often lack context.",
+              "Writing behavior is captured while it happens.",
+              "Certificates support review without exposing private drafts publicly.",
             ].map((item) => (
               <div
                 key={item}
                 className="flex items-start gap-3 text-[15px]"
                 style={{ color: colors.text.secondary }}
               >
-                <CheckCircle2
-                  size={16}
-                  strokeWidth={2.4}
-                  className="mt-0.5 shrink-0"
-                  style={{ color: brand.action }}
-                />
+                <span
+                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
+                  style={{ background: brand.humanBg, color: brand.humanText }}
+                >
+                  <PublicIcon name="shield" size={12} />
+                </span>
                 {item}
               </div>
             ))}
@@ -844,38 +868,34 @@ function RoleCard({
   body,
   points,
 }: {
-  icon: ReactNode;
+  icon: PublicIconName;
   title: string;
   body: string;
   points: string[];
 }) {
   return (
-    <div
-      className="rounded-md border p-7"
-      style={{
-        background: colors.surface[50],
-        borderColor: colors.surface[200],
-        boxShadow: `0 20px 60px -46px ${sa(colors.text.primary, "66")}`,
-      }}
-    >
+    <PublicCard className="p-7">
       <div
         className="mb-5 flex h-11 w-11 items-center justify-center rounded-md"
-        style={{ background: colors.brandSoft, color: brand.action }}
+        style={{ background: colors.brandSoft, color: colors.brand }}
       >
-        {icon}
+        <PublicIcon name={icon} />
       </div>
+
       <h3
-        className="text-2xl font-bold tracking-tight"
+        className="text-2xl font-semibold tracking-[-0.04em]"
         style={{ color: colors.text.primary }}
       >
         {title}
       </h3>
+
       <p
         className="mt-3 text-[15px] leading-relaxed"
         style={{ color: colors.text.secondary }}
       >
         {body}
       </p>
+
       <div className="mt-6 grid gap-3">
         {points.map((point) => (
           <div
@@ -883,86 +903,66 @@ function RoleCard({
             className="flex items-start gap-3 text-[14px]"
             style={{ color: colors.text.secondary }}
           >
-            <Check
-              size={15}
-              strokeWidth={2.5}
-              className="mt-0.5 shrink-0"
-              style={{ color: brand.action }}
-            />
+            <span
+              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
+              style={{ background: colors.brandSoft, color: colors.brand }}
+            >
+              <PublicIcon name="shield" size={12} />
+            </span>
             {point}
           </div>
         ))}
       </div>
-    </div>
+    </PublicCard>
   );
 }
 
 function StudentTeacherSection() {
   return (
-    <section
-      className="px-6 py-32 md:px-12"
-      style={{ background: colors.surface[50] }}
-    >
-      <div className="mx-auto max-w-[1200px]">
-        <Reveal className="mx-auto mb-16 max-w-3xl text-center">
-          <SectionEyebrow>Two-sided workflow</SectionEyebrow>
-          <h2
-            className="mt-5 text-[2.5rem] font-bold leading-[1.05] tracking-tight md:text-[3.8rem]"
-            style={{ color: colors.text.primary }}
-          >
-            Built for students who need proof and teachers who need context.
-          </h2>
+    <PublicSection className="py-32">
+      <Reveal className="mx-auto mb-16 max-w-3xl text-center">
+        <SectionHeading
+          align="center"
+          eyebrow="Two-sided workflow"
+          title="Built for students who need evidence and teachers who need context."
+        />
+      </Reveal>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Reveal>
+          <RoleCard
+            icon="keyboard"
+            title="For students"
+            body="Create authorship evidence while writing, before your work is questioned."
+            points={[
+              "Write inside a focused editor.",
+              "Capture rhythm, edits, pauses, and paste events.",
+              "Generate a certificate for academic review.",
+            ]}
+          />
         </Reveal>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Reveal>
-            <RoleCard
-              icon={<UserCheck size={20} strokeWidth={2.4} />}
-              title="For students"
-              body="Create authorship evidence while writing, before your work is questioned."
-              points={[
-                "Write inside a focused editor",
-                "Capture rhythm, edits, pauses, and paste events",
-                "Generate a certificate for academic review",
-              ]}
-            />
-          </Reveal>
-
-          <Reveal delay={0.08}>
-            <RoleCard
-              icon={<FileSearchIcon />}
-              title="For teachers"
-              body="Review the writing process instead of relying only on AI detector output."
-              points={[
-                "Verify certificate records",
-                "Review session-level evidence",
-                "Use replay and metrics to support fair decisions",
-              ]}
-            />
-          </Reveal>
-        </div>
-
-        <Reveal delay={0.12} className="mt-10">
-          <ImagePanel
-            src={IMAGE_PATHS.studentTeacher}
-            alt="Student and teacher TypeTrace workflow"
+        <Reveal delay={0.08}>
+          <RoleCard
+            icon="teacher"
+            title="For teachers"
+            body="Review the writing process instead of relying only on AI detector output."
+            points={[
+              "Verify certificate records.",
+              "Review session-level evidence.",
+              "Use replay and metrics to support fair decisions.",
+            ]}
           />
         </Reveal>
       </div>
-    </section>
-  );
-}
 
-function FileSearchIcon() {
-  return (
-    <div className="relative h-5 w-5">
-      <FileText size={20} strokeWidth={2.3} />
-      <ScanLine
-        size={10}
-        strokeWidth={2.5}
-        className="absolute -bottom-1 -right-1"
-      />
-    </div>
+      <Reveal delay={0.12} className="mt-10">
+        <ImagePanel
+          src={IMAGE_PATHS.studentTeacher}
+          alt="Student and teacher TypeTrace workflow"
+        />
+      </Reveal>
+    </PublicSection>
   );
 }
 
@@ -984,21 +984,11 @@ function ReplaySection() {
         </Reveal>
 
         <Reveal delay={0.08}>
-          <SectionEyebrow>Replay audit</SectionEyebrow>
-          <h2
-            className="mt-5 text-[2.55rem] font-bold leading-[1.05] tracking-tight md:text-[3.8rem]"
-            style={{ color: colors.text.primary }}
-          >
-            Replay how the document was created.
-          </h2>
-          <p
-            className="mt-6 text-lg leading-relaxed"
-            style={{ color: colors.text.secondary }}
-          >
-            The replay timeline helps reviewers see writing bursts, thinking
-            pauses, deletions, paste events, and revision behavior in one
-            readable audit view.
-          </p>
+          <SectionHeading
+            eyebrow="Replay audit"
+            title="Replay how the document was created."
+            description="The replay timeline helps reviewers see writing bursts, thinking pauses, deletions, paste events, and revision behavior in one readable audit view."
+          />
 
           <div className="mt-8 grid gap-4">
             {[
@@ -1012,35 +1002,35 @@ function ReplaySection() {
                 "Makes edits, deletions, and paste behavior visible.",
               ],
             ].map(([title, body]) => (
-              <div
-                key={title}
-                className="flex gap-4 rounded-md border p-4"
-                style={{
-                  background: colors.surface[50],
-                  borderColor: colors.surface[200],
-                }}
-              >
-                <div
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
-                  style={{ background: colors.brandSoft, color: brand.action }}
-                >
-                  <PlayCircle size={17} strokeWidth={2.4} />
-                </div>
-                <div>
-                  <p
-                    className="text-[14px] font-bold"
-                    style={{ color: colors.text.primary }}
+              <PublicCard key={title} className="p-4">
+                <div className="flex gap-4">
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
+                    style={{
+                      background: colors.brandSoft,
+                      color: colors.brand,
+                    }}
                   >
-                    {title}
-                  </p>
-                  <p
-                    className="mt-1 text-[13px] leading-relaxed"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {body}
-                  </p>
+                    <PublicIcon name="replay" size={17} />
+                  </div>
+
+                  <div>
+                    <p
+                      className="text-[14px] font-bold"
+                      style={{ color: colors.text.primary }}
+                    >
+                      {title}
+                    </p>
+
+                    <p
+                      className="mt-1 text-[13px] leading-relaxed"
+                      style={{ color: colors.text.secondary }}
+                    >
+                      {body}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              </PublicCard>
             ))}
           </div>
         </Reveal>
@@ -1051,51 +1041,36 @@ function ReplaySection() {
 
 function CertificateSection() {
   return (
-    <section
-      className="px-6 py-32 md:px-12"
-      style={{ background: colors.surface[50] }}
-    >
-      <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-14 lg:grid-cols-[0.9fr_1.1fr]">
+    <PublicSection className="py-32">
+      <div className="grid grid-cols-1 items-center gap-14 lg:grid-cols-[0.9fr_1.1fr]">
         <Reveal>
-          <SectionEyebrow>Certificate preview</SectionEyebrow>
-          <h2
-            className="mt-5 text-[2.55rem] font-bold leading-[1.05] tracking-tight md:text-[3.8rem]"
-            style={{ color: colors.text.primary }}
-          >
-            A certificate built for academic review.
-          </h2>
-          <p
-            className="mt-6 text-lg leading-relaxed"
-            style={{ color: colors.text.secondary }}
-          >
-            Each certificate summarizes the writing session with identity-safe
-            metadata, integrity hash, behavioral result, and a public
-            verification route.
-          </p>
+          <SectionHeading
+            eyebrow="Certificate preview"
+            title="A certificate built for academic review."
+            description="Each certificate summarizes the writing session with identity-safe metadata, integrity hash, behavioral result, and a public verification route."
+          />
 
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
             {[
-              ["Certificate ID", <FileCheck2 size={16} strokeWidth={2.4} />],
-              ["SHA-256 hash", <LockKeyhole size={16} strokeWidth={2.4} />],
-              ["QR verification", <QrCode size={16} strokeWidth={2.4} />],
-              ["Session duration", <Clock3 size={16} strokeWidth={2.4} />],
+              ["Certificate ID", "certificate" as PublicIconName],
+              ["SHA-256 hash", "hash" as PublicIconName],
+              ["Public verification", "search" as PublicIconName],
+              ["Session evidence", "timeline" as PublicIconName],
             ].map(([label, icon]) => (
-              <div
-                key={label as string}
-                className="flex items-center gap-3 rounded-md border p-4"
-                style={{
-                  borderColor: colors.surface[200],
-                  background: colors.surface[50],
-                }}
-              >
-                <span style={{ color: brand.action }}>{icon}</span>
-                <span
-                  className="text-[14px] font-semibold"
-                  style={{ color: colors.text.primary }}
-                >
-                  {label as string}
-                </span>
-              </div>
+              <PublicCard key={label} className="p-4">
+                <div className="flex items-center gap-3">
+                  <span style={{ color: colors.brand }}>
+                    <PublicIcon name={icon as PublicIconName} size={16} />
+                  </span>
+
+                  <span
+                    className="text-[14px] font-semibold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {label}
+                  </span>
+                </div>
+              </PublicCard>
             ))}
           </div>
         </Reveal>
@@ -1107,7 +1082,7 @@ function CertificateSection() {
           />
         </Reveal>
       </div>
-    </section>
+    </PublicSection>
   );
 }
 
@@ -1115,7 +1090,7 @@ const TRUST_ITEMS = [
   {
     title: "Process evidence instead of final-text guessing",
     content:
-      "TypeTrace verifies how the document was produced: rhythm, hesitation, revision behavior, paste bursts, deletions, and typing consistency. This makes the evidence stronger than text-only AI detector output.",
+      "TypeTrace records how the document was produced: rhythm, hesitation, revision behavior, paste bursts, deletions, and typing consistency. This gives reviewers more context than text-only AI detector output.",
   },
   {
     title: "Certificate records without exposing private drafts",
@@ -1125,7 +1100,7 @@ const TRUST_ITEMS = [
   {
     title: "Designed for academic review, not automatic punishment",
     content:
-      "TypeTrace should support fair human review. It provides structured evidence that teachers can interpret alongside institutional academic integrity procedures.",
+      "TypeTrace supports fair human review. It provides structured evidence that teachers can interpret alongside institutional academic integrity procedures.",
   },
 ];
 
@@ -1150,7 +1125,7 @@ function TrustAccordion() {
           >
             <div className="flex items-center justify-between gap-6 py-7">
               <h3
-                className="text-xl tracking-tight transition-all duration-200 md:text-2xl"
+                className="text-xl tracking-[-0.03em] transition-all duration-200 md:text-2xl"
                 style={{
                   color: open ? colors.text.primary : colors.text.secondary,
                   fontWeight: open ? 650 : 450,
@@ -1162,14 +1137,16 @@ function TrustAccordion() {
               <motion.div
                 animate={{ rotate: open ? 45 : 0 }}
                 transition={{ duration: 0.22 }}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
                 style={{
-                  background: open ? brand.action : "transparent",
+                  background: open ? colors.brand : "transparent",
                   color: open ? colors.text.light : colors.text.primary,
-                  border: `1.5px solid ${open ? brand.action : colors.surface[200]}`,
+                  border: `1.5px solid ${
+                    open ? colors.brand : colors.surface[200]
+                  }`,
                 }}
               >
-                <Plus size={13} strokeWidth={2.4} />
+                +
               </motion.div>
             </div>
 
@@ -1210,24 +1187,11 @@ function TrustSection() {
       <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-start gap-16 lg:grid-cols-2 lg:gap-24">
         <div className="lg:sticky lg:top-32">
           <Reveal>
-            <SectionEyebrow>Trust architecture</SectionEyebrow>
-          </Reveal>
-          <Reveal delay={0.05}>
-            <h2
-              className="mt-6 text-[2.65rem] font-bold leading-[1.05] tracking-tight md:text-[3.5rem]"
-              style={{ color: colors.text.primary }}
-            >
-              Serious academic evidence needs serious product design.
-            </h2>
-          </Reveal>
-          <Reveal delay={0.1}>
-            <p
-              className="mt-6 text-[17px] leading-relaxed"
-              style={{ color: colors.text.secondary }}
-            >
-              TypeTrace should feel calm, defensible, and professional because
-              the product deals with sensitive academic review workflows.
-            </p>
+            <SectionHeading
+              eyebrow="Trust architecture"
+              title="Serious academic evidence needs serious product design."
+              description="TypeTrace should feel calm, defensible, and professional because the product deals with sensitive academic review workflows."
+            />
           </Reveal>
         </div>
 
@@ -1248,7 +1212,10 @@ function FinalCtaSection() {
       <div
         className="pointer-events-none absolute inset-0"
         style={{
-          background: `radial-gradient(circle at 50% 0%, ${sa(colors.brand, "55")} 0%, transparent 48%)`,
+          background: `radial-gradient(circle at 50% 0%, ${withAlpha(
+            colors.brand,
+            "55",
+          )} 0%, transparent 48%)`,
         }}
       />
 
@@ -1259,7 +1226,7 @@ function FinalCtaSection() {
       >
         <defs>
           <pattern
-            id="cta-dots"
+            id="home-cta-dots"
             x="0"
             y="0"
             width="22"
@@ -1269,7 +1236,7 @@ function FinalCtaSection() {
             <circle cx="1" cy="1" r="1" fill="white" />
           </pattern>
         </defs>
-        <rect width="100%" height="100%" fill="url(#cta-dots)" />
+        <rect width="100%" height="100%" fill="url(#home-cta-dots)" />
       </svg>
 
       <div className="relative z-10 mx-auto flex max-w-[820px] flex-col items-center gap-6">
@@ -1278,35 +1245,35 @@ function FinalCtaSection() {
             className="inline-flex items-center gap-2 rounded-md border px-3.5 py-1.5"
             style={{
               color: colors.text.light,
-              borderColor: sa(colors.text.light, "24"),
-              background: sa(colors.text.light, "08"),
+              borderColor: withAlpha(colors.text.light, "24"),
+              background: withAlpha(colors.text.light, "08"),
             }}
           >
-            <Sparkles size={14} strokeWidth={2.3} />
+            <PublicIcon name="shield" size={14} />
             <span className="text-[12px] font-semibold">
-              Start building an authorship trail today
+              Start building a writing evidence trail
             </span>
           </div>
         </Reveal>
 
         <Reveal delay={0.05}>
           <h2
-            className="text-[2.8rem] font-bold leading-tight tracking-tight md:text-[4.4rem]"
+            className="text-[2.8rem] font-semibold leading-tight tracking-[-0.06em] md:text-[4.4rem]"
             style={{ color: colors.text.light }}
           >
             Stop defending final text.
             <br />
-            Start proving the writing process.
+            Start documenting the writing process.
           </h2>
         </Reveal>
 
         <Reveal delay={0.1}>
           <p
             className="max-w-xl text-[17px] leading-relaxed"
-            style={{ color: sa(colors.text.light, "B8") }}
+            style={{ color: withAlpha(colors.text.light, "B8") }}
           >
             Create a session, write naturally, generate evidence, and share a
-            certificate when your work needs to be verified.
+            certificate when your work needs to be reviewed.
           </p>
         </Reveal>
 
@@ -1314,22 +1281,22 @@ function FinalCtaSection() {
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <Link
               to={ROUTES.REGISTER}
-              className="flex items-center gap-2 rounded-md px-8 py-3.5 text-[15px] font-semibold transition-all hover:opacity-95 active:scale-[0.98]"
-              style={{ background: colors.text.light, color: brand.action }}
+              className="flex items-center gap-2 rounded-md px-8 py-3.5 text-[15px] font-bold transition-all hover:opacity-95 active:scale-[0.98]"
+              style={{ background: colors.text.light, color: colors.brand }}
             >
               Start free session
-              <ArrowRight size={16} strokeWidth={2.3} />
+              <span aria-hidden="true">→</span>
             </Link>
 
             <Link
               to={ROUTES.VERIFY_LOOKUP}
-              className="flex items-center gap-2 rounded-md border px-8 py-3.5 text-[15px] font-semibold transition-all"
+              className="flex items-center gap-2 rounded-md border px-8 py-3.5 text-[15px] font-bold transition-all hover:opacity-80"
               style={{
-                color: sa(colors.text.light, "CC"),
-                borderColor: sa(colors.text.light, "28"),
+                color: withAlpha(colors.text.light, "CC"),
+                borderColor: withAlpha(colors.text.light, "28"),
               }}
             >
-              <ScanLine size={16} strokeWidth={2.3} />
+              <PublicIcon name="search" size={16} />
               Verify certificate
             </Link>
           </div>
@@ -1341,10 +1308,7 @@ function FinalCtaSection() {
 
 export default function HomePage() {
   return (
-    <main
-      className="min-h-screen w-full overflow-x-hidden font-sans"
-      style={{ background: colors.surface[50] }}
-    >
+    <PublicShell>
       <HeroSection />
       <ProofStatsSection />
       <ProcessJourneySection />
@@ -1354,6 +1318,6 @@ export default function HomePage() {
       <CertificateSection />
       <TrustSection />
       <FinalCtaSection />
-    </main>
+    </PublicShell>
   );
 }
