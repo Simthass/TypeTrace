@@ -135,6 +135,54 @@ async def _ensure_student_can_submit_to_course(
         )
 
 
+def _clamp_score(value: Any) -> float:
+    """Clamp score values to 0-100 range, handling NaN/Infinity."""
+    try:
+        score = float(value)
+
+        if score != score:  # NaN check
+            return 0.0
+
+        return round(max(0.0, min(100.0, score)), 2)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _normalize_result_label(value: Any) -> str:
+    """Normalize classification labels to consistent values."""
+    label = str(value or "UNKNOWN").strip().upper()
+
+    if label in {"HUMAN", "SUSPICIOUS", "SYNTHETIC"}:
+        return label
+
+    if label in {"AI", "AI-GENERATED", "AI_GENERATED"}:
+        return "SYNTHETIC"
+
+    if label in {"REAL", "NORMAL"}:
+        return "HUMAN"
+
+    if label in {"UNCERTAIN", "AMBIGUOUS"}:
+        return "SUSPICIOUS"
+
+    return "UNKNOWN"
+
+
+def _normalize_risk_level(value: Any, risk_score: float) -> str:
+    """Normalize risk level with fallback to score-based calculation."""
+    level = str(value or "").strip().upper()
+
+    if level in {"LOW", "MEDIUM", "HIGH"}:
+        return level
+
+    if risk_score >= 70:
+        return "HIGH"
+
+    if risk_score >= 40:
+        return "MEDIUM"
+
+    return "LOW"
+
+
 @router.post(
     "/analyze",
     response_model=AnalysisResponse,
@@ -175,11 +223,17 @@ async def analyze_session(
             stats=payload.stats,
             text_content=payload.text_content,
         )
-    except RuntimeError as exc:
+    except Exception as exc:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        )
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Analysis engine failed to process this writing session.",
+        ) from exc
+
+    # Normalize and bound all ML outputs before persisting
+    classification = _normalize_result_label(result.classification)
+    confidence_score = _clamp_score(result.confidence_score)
+    risk_score = _clamp_score(result.risk_score)
+    risk_level = _normalize_risk_level(result.risk_level, risk_score)
 
     title = _normalize_title(payload.title)
 
@@ -204,12 +258,12 @@ async def analyze_session(
         pauses=int(payload.stats.pauses),
         avg_iki=int(payload.stats.avgIki),
         duration_seconds=float(payload.stats.sessionSeconds),
-        ml_confidence_score=float(result.confidence_score),
-        classification_result=result.classification,
+        ml_confidence_score=confidence_score,
+        classification_result=classification,
         raw_keystroke_data=payload.keystroke_array,
         certificate_id=certificate_id,
         document_hash=document_hash,
-        risk_level=result.risk_level,
+        risk_level=risk_level,
         review_status="PENDING",
     )
 
@@ -233,14 +287,14 @@ async def analyze_session(
         raise
 
     return AnalysisResponse(
-        classification=result.classification,
-        confidence_score=float(result.confidence_score),
+        classification=classification,
+        confidence_score=confidence_score,
         kill_switch_triggered=bool(result.kill_switch_triggered),
         kill_switch_reason=result.kill_switch_reason,
         advanced_stats=result.advanced_stats,
         session_id=int(session.id),
         certificate_id=certificate_id,
         document_hash=document_hash,
-        risk_level=result.risk_level,
-        risk_score=float(result.risk_score),
+        risk_level=risk_level,
+        risk_score=risk_score,
     )
