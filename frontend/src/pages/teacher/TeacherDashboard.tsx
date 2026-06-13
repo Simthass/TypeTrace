@@ -1,567 +1,462 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, type ReactNode } from "react";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { Badge } from "../../components/ui/Badge";
 import { ButtonLink } from "../../components/ui/Button";
-import { Card, CardBody, CardHeader } from "../../components/ui/Card";
-import { EmptyState, PageHeader } from "../../components/ui/PageState";
-import { DashboardSkeleton } from "../../components/ui/Skeleton";
 import { ROUTES } from "../../constants/routes";
-import { api, getApiErrorMessage } from "../../lib/api";
-import { useToast } from "../../components/ui/ToastProvider";
 import { brand, colors } from "../../styles/colors";
-import { API_ROUTES } from "../../constants/apiRoutes";
+import { useAuthStore } from "../../store/authStore";
 
-interface TeacherSummary {
-  total_courses: number;
-  total_students: number;
-  total_submissions: number;
-  pending_reviews: number;
-  approved_reviews: number;
-  flagged_reviews: number;
-  human_submissions: number;
-  suspicious_submissions: number;
-  synthetic_submissions: number;
-  avg_confidence: number;
-  avg_wpm: number;
-}
+// ─── Icon set ─────────────────────────────────────────────────────────────────
 
-interface TeacherCourse {
-  id: number;
-  course_name: string;
-  course_code: string;
-  invite_code: string;
-  student_count: number;
-  submission_count: number;
-  pending_count: number;
-}
-
-interface TeacherSubmission {
-  id: number;
-  title: string;
-  student_name: string;
-  student_id: string;
-  course_name: string;
-  course_code: string;
-  classification: string;
-  classification_bucket: "HUMAN" | "SUSPICIOUS" | "SYNTHETIC" | "UNKNOWN";
-  confidence: number;
-  review_status: string;
-  created_at: string;
-}
-
-interface TeacherDashboardResponse {
-  status: string;
-  summary: TeacherSummary;
-  courses: TeacherCourse[];
-  recent_submissions: TeacherSubmission[];
-}
-
-function fallbackSummary(): TeacherSummary {
-  return {
-    total_courses: 0,
-    total_students: 0,
-    total_submissions: 0,
-    pending_reviews: 0,
-    approved_reviews: 0,
-    flagged_reviews: 0,
-    human_submissions: 0,
-    suspicious_submissions: 0,
-    synthetic_submissions: 0,
-    avg_confidence: 0,
-    avg_wpm: 0,
+function Icon({ type }: { type: string }) {
+  const paths: Record<string, ReactNode> = {
+    dashboard: (
+      <>
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+      </>
+    ),
+    courses: (
+      <>
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+        <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z" />
+      </>
+    ),
+    submissions: (
+      <>
+        <path d="M9 11l3 3L22 4" />
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+      </>
+    ),
+    students: (
+      <>
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </>
+    ),
+    settings: (
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </>
+    ),
+    menu: (
+      <>
+        <path d="M4 6h16" />
+        <path d="M4 12h16" />
+        <path d="M4 18h16" />
+      </>
+    ),
+    close: (
+      <>
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </>
+    ),
+    bell: (
+      <>
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </>
+    ),
+    plus: (
+      <>
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </>
+    ),
   };
-}
-
-function submissionBadge(submission: TeacherSubmission) {
-  if (submission.classification_bucket === "HUMAN") {
-    return {
-      label: "Human",
-      tone: "human" as const,
-    };
-  }
-
-  if (submission.classification_bucket === "SUSPICIOUS") {
-    return {
-      label: "Review",
-      tone: "suspicious" as const,
-    };
-  }
-
-  return {
-    label: "High Risk",
-    tone: "danger" as const,
-  };
-}
-
-function MetricCard({
-  label,
-  value,
-  sub,
-  tone = "brand",
-}: {
-  label: string;
-  value: string | number;
-  sub: string;
-  tone?: "brand" | "green" | "amber" | "red";
-}) {
-  const accent =
-    tone === "green"
-      ? brand.humanAccent
-      : tone === "amber"
-        ? brand.suspiciousAccent
-        : tone === "red"
-          ? brand.aiAccent
-          : colors.brand;
 
   return (
-    <Card className="relative overflow-hidden p-6">
-      <div
-        className="absolute right-[-32px] top-[-32px] h-24 w-24 rounded-full"
-        style={{ background: `${accent}16` }}
-      />
-
-      <p
-        className="text-[11px] font-bold uppercase tracking-[0.16em]"
-        style={{ color: colors.text.secondary }}
-      >
-        {label}
-      </p>
-
-      <p
-        className="mt-4 text-[2rem] font-bold tracking-[-0.05em]"
-        style={{ color: colors.text.primary }}
-      >
-        {value}
-      </p>
-
-      <p className="mt-1 text-[13px]" style={{ color: colors.text.secondary }}>
-        {sub}
-      </p>
-    </Card>
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {paths[type] ?? null}
+    </svg>
   );
 }
 
-function SubmissionRow({ submission }: { submission: TeacherSubmission }) {
-  const badge = submissionBadge(submission);
+// ─── Nav structure ────────────────────────────────────────────────────────────
+
+type TeacherNavItem = {
+  label: string;
+  path: string;
+  icon: string;
+  badge?: string;
+};
+type TeacherNavSection = { label: string; items: TeacherNavItem[] };
+
+const navSections: TeacherNavSection[] = [
+  {
+    label: "Review",
+    items: [
+      { label: "Overview", path: ROUTES.TEACHER_DASHBOARD, icon: "dashboard" },
+      {
+        label: "Submissions",
+        path: ROUTES.TEACHER_SUBMISSIONS,
+        icon: "submissions",
+        badge: "Queue",
+      },
+    ],
+  },
+  {
+    label: "Courses",
+    items: [
+      { label: "Courses", path: ROUTES.TEACHER_COURSES, icon: "courses" },
+      { label: "Students", path: ROUTES.TEACHER_STUDENTS, icon: "students" },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { label: "Settings", path: ROUTES.TEACHER_SETTINGS, icon: "settings" },
+    ],
+  },
+];
+
+// ─── Sidebar content ──────────────────────────────────────────────────────────
+
+function SidebarContent({
+  collapsed,
+  onClose,
+}: {
+  collapsed: boolean;
+  onClose?: () => void;
+}) {
+  const navigate = useNavigate();
+  const { user, logout } = useAuthStore();
+
+  const fullName =
+    `${user?.first_name || "Teacher"} ${user?.last_name || ""}`.trim();
+  const initials =
+    `${(user?.first_name || "T")[0]}${(user?.last_name || "")[0] || ""}`.toUpperCase();
+
+  const handleLogout = () => {
+    logout();
+    onClose?.();
+    navigate(ROUTES.LOGIN);
+  };
 
   return (
-    <div
-      className="rounded-xl border bg-white p-4 transition hover:-translate-y-0.5"
-      style={{
-        borderColor: colors.surface[200],
-        boxShadow: `0 14px 46px -38px ${colors.shadowStrong}`,
-      }}
-    >
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <p
-              className="text-[15px] font-bold"
-              style={{ color: colors.text.primary }}
+    <div className="flex h-full flex-col">
+      {/* Logo */}
+      <div className="flex h-14 items-center px-2">
+        <Link
+          to={ROUTES.TEACHER_DASHBOARD}
+          onClick={onClose}
+          className="flex min-w-0 items-center"
+        >
+          {!collapsed ? (
+            <img
+              src="/Logo.png"
+              alt="TypeTrace"
+              className="h-8 w-auto object-contain"
+            />
+          ) : (
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-[12px] font-extrabold"
+              style={{ background: colors.brand, color: colors.text.light }}
             >
-              {submission.title || "Untitled Document"}
-            </p>
+              TT
+            </div>
+          )}
+        </Link>
+      </div>
 
-            <Badge tone={badge.tone}>{badge.label}</Badge>
-            <Badge tone="neutral">{submission.review_status}</Badge>
-          </div>
+      <div
+        className="mb-4 mt-1 h-px"
+        style={{ background: colors.surface[200] }}
+      />
 
-          <p
-            className="mt-2 text-[13px]"
-            style={{ color: colors.text.secondary }}
-          >
-            {submission.student_name} · {submission.course_code} ·{" "}
-            {submission.created_at}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <p
-              className="text-[10px] font-bold uppercase tracking-[0.14em]"
-              style={{ color: colors.text.secondary }}
-            >
-              Confidence
-            </p>
-
-            <p
-              className="mt-1 text-[15px] font-bold"
-              style={{ color: colors.text.primary }}
-            >
-              {submission.confidence}%
-            </p>
-          </div>
-
-          <ButtonLink
-            to={ROUTES.TEACHER_REVIEW.replace(
-              ":sessionId",
-              String(submission.id),
+      {/* Nav */}
+      <nav className="flex-1 space-y-5 overflow-y-auto">
+        {navSections.map((section) => (
+          <div key={section.label}>
+            {!collapsed && (
+              <p
+                className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.16em]"
+                style={{ color: colors.text.muted }}
+              >
+                {section.label}
+              </p>
             )}
-            size="sm"
+            <div className="space-y-0.5">
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  title={collapsed ? item.label : undefined}
+                  onClick={onClose}
+                  className="relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors duration-100"
+                  style={({ isActive }) => ({
+                    background: isActive ? brand.bgNavActive : "transparent",
+                    color: isActive ? colors.brand : colors.text.secondary,
+                  })}
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive && (
+                        <span
+                          className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full"
+                          style={{ background: colors.brand }}
+                        />
+                      )}
+                      <span className="shrink-0">
+                        <Icon type={item.icon} />
+                      </span>
+                      {!collapsed && (
+                        <>
+                          <span className="flex-1 truncate">{item.label}</span>
+                          {item.badge && (
+                            <span
+                              className="rounded-md px-1.5 py-0.5 text-[10px] font-bold"
+                              style={{
+                                background: brand.suspiciousBg,
+                                color: brand.suspiciousText,
+                              }}
+                            >
+                              {item.badge}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      {/* Profile card */}
+      <div
+        className="mt-4 border-t pt-4"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        {!collapsed ? (
+          <div
+            className="rounded-xl border p-3"
+            style={{
+              borderColor: colors.surface[200],
+              background: colors.surface[100],
+            }}
           >
-            Review
-          </ButtonLink>
-        </div>
+            <div className="flex items-center gap-3">
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-bold"
+                style={{ background: colors.brandSoft, color: colors.brand }}
+              >
+                {initials}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p
+                  className="truncate text-[13px] font-semibold"
+                  style={{ color: colors.text.primary }}
+                >
+                  {fullName}
+                </p>
+                <p
+                  className="truncate text-[11px]"
+                  style={{ color: colors.text.muted }}
+                >
+                  {user?.email}
+                </p>
+              </div>
+              <Badge tone="brand">
+                <span className="text-[9px]">Teacher</span>
+              </Badge>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="mt-3 w-full rounded-lg border px-3 py-2 text-[12px] font-semibold transition hover:opacity-80"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.secondary,
+                background: colors.surface[50],
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-full text-[12px] font-bold"
+              style={{ background: colors.brandSoft, color: colors.brand }}
+            >
+              {initials}
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-[10px] font-semibold"
+              style={{ color: colors.text.muted }}
+            >
+              Out
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function CourseCard({ course }: { course: TeacherCourse }) {
+// ─── Layout ───────────────────────────────────────────────────────────────────
+
+export default function TeacherLayout() {
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const { user } = useAuthStore();
+
+  const sidebarW = collapsed ? 72 : 256;
+
   return (
-    <Link
-      to={ROUTES.TEACHER_COURSE_DETAIL.replace(":courseId", String(course.id))}
-      className="block rounded-xl border bg-white p-5 transition hover:-translate-y-0.5"
-      style={{
-        borderColor: colors.surface[200],
-        boxShadow: `0 18px 70px -52px ${colors.shadowStrong}`,
-      }}
+    <div
+      className="flex min-h-screen"
+      style={{ background: colors.surface[150] }}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3
-            className="text-[15px] font-bold"
-            style={{ color: colors.text.primary }}
-          >
-            {course.course_name}
-          </h3>
-
-          <p
-            className="mt-1 text-[12px]"
-            style={{ color: colors.text.secondary }}
-          >
-            {course.course_code}
-          </p>
-        </div>
-
-        <Badge tone="brand">{course.invite_code}</Badge>
-      </div>
-
-      <div className="mt-5 grid grid-cols-3 gap-3">
-        {[
-          ["Students", course.student_count],
-          ["Sessions", course.submission_count],
-          ["Pending", course.pending_count],
-        ].map(([label, value]) => (
-          <div key={label}>
-            <p
-              className="text-[10px] font-bold uppercase tracking-[0.14em]"
-              style={{ color: colors.text.secondary }}
-            >
-              {label}
-            </p>
-
-            <p
-              className="mt-1 text-[16px] font-bold"
-              style={{ color: colors.text.primary }}
-            >
-              {value}
-            </p>
-          </div>
-        ))}
-      </div>
-    </Link>
-  );
-}
-
-export default function TeacherDashboard() {
-  const toast = useToast();
-
-  const [data, setData] = useState<TeacherDashboardResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadDashboard() {
-      setIsLoading(true);
-
-      try {
-        const response = await api.get<TeacherDashboardResponse>(
-          API_ROUTES.teacher.dashboard,
-        );
-
-        if (!mounted) return;
-        setData(response.data);
-      } catch (error) {
-        if (!mounted) return;
-        toast.error(
-          "Teacher dashboard failed to load",
-          getApiErrorMessage(error),
-        );
-      } finally {
-        if (mounted) setIsLoading(false);
-      }
-    }
-
-    loadDashboard();
-
-    return () => {
-      mounted = false;
-    };
-  }, [toast]);
-
-  const summary = data?.summary || fallbackSummary();
-
-  const reviewRate = useMemo(() => {
-    if (!summary.total_submissions) return 0;
-
-    return Math.round(
-      ((summary.approved_reviews + summary.flagged_reviews) /
-        summary.total_submissions) *
-        100,
-    );
-  }, [summary]);
-
-  if (isLoading) {
-    return <DashboardSkeleton />;
-  }
-
-  return (
-    <div className="space-y-8">
-      <PageHeader
-        eyebrow="Teacher console"
-        title="Review authorship evidence with clarity."
-        description="Prioritize high-risk submissions, monitor course activity, and review student writing trails from one workspace."
-        action={
-          <ButtonLink to={ROUTES.TEACHER_COURSES}>Manage courses</ButtonLink>
-        }
-      />
-
-      <section
-        className="relative overflow-hidden rounded-2xl border bg-white p-6"
-        style={{
-          borderColor: colors.surface[200],
-          boxShadow: `0 24px 90px -58px ${colors.shadowStrong}`,
-        }}
+      {/* Desktop sidebar */}
+      <aside
+        className="fixed inset-y-0 left-0 z-40 hidden flex-col border-r bg-white px-3 py-4 transition-all duration-200 lg:flex"
+        style={{ width: sidebarW, borderColor: colors.surface[200] }}
       >
-        <div
-          className="absolute right-[-80px] top-[-120px] h-72 w-72 rounded-full"
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="absolute -right-3 top-[60px] flex h-6 w-6 items-center justify-center rounded-full border bg-white shadow-sm transition hover:shadow"
           style={{
-            background: brand.suspiciousBg,
-            filter: "blur(34px)",
+            borderColor: colors.surface[200],
+            color: colors.text.secondary,
           }}
-        />
+          aria-label="Toggle sidebar"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              transform: collapsed ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.2s",
+            }}
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+        </button>
+        <SidebarContent collapsed={collapsed} />
+      </aside>
 
-        <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
-          <div>
-            <p
-              className="text-[11px] font-bold uppercase tracking-[0.18em]"
-              style={{ color: colors.brand }}
-            >
-              Review queue
-            </p>
-
-            <h2
-              className="mt-3 text-[2.6rem] font-bold tracking-[-0.06em]"
-              style={{ color: colors.text.primary }}
-            >
-              {summary.pending_reviews} pending reviews
-            </h2>
-
-            <p
-              className="mt-3 max-w-2xl text-[14px] leading-6"
-              style={{ color: colors.text.secondary }}
-            >
-              High-risk and suspicious writing sessions should be reviewed first
-              because they affect academic integrity decisions.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Badge tone="suspicious">
-              {summary.suspicious_submissions} suspicious
-            </Badge>
-            <Badge tone="danger">
-              {summary.synthetic_submissions} high risk
-            </Badge>
-            <Badge tone="human">{summary.approved_reviews} approved</Badge>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Courses"
-          value={summary.total_courses}
-          sub="Active academic modules"
-        />
-        <MetricCard
-          label="Students"
-          value={summary.total_students}
-          sub="Enrolled across courses"
-          tone="green"
-        />
-        <MetricCard
-          label="Pending reviews"
-          value={summary.pending_reviews}
-          sub="Need teacher decision"
-          tone="amber"
-        />
-        <MetricCard
-          label="Review completion"
-          value={`${reviewRate}%`}
-          sub="Approved or flagged"
-        />
-      </section>
-
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_380px]">
-        <Card elevated>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2
-                  className="text-[15px] font-bold"
-                  style={{ color: colors.text.primary }}
-                >
-                  Priority review queue
-                </h2>
-
-                <p
-                  className="mt-1 text-[12px]"
-                  style={{ color: colors.text.secondary }}
-                >
-                  Latest submissions requiring teacher interpretation.
-                </p>
-              </div>
-
-              <ButtonLink
-                to={ROUTES.TEACHER_SUBMISSIONS}
-                variant="secondary"
-                size="sm"
-              >
-                View all
-              </ButtonLink>
-            </div>
-          </CardHeader>
-
-          <CardBody>
-            {!data?.recent_submissions?.length ? (
-              <EmptyState
-                compact
-                icon="review"
-                title="No submissions yet"
-                description="When students submit writing sessions, review-ready evidence will appear here."
-                action={
-                  <ButtonLink to={ROUTES.TEACHER_COURSES} size="sm">
-                    Manage courses
-                  </ButtonLink>
-                }
-              />
-            ) : (
-              <div className="space-y-3">
-                {data.recent_submissions.map((submission) => (
-                  <SubmissionRow key={submission.id} submission={submission} />
-                ))}
-              </div>
-            )}
-          </CardBody>
-        </Card>
-
-        <Card elevated>
-          <CardHeader>
-            <p
-              className="text-[11px] font-bold uppercase tracking-[0.16em]"
-              style={{ color: colors.brand }}
-            >
-              Risk distribution
-            </p>
-
-            <h2
-              className="mt-2 text-xl font-bold tracking-[-0.04em]"
-              style={{ color: colors.text.primary }}
-            >
-              Submission quality
-            </h2>
-          </CardHeader>
-
-          <CardBody className="space-y-5">
-            {[
-              ["Human", summary.human_submissions, brand.humanAccent],
-              [
-                "Review",
-                summary.suspicious_submissions,
-                brand.suspiciousAccent,
-              ],
-              ["High Risk", summary.synthetic_submissions, brand.aiAccent],
-            ].map(([label, value, accent]) => {
-              const total = Math.max(summary.total_submissions, 1);
-              const pct = Math.round((Number(value) / total) * 100);
-
-              return (
-                <div key={label as string}>
-                  <div className="flex justify-between text-[12px]">
-                    <span
-                      className="font-bold"
-                      style={{ color: colors.text.primary }}
-                    >
-                      {label}
-                    </span>
-                    <span style={{ color: colors.text.secondary }}>
-                      {value} · {pct}%
-                    </span>
-                  </div>
-
-                  <div
-                    className="mt-2 h-2 rounded-full"
-                    style={{ background: colors.surface[200] }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${pct}%`,
-                        background: accent as string,
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </CardBody>
-        </Card>
-      </section>
-
-      <section>
-        <div className="mb-4 flex items-end justify-between gap-4">
-          <div>
-            <p
-              className="text-[11px] font-bold uppercase tracking-[0.16em]"
-              style={{ color: colors.brand }}
-            >
-              Courses
-            </p>
-
-            <h2
-              className="mt-2 text-xl font-bold tracking-[-0.04em]"
-              style={{ color: colors.text.primary }}
-            >
-              Active course workspaces
-            </h2>
-          </div>
-
-          <ButtonLink to={ROUTES.TEACHER_COURSES} variant="secondary" size="sm">
-            View courses
-          </ButtonLink>
-        </div>
-
-        {!data?.courses?.length ? (
-          <EmptyState
-            icon="course"
-            title="No courses created yet"
-            description="Create a course workspace and share the invite code with students."
-            action={
-              <ButtonLink to={ROUTES.TEACHER_COURSES}>Create course</ButtonLink>
-            }
+      {/* Mobile sidebar */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            className="absolute inset-0"
+            style={{ background: "rgba(15,23,42,0.4)" }}
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close menu"
           />
-        ) : (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            {data.courses.slice(0, 3).map((course) => (
-              <CourseCard key={course.id} course={course} />
-            ))}
+          <aside
+            className="absolute inset-y-0 left-0 w-[280px] border-r bg-white px-3 py-4"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              className="absolute right-3 top-4 flex h-8 w-8 items-center justify-center rounded-lg border"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.secondary,
+              }}
+            >
+              <Icon type="close" />
+            </button>
+            <SidebarContent
+              collapsed={false}
+              onClose={() => setMobileOpen(false)}
+            />
+          </aside>
+        </div>
+      )}
+
+      {/* Main */}
+      <div className="flex flex-1 flex-col" style={{ marginLeft: sidebarW }}>
+        <header
+          className="sticky top-0 z-30 border-b bg-white/95 backdrop-blur-sm"
+          style={{ borderColor: colors.surface[200] }}
+        >
+          <div className="flex h-14 items-center justify-between gap-4 px-6">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border lg:hidden"
+              style={{
+                borderColor: colors.surface[200],
+                color: colors.text.primary,
+              }}
+            >
+              <Icon type="menu" />
+            </button>
+
+            <p
+              className="hidden text-[11px] font-bold uppercase tracking-[0.16em] lg:block"
+              style={{ color: colors.text.muted }}
+            >
+              Teacher console
+            </p>
+
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                className="relative flex h-9 w-9 items-center justify-center rounded-lg border transition hover:bg-slate-50"
+                style={{
+                  borderColor: colors.surface[200],
+                  color: colors.text.secondary,
+                }}
+                aria-label="Notifications"
+              >
+                <Icon type="bell" />
+                <span
+                  className="absolute right-2 top-2 h-2 w-2 rounded-full"
+                  style={{ background: brand.suspiciousAccent }}
+                />
+              </button>
+              <ButtonLink to={ROUTES.TEACHER_COURSES} size="md">
+                Manage Courses
+              </ButtonLink>
+              <div
+                className="flex h-9 w-9 items-center justify-center rounded-full text-[12px] font-bold"
+                style={{ background: colors.brandSoft, color: colors.brand }}
+              >
+                {`${(user?.first_name || "T")[0]}${(user?.last_name || "")[0] || ""}`.toUpperCase()}
+              </div>
+            </div>
           </div>
-        )}
-      </section>
+        </header>
+
+        <main className="p-6">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
