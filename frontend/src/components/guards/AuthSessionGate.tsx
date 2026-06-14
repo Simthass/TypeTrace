@@ -6,6 +6,7 @@ import { API_ROUTES } from "../../constants/apiRoutes";
 import { api } from "../../lib/api";
 import { colors } from "../../styles/colors";
 import { useAuthStore, type AuthUser } from "../../store/authStore";
+import { toast } from "../../lib/toast";
 
 interface VerifyTokenResponse {
   valid: boolean;
@@ -23,7 +24,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
 
     let cancelled = false;
 
-    const verifyPersistedSession = async () => {
+    async function verifyPersistedSession() {
       if (!token) {
         if (!cancelled) setIsChecking(false);
         return;
@@ -32,6 +33,10 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
       try {
         const response = await api.get<VerifyTokenResponse>(
           API_ROUTES.auth.verifyToken,
+          {
+            skipGlobalToast: true,
+            skipAuthRedirect: true,
+          },
         );
 
         if (cancelled) return;
@@ -44,13 +49,18 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
       } catch {
         if (!cancelled) {
           logout();
+
+          toast.info(
+            "Session check failed",
+            "Please sign in again to continue securely.",
+          );
         }
       } finally {
         if (!cancelled) {
           setIsChecking(false);
         }
       }
-    };
+    }
 
     void verifyPersistedSession();
 
@@ -62,18 +72,26 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
   if (!hasHydrated || isChecking) {
     return (
       <div
-        className="flex min-h-screen items-center justify-center"
+        className="flex min-h-screen items-center justify-center px-4"
         style={{ background: colors.surface[50] }}
       >
         <div
-          className="rounded-md border px-5 py-4 text-[13px] font-semibold"
+          className="w-full max-w-sm rounded-md border px-5 py-4 text-center"
           style={{
             borderColor: colors.surface[200],
             background: colors.surface[100],
             color: colors.text.secondary,
           }}
         >
-          Preparing secure workspace...
+          <img
+            src="/Logo.png"
+            alt="TypeTrace"
+            className="mx-auto h-10 w-auto object-contain"
+            draggable={false}
+          />
+          <p className="mt-4 text-[13px] font-semibold">
+            Preparing secure workspace.
+          </p>
         </div>
       </div>
     );
@@ -81,6 +99,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
 
   if (isAuthenticated && !user) {
     logout();
+    return null;
   }
 
   return <>{children}</>;

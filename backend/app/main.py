@@ -1,12 +1,16 @@
 # backend/app/main.py
 
 import logging
+from datetime import datetime, timezone
+from typing import Any, Dict
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
 
@@ -17,6 +21,36 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("typetrace")
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _error_payload(
+    *,
+    code: str,
+    message: str,
+    path: str,
+    status_code: int,
+    details: Any = None,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "success": False,
+        "error": {
+            "code": code,
+            "message": message,
+            "status_code": status_code,
+            "path": path,
+            "timestamp": _utc_now(),
+        },
+        "detail": message,
+    }
+
+    if details is not None:
+      payload["error"]["details"] = details
+
+    return payload
 
 
 def create_application() -> FastAPI:
@@ -38,15 +72,63 @@ def create_application() -> FastAPI:
 
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        message = str(exc.detail or "Request failed.")
+
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=_error_payload(
+                code=f"HTTP_{exc.status_code}",
+                message=message,
+                path=str(request.url.path),
+                status_code=exc.status_code,
+            ),
+        )
+
+    @app.exception_handler(HTTPException)
+    async def fastapi_http_exception_handler(request: Request, exc: HTTPException):
+        message = str(exc.detail or "Request failed.")
+
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=_error_payload(
+                code=f"HTTP_{exc.status_code}",
+                message=message,
+                path=str(request.url.path),
+                status_code=exc.status_code,
+            ),
+            headers=getattr(exc, "headers", None),
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+        request: Request,
+        exc: RequestValidationError,
+    ):
+        return JSONResponse(
+            status_code=422,
+            content=_error_payload(
+                code="VALIDATION_ERROR",
+                message="Some submitted fields are invalid.",
+                path=str(request.url.path),
+                status_code=422,
+                details=exc.errors(),
+            ),
+        )
+
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
         logger.exception("Unhandled server error: %s", exc)
+
         return JSONResponse(
             status_code=500,
-            content={
-                "detail": "Internal server error.",
-                "path": str(request.url.path),
-            },
+            content=_error_payload(
+                code="INTERNAL_SERVER_ERROR",
+                message="The server had a problem processing this request.",
+                path=str(request.url.path),
+                status_code=500,
+            ),
         )
 
     from app.api.routes.auth import router as auth_router

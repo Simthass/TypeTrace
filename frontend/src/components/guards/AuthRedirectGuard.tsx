@@ -3,9 +3,9 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
-import { useAuthStore } from "../../store/authStore";
+import { useAuthStore, type UserRole } from "../../store/authStore";
 
-function getDashboardPath(role?: string): string {
+function getDashboardPath(role?: UserRole): string {
   return role === "TEACHER" ? ROUTES.TEACHER_DASHBOARD : ROUTES.DASHBOARD;
 }
 

@@ -3,6 +3,7 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import AuthRedirectGuard from "./components/guards/AuthRedirectGuard";
+import AuthSessionGate from "./components/guards/AuthSessionGate";
 import RoleGuard from "./components/guards/RoleGuard";
 
 import AuthLayout from "./components/layout/AuthLayout";
@@ -10,6 +11,7 @@ import DashboardLayout from "./components/layout/DashboardLayout";
 import RootLayout from "./components/layout/RootLayout";
 import TeacherLayout from "./components/layout/TeacherLayout";
 
+import ErrorBoundary from "./components/errors/ErrorBoundary";
 import ScrollToTop from "./components/ui/ScrollToTop";
 import { ToastProvider } from "./components/ui/ToastProvider";
 
@@ -45,107 +47,121 @@ import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
 import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage";
 import TeacherSubmissionsPage from "./pages/teacher/TeacherSubmissionsPage";
 
-import AuthSessionGate from "./components/guards/AuthSessionGate";
-
 export default function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
-        <AuthSessionGate>
-          <ScrollToTop />
+        <ErrorBoundary>
+          <AuthSessionGate>
+            <ScrollToTop />
 
-          <Routes>
-            <Route element={<RootLayout />}>
-              <Route index element={<HomePage />} />
-              <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
-              <Route path={ROUTES.FEATURES} element={<FeaturesPage />} />
-              <Route path={ROUTES.ABOUT} element={<AboutPage />} />
-              <Route path={ROUTES.HELP_DOCS} element={<HelpDocsPage />} />
-              <Route
-                path={ROUTES.VERIFY_LOOKUP}
-                element={<VerifyLookupPage />}
-              />
-              <Route path={ROUTES.VERIFY} element={<VerifyCertificatePage />} />
-            </Route>
-
-            <Route element={<AuthRedirectGuard />}>
-              <Route element={<AuthLayout />}>
-                <Route path={ROUTES.LOGIN} element={<LoginPage />} />
-                <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
-                <Route path={ROUTES.VERIFY_OTP} element={<VerifyOtpPage />} />
+            <Routes>
+              {/* Public routes */}
+              <Route element={<RootLayout />}>
+                <Route index element={<HomePage />} />
                 <Route
-                  path={ROUTES.FORGOT_PASSWORD}
-                  element={<ForgotPasswordPage />}
+                  path={ROUTES.HOW_IT_WORKS}
+                  element={<HowItWorksPage />}
+                />
+                <Route path={ROUTES.FEATURES} element={<FeaturesPage />} />
+                <Route path={ROUTES.ABOUT} element={<AboutPage />} />
+                <Route path={ROUTES.HELP_DOCS} element={<HelpDocsPage />} />
+                <Route
+                  path={ROUTES.VERIFY_LOOKUP}
+                  element={<VerifyLookupPage />}
+                />
+                <Route
+                  path={ROUTES.VERIFY}
+                  element={<VerifyCertificatePage />}
                 />
               </Route>
-            </Route>
 
-            <Route
-              element={<RoleGuard allowedRoles={["STUDENT", "TEACHER"]} />}
-            >
+              {/* Auth routes */}
+              <Route element={<AuthRedirectGuard />}>
+                <Route element={<AuthLayout />}>
+                  <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+                  <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
+                  <Route path={ROUTES.VERIFY_OTP} element={<VerifyOtpPage />} />
+                  <Route
+                    path={ROUTES.FORGOT_PASSWORD}
+                    element={<ForgotPasswordPage />}
+                  />
+                </Route>
+              </Route>
+
+              {/* Shared authenticated routes */}
               <Route
-                path={ROUTES.SETTINGS}
-                element={<SettingsRedirectPage />}
-              />
-              <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
-            </Route>
-
-            <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
-              <Route path={ROUTES.EDITOR} element={<EditorPage />} />
-              <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
-
-              <Route element={<DashboardLayout />}>
-                <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+                element={<RoleGuard allowedRoles={["STUDENT", "TEACHER"]} />}
+              >
+                <Route
+                  path={ROUTES.SETTINGS}
+                  element={<SettingsRedirectPage />}
+                />
                 <Route
                   path={ROUTES.STUDENT_SETTINGS}
                   element={<SettingsPage />}
-                />
-                <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
-                <Route
-                  path={ROUTES.CERTIFICATES}
-                  element={<CertificatesPage />}
-                />
-                <Route path={ROUTES.ANALYTICS} element={<AnalyticsPage />} />
-                <Route path={ROUTES.JOIN_COURSE} element={<JoinCoursePage />} />
-              </Route>
-            </Route>
-
-            <Route element={<RoleGuard allowedRoles={["TEACHER"]} />}>
-              <Route element={<TeacherLayout />}>
-                <Route
-                  path={ROUTES.TEACHER_DASHBOARD}
-                  element={<TeacherDashboard />}
                 />
                 <Route
                   path={ROUTES.TEACHER_SETTINGS}
                   element={<SettingsPage />}
                 />
-                <Route
-                  path={ROUTES.TEACHER_COURSES}
-                  element={<TeacherCoursesPage />}
-                />
-                <Route
-                  path={ROUTES.TEACHER_COURSE_DETAIL}
-                  element={<TeacherCourseDetailPage />}
-                />
-                <Route
-                  path={ROUTES.TEACHER_SUBMISSIONS}
-                  element={<TeacherSubmissionsPage />}
-                />
-                <Route
-                  path={ROUTES.TEACHER_STUDENTS}
-                  element={<TeacherStudentsPage />}
-                />
-                <Route
-                  path={ROUTES.TEACHER_REVIEW}
-                  element={<TeacherReviewPage />}
-                />
+                <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
               </Route>
-            </Route>
 
-            <Route path={ROUTES.NOT_FOUND} element={<NotFoundPage />} />
-          </Routes>
-        </AuthSessionGate>
+              {/* Student routes */}
+              <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
+                <Route path={ROUTES.EDITOR} element={<EditorPage />} />
+                <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
+
+                <Route element={<DashboardLayout />}>
+                  <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+                  <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
+                  <Route
+                    path={ROUTES.CERTIFICATES}
+                    element={<CertificatesPage />}
+                  />
+                  <Route path={ROUTES.ANALYTICS} element={<AnalyticsPage />} />
+                  <Route
+                    path={ROUTES.JOIN_COURSE}
+                    element={<JoinCoursePage />}
+                  />
+                </Route>
+              </Route>
+
+              {/* Teacher routes */}
+              <Route element={<RoleGuard allowedRoles={["TEACHER"]} />}>
+                <Route element={<TeacherLayout />}>
+                  <Route
+                    path={ROUTES.TEACHER_DASHBOARD}
+                    element={<TeacherDashboard />}
+                  />
+                  <Route
+                    path={ROUTES.TEACHER_COURSES}
+                    element={<TeacherCoursesPage />}
+                  />
+                  <Route
+                    path={ROUTES.TEACHER_COURSE_DETAIL}
+                    element={<TeacherCourseDetailPage />}
+                  />
+                  <Route
+                    path={ROUTES.TEACHER_SUBMISSIONS}
+                    element={<TeacherSubmissionsPage />}
+                  />
+                  <Route
+                    path={ROUTES.TEACHER_STUDENTS}
+                    element={<TeacherStudentsPage />}
+                  />
+                  <Route
+                    path={ROUTES.TEACHER_REVIEW}
+                    element={<TeacherReviewPage />}
+                  />
+                </Route>
+              </Route>
+
+              <Route path={ROUTES.NOT_FOUND} element={<NotFoundPage />} />
+            </Routes>
+          </AuthSessionGate>
+        </ErrorBoundary>
       </ToastProvider>
     </BrowserRouter>
   );

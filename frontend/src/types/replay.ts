@@ -6,7 +6,9 @@ export type ReplayClassificationBucket =
   | "SYNTHETIC"
   | "UNKNOWN";
 
-export type ReplayMarkerType =
+export type ReplayEventType = "keydown" | "keyup" | "paste" | string;
+
+export type ReplayTimelineMarkerType =
   | "paste"
   | "deletion"
   | "pause"
@@ -60,14 +62,14 @@ export interface ReplayEvent {
   key: string;
   display_key: string;
   keyCode: number;
-  code?: string | null;
-  type: string;
+  code: string | null;
+  type: ReplayEventType;
   timestamp: number;
   relative_time_ms: number;
-  down_time?: number | null;
-  up_time?: number | null;
-  dwell_time?: number | null;
-  flight_time?: number | null;
+  down_time: number | null;
+  up_time: number | null;
+  dwell_time: number | null;
+  flight_time: number | null;
   documentLength: number;
   cursorPosition: number;
   pastedLength: number;
@@ -80,7 +82,7 @@ export interface ReplayEvent {
 }
 
 export interface ReplayTimelineMarker {
-  type: ReplayMarkerType;
+  type: ReplayTimelineMarkerType;
   label: string;
   event_index: number;
   relative_time_ms: number;
@@ -94,10 +96,20 @@ export interface ReplayAudit {
   has_cognitive_pauses: boolean;
   has_deletions: boolean;
   integrity_hash: string | null;
+
+  /**
+   * Backend sets this when the event stream is larger than the safe replay limit.
+   */
+  is_truncated: boolean;
+
+  /**
+   * Maximum number of events returned to the frontend when truncation is active.
+   */
+  max_events_returned: number;
 }
 
 export interface ReplayResponse {
-  status: string;
+  status: "success" | string;
   session: ReplaySession;
   metrics: ReplayMetrics;
   events: ReplayEvent[];
@@ -107,5 +119,5 @@ export interface ReplayResponse {
 
 export interface ReplaySegment {
   text: string;
-  type: "typed" | "paste" | "deletion";
+  type: "typed" | "paste";
 }
