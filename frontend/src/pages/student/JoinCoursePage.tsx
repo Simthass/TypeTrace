@@ -1,8 +1,12 @@
+// frontend/src/pages/student/JoinCoursePage.tsx
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/api";
 import { colors } from "../../styles/colors";
 import { ROUTES } from "../../constants/routes";
+import { useToast } from "../../components/ui/ToastProvider";
+import { API_ROUTES } from "../../constants/apiRoutes";
 
 export default function JoinCoursePage() {
   const [inviteCode, setInviteCode] = useState("");
@@ -13,11 +17,17 @@ export default function JoinCoursePage() {
     course_code: string;
   } | null>(null);
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const handleJoin = async () => {
     const code = inviteCode.trim().toUpperCase();
     if (!code) {
       setError("Please enter an invite code.");
+      showToast({
+        type: "warning",
+        title: "Invite code required",
+        message: "Enter the course invite code provided by your teacher.",
+      });
       return;
     }
     setIsLoading(true);
@@ -27,14 +37,25 @@ export default function JoinCoursePage() {
         message: string;
         course_name: string;
         course_code: string;
-      }>("/courses/join", { invite_code: code });
+      }>(API_ROUTES.courses.join, { invite_code: code });
       setSuccess({
         course_name: res.data.course_name,
         course_code: res.data.course_code,
       });
+      showToast({
+        type: "success",
+        title: "Course joined",
+        message: `You've been enrolled in ${res.data.course_name}.`,
+      });
     } catch (e: unknown) {
       const ax = e as { response?: { data?: { detail?: string } } };
-      setError(ax.response?.data?.detail ?? "Invalid invite code.");
+      const message = ax.response?.data?.detail ?? "Invalid invite code.";
+      setError(message);
+      showToast({
+        type: "error",
+        title: "Could not join course",
+        message,
+      });
     } finally {
       setIsLoading(false);
     }

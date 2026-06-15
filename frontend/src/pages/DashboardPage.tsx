@@ -7,6 +7,7 @@ import { useToast } from "../components/ui/ToastProvider";
 import { brand, colors } from "../styles/colors";
 import { useAuthStore } from "../store/authStore";
 import { API_ROUTES } from "../constants/apiRoutes";
+import { ErrorState, EmptyState } from "../components/ui/AsyncState";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -165,8 +166,7 @@ function DashboardSkeleton() {
   );
 }
 
-// ─── Metric card — PolicyPilot style ─────────────────────────────────────────
-// Icon top-left, number large, label below, arrow link top-right
+// ─── Metric card ──────────────────────────────────────────────────────────────
 
 function MetricCard({
   label,
@@ -190,7 +190,6 @@ function MetricCard({
       className="relative flex flex-col rounded-xl border bg-white p-5 transition-shadow hover:shadow-md"
       style={{ borderColor: colors.surface[200] }}
     >
-      {/* Icon + arrow row */}
       <div className="mb-4 flex items-start justify-between">
         <div
           className="flex h-10 w-10 items-center justify-center rounded-xl"
@@ -234,24 +233,18 @@ function MetricCard({
           </Link>
         )}
       </div>
-
-      {/* Value */}
       <p
         className="text-[2.1rem] font-bold leading-none tracking-tight"
         style={{ color: colors.text.primary }}
       >
         {value}
       </p>
-
-      {/* Label */}
       <p
         className="mt-1.5 text-[13px] font-semibold"
         style={{ color: colors.text.primary }}
       >
         {label}
       </p>
-
-      {/* Sub */}
       <p className="mt-0.5 text-[12px]" style={{ color: colors.text.muted }}>
         {sub}
       </p>
@@ -693,7 +686,7 @@ function GettingStarted({
   );
 }
 
-// ─── Session row — PolicyPilot table style ────────────────────────────────────
+// ─── Session row ──────────────────────────────────────────────────────────────
 
 function SessionRow({
   session,
@@ -715,7 +708,6 @@ function SessionRow({
         borderTop: index === 0 ? "none" : `1px solid ${colors.surface[200]}`,
       }}
     >
-      {/* Title + course */}
       <div className="min-w-0">
         <p
           className="truncate font-semibold"
@@ -730,7 +722,6 @@ function SessionRow({
           {session.course_code ?? "Personal"} · {session.created_at}
         </p>
       </div>
-      {/* Classification */}
       <div>
         <span
           className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold"
@@ -743,18 +734,15 @@ function SessionRow({
           {cls.label}
         </span>
       </div>
-      {/* Confidence */}
       <p
         className="tabular-nums font-semibold"
         style={{ color: colors.text.primary }}
       >
         {session.confidence}%
       </p>
-      {/* WPM */}
       <p className="tabular-nums" style={{ color: colors.text.secondary }}>
         {session.wpm}
       </p>
-      {/* Review */}
       <div>
         <span
           className="inline-flex rounded-lg px-2.5 py-1 text-[11px] font-semibold"
@@ -763,7 +751,6 @@ function SessionRow({
           {rev.label}
         </span>
       </div>
-      {/* Certificate */}
       <div className="flex justify-end">
         {session.certificate_id ? (
           <span
@@ -925,12 +912,14 @@ export default function DashboardPage() {
   const { user } = useAuthStore();
 
   const [data, setData] = useState<DashboardResponse | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
     async function load() {
       setIsLoading(true);
+      setApiError(null);
       try {
         const res = await api.get<DashboardResponse>(
           API_ROUTES.student.dashboard,
@@ -939,10 +928,12 @@ export default function DashboardPage() {
         setData(res.data);
       } catch (error) {
         if (!mounted) return;
+        const message = getApiErrorMessage(error);
+        setApiError(message);
         showToast({
           type: "error",
           title: "Dashboard failed to load",
-          message: getApiErrorMessage(error),
+          message,
         });
       } finally {
         if (mounted) setIsLoading(false);
@@ -962,33 +953,41 @@ export default function DashboardPage() {
 
   if (isLoading) return <DashboardSkeleton />;
 
+  if (apiError) {
+    return (
+      <ErrorState
+        title="Could not load dashboard"
+        message={apiError}
+        action={
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-lg px-4 py-2.5 text-[13px] font-bold text-white"
+            style={{ background: colors.brand }}
+          >
+            Retry
+          </button>
+        }
+      />
+    );
+  }
+
   if (!data || !summary) {
     return (
-      <div
-        className="rounded-xl border bg-white px-6 py-14 text-center"
-        style={{ borderColor: colors.surface[200] }}
-      >
-        <p
-          className="text-[15px] font-semibold"
-          style={{ color: colors.text.primary }}
-        >
-          Dashboard unavailable
-        </p>
-        <p
-          className="mt-2 text-[13px]"
-          style={{ color: colors.text.secondary }}
-        >
-          Could not load your data. Try refreshing.
-        </p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="mt-5 rounded-lg px-4 py-2 text-[13px] font-semibold text-white"
-          style={{ background: colors.brand }}
-        >
-          Reload
-        </button>
-      </div>
+      <ErrorState
+        title="Dashboard unavailable"
+        message="Could not load your workspace data. Try refreshing the page."
+        action={
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-lg px-4 py-2.5 text-[13px] font-bold text-white"
+            style={{ background: colors.brand }}
+          >
+            Reload
+          </button>
+        }
+      />
     );
   }
 
@@ -996,7 +995,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* ── Page header — PolicyPilot style large H1 ─────────────────── */}
+      {/* ── Page header ─────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1
@@ -1037,7 +1036,8 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {/* ── Metric cards — PolicyPilot style 4-up ────────────────────── */}
+      {/* Rest of the dashboard content remains unchanged... */}
+      {/* ── Metric cards ────────────────────── */}
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <MetricCard
           label="Total Sessions"
@@ -1167,7 +1167,7 @@ export default function DashboardPage() {
       {/* ── Course breakdown ──────────────────────────────────────────── */}
       <CoursePanel courses={data.courses} />
 
-      {/* ── Recent sessions table — PolicyPilot style ────────────────── */}
+      {/* ── Recent sessions table ────────────────── */}
       <div>
         <div className="mb-3 flex items-center justify-between gap-4">
           <div>
@@ -1201,51 +1201,21 @@ export default function DashboardPage() {
           style={{ borderColor: colors.surface[200] }}
         >
           {data.recent_sessions.length === 0 ? (
-            <div className="flex flex-col items-center py-14 px-6 text-center">
-              <div
-                className="mb-3 flex h-14 w-14 items-center justify-center rounded-xl"
-                style={{ background: colors.surface[150] }}
-              >
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke={colors.text.muted}
-                  strokeWidth="2"
-                  strokeLinecap="round"
+            <EmptyState
+              title="No sessions yet"
+              message="Start writing to generate your first authorship evidence trail."
+              action={
+                <Link
+                  to={ROUTES.EDITOR_NEW}
+                  className="rounded-lg px-4 py-2 text-[13px] font-semibold text-white"
+                  style={{ background: colors.brand }}
                 >
-                  <path d="M8 6h13" />
-                  <path d="M8 12h13" />
-                  <path d="M8 18h13" />
-                  <path d="M3 6h.01" />
-                  <path d="M3 12h.01" />
-                  <path d="M3 18h.01" />
-                </svg>
-              </div>
-              <p
-                className="text-[14px] font-semibold"
-                style={{ color: colors.text.primary }}
-              >
-                No sessions yet
-              </p>
-              <p
-                className="mt-1 text-[13px]"
-                style={{ color: colors.text.secondary }}
-              >
-                Start writing to generate your first authorship evidence trail.
-              </p>
-              <Link
-                to={ROUTES.EDITOR_NEW}
-                className="mt-4 rounded-lg px-4 py-2 text-[13px] font-semibold text-white transition hover:brightness-110"
-                style={{ background: colors.brand }}
-              >
-                Start writing
-              </Link>
-            </div>
+                  Start writing
+                </Link>
+              }
+            />
           ) : (
             <>
-              {/* Table header */}
               <div
                 className="grid grid-cols-[1fr_120px_80px_80px_100px_80px] gap-4 border-b px-5 py-3"
                 style={{
@@ -1270,7 +1240,6 @@ export default function DashboardPage() {
                   </p>
                 ))}
               </div>
-              {/* Rows */}
               {data.recent_sessions.map((session, i) => (
                 <SessionRow key={session.id} session={session} index={i} />
               ))}

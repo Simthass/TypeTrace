@@ -1,5 +1,3 @@
-// frontend/src/pages/ForgotPasswordPage.tsx
-
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -8,13 +6,19 @@ import {
   AuthButton,
   AuthField,
   AuthForm,
-  AuthMessage,
   AuthPanel,
 } from "../components/auth/AuthPanel";
 import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
 import { colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
+import { useToast } from "../components/ui/ToastProvider";
+import {
+  normalizeEmail,
+  isValidEmail,
+  isValidOtp,
+  isStrongEnoughPassword,
+} from "../lib/edgeCases";
 
 type Step = "request" | "verify" | "reset";
 
@@ -25,6 +29,7 @@ interface ResetVerifyResponse {
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const [step, setStep] = useState<Step>("request");
   const [email, setEmail] = useState("");
@@ -33,20 +38,19 @@ export default function ForgotPasswordPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const cleanEmail = email.trim().toLowerCase();
+  const cleanEmail = normalizeEmail(email);
 
   const requestCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    setApiError(null);
-    setSuccessMsg(null);
-
-    if (!cleanEmail) {
-      setApiError("Email address is required.");
+    if (!isValidEmail(cleanEmail)) {
+      showToast({
+        type: "warning",
+        title: "Invalid email",
+        message: "Enter a valid email address.",
+      });
       return;
     }
 
@@ -56,10 +60,19 @@ export default function ForgotPasswordPage() {
       await api.post(API_ROUTES.auth.passwordResetRequest, {
         email: cleanEmail,
       });
-      setSuccessMsg("If that account exists, a reset code has been sent.");
+
+      showToast({
+        type: "success",
+        title: "Reset code sent",
+        message: "Check your email for the password reset code.",
+      });
       setStep("verify");
     } catch (error) {
-      setApiError(getApiErrorMessage(error));
+      showToast({
+        type: "error",
+        title: "Request failed",
+        message: getApiErrorMessage(error),
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -68,13 +81,23 @@ export default function ForgotPasswordPage() {
   const verifyCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    setApiError(null);
-    setSuccessMsg(null);
-
     const cleanOtp = otp.trim();
 
-    if (!cleanEmail || cleanOtp.length !== 6) {
-      setApiError("Enter your email and 6-digit reset code.");
+    if (!isValidEmail(cleanEmail)) {
+      showToast({
+        type: "warning",
+        title: "Invalid email",
+        message: "Enter a valid email address.",
+      });
+      return;
+    }
+
+    if (!isValidOtp(cleanOtp)) {
+      showToast({
+        type: "warning",
+        title: "Invalid reset code",
+        message: "Enter the 6-digit reset code.",
+      });
       return;
     }
 
@@ -90,10 +113,19 @@ export default function ForgotPasswordPage() {
       );
 
       setResetToken(response.data.reset_token);
-      setSuccessMsg("Code verified. Create your new password.");
+
+      showToast({
+        type: "success",
+        title: "Code verified",
+        message: "You can now set a new password.",
+      });
       setStep("reset");
     } catch (error) {
-      setApiError(getApiErrorMessage(error));
+      showToast({
+        type: "error",
+        title: "Verification failed",
+        message: getApiErrorMessage(error),
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -102,23 +134,31 @@ export default function ForgotPasswordPage() {
   const resetPassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    setApiError(null);
-    setSuccessMsg(null);
-
-    if (newPassword.length < 8) {
-      setApiError("Password must be at least 8 characters.");
+    if (!isStrongEnoughPassword(newPassword)) {
+      showToast({
+        type: "warning",
+        title: "Password too short",
+        message: "Use at least 8 characters.",
+      });
       return;
     }
 
     if (!/\d/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
-      setApiError(
-        "Password must contain at least one number and one special character.",
-      );
+      showToast({
+        type: "warning",
+        title: "Password requirements",
+        message:
+          "Password must contain at least one number and one special character.",
+      });
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setApiError("Passwords do not match.");
+      showToast({
+        type: "warning",
+        title: "Passwords do not match",
+        message: "Confirm password must match the new password.",
+      });
       return;
     }
 
@@ -131,9 +171,18 @@ export default function ForgotPasswordPage() {
         new_password: newPassword,
       });
 
+      showToast({
+        type: "success",
+        title: "Password updated",
+        message: "Sign in with your new password.",
+      });
       navigate(ROUTES.LOGIN, { replace: true });
     } catch (error) {
-      setApiError(getApiErrorMessage(error));
+      showToast({
+        type: "error",
+        title: "Reset failed",
+        message: getApiErrorMessage(error),
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -149,9 +198,6 @@ export default function ForgotPasswordPage() {
     >
       {step === "request" && (
         <AuthForm onSubmit={requestCode}>
-          {apiError && <AuthMessage type="error">{apiError}</AuthMessage>}
-          {successMsg && <AuthMessage type="success">{successMsg}</AuthMessage>}
-
           <AuthField
             label="Email address"
             type="email"
@@ -174,9 +220,6 @@ export default function ForgotPasswordPage() {
 
       {step === "verify" && (
         <AuthForm onSubmit={verifyCode}>
-          {apiError && <AuthMessage type="error">{apiError}</AuthMessage>}
-          {successMsg && <AuthMessage type="success">{successMsg}</AuthMessage>}
-
           <AuthField
             label="Email address"
             type="email"
@@ -200,9 +243,6 @@ export default function ForgotPasswordPage() {
 
       {step === "reset" && (
         <AuthForm onSubmit={resetPassword}>
-          {apiError && <AuthMessage type="error">{apiError}</AuthMessage>}
-          {successMsg && <AuthMessage type="success">{successMsg}</AuthMessage>}
-
           <AuthField
             label="New password"
             type="password"

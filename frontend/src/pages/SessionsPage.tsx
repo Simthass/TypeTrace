@@ -1,5 +1,3 @@
-// frontend/src/pages/SessionsPage.tsx
-
 import { useEffect, useMemo, useState } from "react";
 
 import { Badge, classificationTone } from "../components/ui/Badge";
@@ -8,6 +6,7 @@ import { Card, CardBody } from "../components/ui/Card";
 import { EmptyState, PageHeader } from "../components/ui/PageState";
 import { TableSkeleton } from "../components/ui/Skeleton";
 import { Tabs } from "../components/ui/Tabs";
+import { ErrorState } from "../components/ui/AsyncState";
 import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/ToastProvider";
@@ -142,11 +141,12 @@ function SessionCard({ session }: { session: SessionItem }) {
 }
 
 export default function SessionsPage() {
-  const toast = useToast();
+  const { showToast } = useToast();
 
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [selectedFilter, setSelectedFilter] = useState("ALL");
   const [search, setSearch] = useState("");
+  const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const filteredSessions = useMemo(() => {
@@ -183,6 +183,7 @@ export default function SessionsPage() {
 
     async function loadSessions() {
       setIsLoading(true);
+      setApiError(null);
 
       try {
         const response = await api.get<SessionsResponse>(
@@ -198,7 +199,13 @@ export default function SessionsPage() {
         setSessions(response.data.sessions || []);
       } catch (error) {
         if (!mounted) return;
-        toast.error("Sessions failed to load", getApiErrorMessage(error));
+        const message = getApiErrorMessage(error);
+        setApiError(message);
+        showToast({
+          type: "error",
+          title: "Sessions failed to load",
+          message,
+        });
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -209,12 +216,40 @@ export default function SessionsPage() {
     return () => {
       mounted = false;
     };
-  }, [toast]);
+  }, [showToast]);
 
   const tabItems = filters.map((filter) => ({
     ...filter,
     count: filterCount(sessions, filter.value),
   }));
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          eyebrow="Evidence library"
+          title="Writing sessions"
+          description="Review your captured authorship trails, replay behavioral evidence, and access certificate records."
+          action={<ButtonLink to={ROUTES.EDITOR_NEW}>New session</ButtonLink>}
+        />
+        <TableSkeleton rows={6} />
+      </div>
+    );
+  }
+
+  if (apiError) {
+    return (
+      <ErrorState
+        title="Could not load sessions"
+        message={apiError}
+        action={
+          <Button type="button" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        }
+      />
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -259,9 +294,7 @@ export default function SessionsPage() {
         </CardBody>
       </Card>
 
-      {isLoading ? (
-        <TableSkeleton rows={6} />
-      ) : !sessions.length ? (
+      {!sessions.length ? (
         <EmptyState
           icon="session"
           title="No sessions yet"

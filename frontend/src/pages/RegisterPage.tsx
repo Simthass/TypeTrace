@@ -1,5 +1,3 @@
-// frontend/src/pages/RegisterPage.tsx
-
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -8,7 +6,6 @@ import {
   AuthButton,
   AuthField,
   AuthForm,
-  AuthMessage,
   AuthPanel,
   AuthSelect,
 } from "../components/auth/AuthPanel";
@@ -17,6 +14,7 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { useAuthStore, type UserRole } from "../store/authStore";
 import { brand, colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
+import { useToast } from "../components/ui/ToastProvider";
 
 interface RegisterResponse {
   message: string;
@@ -91,10 +89,11 @@ function validate(form: RegisterForm): string | null {
 export default function RegisterPage() {
   const navigate = useNavigate();
   const { setPendingEmail } = useAuthStore();
+  const { showToast } = useToast();
 
   const [form, setForm] = useState<RegisterForm>(initialForm);
-  const [apiError, setApiError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const roleDescription = useMemo(() => {
     if (form.role === "TEACHER") {
@@ -109,16 +108,22 @@ export default function RegisterPage() {
     value: RegisterForm[K],
   ) => {
     setForm((current) => ({ ...current, [key]: value }));
+    setValidationError(null);
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    setApiError(null);
+    setValidationError(null);
 
-    const validationError = validate(form);
-    if (validationError) {
-      setApiError(validationError);
+    const error = validate(form);
+    if (error) {
+      setValidationError(error);
+      showToast({
+        type: "warning",
+        title: "Please check your information",
+        message: error,
+      });
       return;
     }
 
@@ -154,9 +159,20 @@ export default function RegisterPage() {
       );
 
       setPendingEmail(response.data.email);
+
+      showToast({
+        type: "success",
+        title: "OTP sent",
+        message: "Check your email to complete TypeTrace registration.",
+      });
+
       navigate(ROUTES.VERIFY_OTP, { replace: true });
     } catch (error) {
-      setApiError(getApiErrorMessage(error));
+      showToast({
+        type: "error",
+        title: "Registration failed",
+        message: getApiErrorMessage(error),
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -171,7 +187,18 @@ export default function RegisterPage() {
       sideDescription="Student accounts focus on writing evidence. Teacher accounts focus on course review, submission triage, and replayable audit trails."
     >
       <AuthForm onSubmit={submit}>
-        {apiError && <AuthMessage type="error">{apiError}</AuthMessage>}
+        {validationError && (
+          <div
+            className="rounded-md border px-4 py-3 text-[13px]"
+            style={{
+              borderColor: brand.suspiciousAccent,
+              background: brand.suspiciousBg,
+              color: brand.suspiciousText,
+            }}
+          >
+            {validationError}
+          </div>
+        )}
 
         <AuthSelect
           label="Account type"

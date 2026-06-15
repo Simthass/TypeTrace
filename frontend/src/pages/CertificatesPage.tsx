@@ -1,5 +1,3 @@
-// frontend/src/pages/CertificatesPage.tsx
-
 import { useEffect, useMemo, useState } from "react";
 
 import { Badge, classificationTone } from "../components/ui/Badge";
@@ -8,6 +6,7 @@ import { Card, CardBody } from "../components/ui/Card";
 import { EmptyState, PageHeader } from "../components/ui/PageState";
 import { CardGridSkeleton } from "../components/ui/Skeleton";
 import { Tabs } from "../components/ui/Tabs";
+import { ErrorState } from "../components/ui/AsyncState";
 import { ROUTES } from "../constants/routes";
 import { useCertificateDownload } from "../hooks/useCertificateDownload";
 import { api, getApiErrorMessage } from "../lib/api";
@@ -213,11 +212,12 @@ function CertificateCard({
 }
 
 export default function CertificatesPage() {
-  const toast = useToast();
+  const { showToast } = useToast();
   const { downloadingId, downloadCertificate } = useCertificateDownload();
 
   const [certificates, setCertificates] = useState<CertificateItem[]>([]);
   const [selectedFilter, setSelectedFilter] = useState("ALL");
+  const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const filteredCertificates = useMemo(() => {
@@ -239,6 +239,7 @@ export default function CertificatesPage() {
 
     async function loadCertificates() {
       setIsLoading(true);
+      setApiError(null);
 
       try {
         const response = await api.get<CertificatesResponse>(
@@ -249,7 +250,13 @@ export default function CertificatesPage() {
         setCertificates(response.data.certificates || []);
       } catch (error) {
         if (!mounted) return;
-        toast.error("Certificates failed to load", getApiErrorMessage(error));
+        const message = getApiErrorMessage(error);
+        setApiError(message);
+        showToast({
+          type: "error",
+          title: "Certificates failed to load",
+          message,
+        });
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -260,12 +267,44 @@ export default function CertificatesPage() {
     return () => {
       mounted = false;
     };
-  }, [toast]);
+  }, [showToast]);
 
   const tabItems = filters.map((filter) => ({
     ...filter,
     count: countByFilter(certificates, filter.value),
   }));
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          eyebrow="Certificate vault"
+          title="Authorship certificates"
+          description="Download, verify, and audit certificate-backed writing sessions with document hashes and replay links."
+          action={
+            <ButtonLink to={ROUTES.EDITOR_NEW}>
+              Create new certificate
+            </ButtonLink>
+          }
+        />
+        <CardGridSkeleton cards={6} />
+      </div>
+    );
+  }
+
+  if (apiError) {
+    return (
+      <ErrorState
+        title="Could not load certificates"
+        message={apiError}
+        action={
+          <Button type="button" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        }
+      />
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -288,9 +327,7 @@ export default function CertificatesPage() {
         </CardBody>
       </Card>
 
-      {isLoading ? (
-        <CardGridSkeleton cards={6} />
-      ) : !certificates.length ? (
+      {!certificates.length ? (
         <EmptyState
           icon="certificate"
           title="No certificates yet"

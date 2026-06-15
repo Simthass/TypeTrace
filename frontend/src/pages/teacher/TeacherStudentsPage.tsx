@@ -3,7 +3,13 @@ import { Link } from "react-router-dom";
 
 import { api, getApiErrorMessage } from "../../lib/api";
 import { ROUTES } from "../../constants/routes";
-import { colors, brand } from "../../styles/colors";
+import { colors } from "../../styles/colors";
+import {
+  LoadingState,
+  ErrorState,
+  EmptyState,
+} from "../../components/ui/AsyncState";
+import { useToast } from "../../components/ui/ToastProvider";
 import type {
   TeacherStudent,
   TeacherStudentsResponse,
@@ -27,6 +33,7 @@ function SearchIcon() {
 }
 
 export default function TeacherStudentsPage() {
+  const { showToast } = useToast();
   const [students, setStudents] = useState<TeacherStudent[]>([]);
   const [search, setSearch] = useState("");
   const [apiError, setApiError] = useState<string | null>(null);
@@ -47,7 +54,13 @@ export default function TeacherStudentsPage() {
         setStudents(response.data.students || []);
       } catch (error) {
         if (!mounted) return;
-        setApiError(getApiErrorMessage(error));
+        const message = getApiErrorMessage(error);
+        setApiError(message);
+        showToast({
+          type: "error",
+          title: "Failed to load students",
+          message,
+        });
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -58,7 +71,7 @@ export default function TeacherStudentsPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [showToast]);
 
   const filteredStudents = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -79,6 +92,34 @@ export default function TeacherStudentsPage() {
       return haystack.includes(query);
     });
   }, [students, search]);
+
+  if (isLoading) {
+    return (
+      <LoadingState
+        title="Loading students"
+        message="Retrieving enrolled students."
+      />
+    );
+  }
+
+  if (apiError) {
+    return (
+      <ErrorState
+        title="Could not load students"
+        message={apiError}
+        action={
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
+            style={{ background: colors.brand }}
+          >
+            Retry
+          </button>
+        }
+      />
+    );
+  }
 
   return (
     <div
@@ -149,47 +190,16 @@ export default function TeacherStudentsPage() {
           </p>
         </div>
 
-        {apiError && (
-          <div
-            className="mt-6 rounded-md border px-4 py-3 text-[13px]"
-            style={{
-              borderColor: brand.aiAccent,
-              background: brand.aiBg,
-              color: brand.aiText,
-            }}
-          >
-            {apiError}
-          </div>
-        )}
-
-        {isLoading ? (
-          <div
-            className="mt-6 rounded-md border bg-white px-5 py-10 text-center text-[13px]"
-            style={{
-              borderColor: colors.surface[200],
-              color: colors.text.secondary,
-            }}
-          >
-            Loading students...
-          </div>
+        {students.length === 0 ? (
+          <EmptyState
+            title="No students found"
+            message="Share course invite codes so students can join."
+          />
         ) : filteredStudents.length === 0 ? (
-          <div
-            className="mt-6 rounded-md border bg-white px-5 py-10 text-center"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <h2
-              className="text-[15px] font-semibold"
-              style={{ color: colors.text.primary }}
-            >
-              No students found
-            </h2>
-            <p
-              className="mt-2 text-[13px]"
-              style={{ color: colors.text.secondary }}
-            >
-              Share course invite codes so students can join.
-            </p>
-          </div>
+          <EmptyState
+            title="No students match your search"
+            message="Try a different search term."
+          />
         ) : (
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {filteredStudents.map((student) => (
@@ -249,7 +259,10 @@ export default function TeacherStudentsPage() {
                   style={{ borderColor: colors.surface[200] }}
                 >
                   <Link
-                    to={`/teacher/courses/${student.course_id}`}
+                    to={ROUTES.TEACHER_COURSE_DETAIL.replace(
+                      ":courseId",
+                      String(student.course_id),
+                    )}
                     className="rounded-md border px-3 py-2 text-[12px] font-semibold"
                     style={{
                       borderColor: colors.surface[200],

@@ -1,13 +1,18 @@
-// frontend/src/pages/VerifyCertificatePage.tsx
-
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { api, getApiErrorMessage } from "../lib/api";
-import { ROUTES } from "../constants/routes";
-import { colors, brand } from "../styles/colors";
-import type { PublicCertificateVerification } from "../types/certificate";
+import {
+  ErrorState,
+  LoadingState,
+  StatePanel,
+} from "../components/ui/AsyncState";
+import { useToast } from "../components/ui/ToastProvider";
 import { API_ROUTES } from "../constants/apiRoutes";
+import { ROUTES } from "../constants/routes";
+import { api, getApiErrorMessage } from "../lib/api";
+import { isValidCertificateId, normalizeCertificateId } from "../lib/edgeCases";
+import { brand, colors } from "../styles/colors";
+import type { PublicCertificateVerification } from "../types/certificate";
 
 function statusStyle(status: string | undefined) {
   if (status === "VALID") {
@@ -28,16 +33,26 @@ function statusStyle(status: string | undefined) {
     };
   }
 
+  if (status === "INVALID") {
+    return {
+      background: colors.surface[100],
+      color: colors.text.secondary,
+      borderColor: colors.surface[200],
+      label: "Invalid Certificate",
+    };
+  }
+
   return {
     background: brand.aiBg,
     color: brand.aiText,
     borderColor: brand.aiAccent,
-    label: "High Risk / Invalid",
+    label: "High Risk Evidence",
   };
 }
 
 export default function VerifyCertificatePage() {
   const { certId } = useParams<{ certId: string }>();
+  const { showToast } = useToast();
 
   const [result, setResult] = useState<PublicCertificateVerification | null>(
     null,
@@ -49,21 +64,44 @@ export default function VerifyCertificatePage() {
     let mounted = true;
 
     async function verify() {
-      const cleanCertId = certId?.trim();
+      const cleanCertId = normalizeCertificateId(certId || "");
 
       if (!cleanCertId) {
         setApiError("Certificate ID is missing.");
         setIsLoading(false);
+
+        showToast({
+          type: "warning",
+          title: "Certificate ID missing",
+          message: "Open verification using a valid TypeTrace certificate ID.",
+        });
+
+        return;
+      }
+
+      if (!isValidCertificateId(cleanCertId)) {
+        setApiError("Certificate ID format is invalid.");
+        setIsLoading(false);
+
+        showToast({
+          type: "warning",
+          title: "Invalid certificate ID",
+          message:
+            "Certificate IDs may only contain letters, numbers, dashes, and underscores.",
+        });
+
         return;
       }
 
       setIsLoading(true);
       setApiError(null);
-      setResult(null);
 
       try {
         const response = await api.get<PublicCertificateVerification>(
-          API_ROUTES.certificates.verifyPublic(cleanCertId),
+          API_ROUTES.certificates.verify(cleanCertId),
+          {
+            skipGlobalToast: true,
+          },
         );
 
         if (!mounted) return;
@@ -71,19 +109,27 @@ export default function VerifyCertificatePage() {
         setResult(response.data);
 
         if (!response.data.valid) {
-          setApiError(
-            response.data.reason ||
-              "Certificate ID was not found in the TypeTrace verification ledger.",
-          );
+          showToast({
+            type: "warning",
+            title: "Certificate not found",
+            message:
+              response.data.reason ||
+              "This certificate ID was not found in the TypeTrace ledger.",
+          });
         }
       } catch (error) {
         if (!mounted) return;
-        setApiError(getApiErrorMessage(error));
-        setResult(null);
+
+        const message = getApiErrorMessage(error);
+        setApiError(message);
+
+        showToast({
+          type: "error",
+          title: "Verification failed",
+          message,
+        });
       } finally {
-        if (mounted) {
-          setIsLoading(false);
-        }
+        if (mounted) setIsLoading(false);
       }
     }
 
@@ -92,235 +138,178 @@ export default function VerifyCertificatePage() {
     return () => {
       mounted = false;
     };
-  }, [certId]);
+  }, [certId, showToast]);
 
-  const style = statusStyle(result?.status);
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-3xl px-5 py-16">
+        <LoadingState
+          title="Verifying certificate"
+          message="Checking the TypeTrace certificate ledger."
+        />
+      </div>
+    );
+  }
+
+  if (apiError) {
+    return (
+      <div className="mx-auto max-w-3xl px-5 py-16">
+        <ErrorState
+          title="Certificate verification failed"
+          message={apiError}
+          action={
+            <Link
+              to={ROUTES.VERIFY_LOOKUP}
+              className="inline-flex rounded-md px-4 py-2.5 text-[13px] font-bold"
+              style={{ background: colors.brand, color: colors.text.light }}
+            >
+              Try another certificate
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (!result) {
+    return (
+      <div className="mx-auto max-w-3xl px-5 py-16">
+        <ErrorState
+          title="No verification result"
+          message="TypeTrace could not load a certificate result for this request."
+        />
+      </div>
+    );
+  }
+
+  const style = statusStyle(result.status);
+
+  if (!result.valid) {
+    return (
+      <div className="mx-auto max-w-3xl px-5 py-16">
+        <StatePanel
+          tone="warning"
+          title="Certificate not found"
+          message={
+            result.reason ||
+            "This certificate ID was not found in the TypeTrace ledger."
+          }
+          action={
+            <Link
+              to={ROUTES.VERIFY_LOOKUP}
+              className="inline-flex rounded-md px-4 py-2.5 text-[13px] font-bold"
+              style={{ background: colors.brand, color: colors.text.light }}
+            >
+              Verify another certificate
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   return (
-    <div
-      className="min-h-screen px-6 py-12"
-      style={{ background: colors.surface[50] }}
-    >
-      <div className="mx-auto max-w-5xl">
-        <div
-          className="rounded-md border bg-white p-6 shadow-sm"
-          style={{ borderColor: colors.surface[200] }}
-        >
-          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-            <div>
-              <p
-                className="text-[12px] font-semibold uppercase tracking-[0.18em]"
-                style={{ color: colors.text.secondary }}
-              >
-                TypeTrace public verification
-              </p>
-              <h1
-                className="mt-2 text-2xl font-semibold"
-                style={{ color: colors.text.primary }}
-              >
-                Certificate Verification
-              </h1>
-              <p
-                className="mt-2 text-[14px]"
-                style={{ color: colors.text.secondary }}
-              >
-                This page verifies that a TypeTrace certificate exists and
-                matches a recorded writing session.
-              </p>
-            </div>
-
-            {result && (
-              <div
-                className="rounded-md border px-4 py-3 text-right"
-                style={{
-                  background: style.background,
-                  color: style.color,
-                  borderColor: style.borderColor,
-                }}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.15em]">
-                  Status
-                </p>
-                <p className="mt-1 text-lg font-bold">{style.label}</p>
-              </div>
-            )}
-          </div>
-
-          {isLoading && (
-            <div
-              className="mt-8 text-[13px]"
+    <div className="mx-auto max-w-5xl px-5 py-12">
+      <div
+        className="rounded-md border bg-white p-6"
+        style={{
+          borderColor: colors.surface[200],
+          boxShadow: `0 24px 70px ${colors.shadow}`,
+        }}
+      >
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+          <div>
+            <p
+              className="text-[12px] font-bold uppercase tracking-[0.16em]"
+              style={{ color: colors.brand }}
+            >
+              TypeTrace public verification
+            </p>
+            <h1
+              className="mt-3 text-3xl font-semibold tracking-[-0.04em]"
+              style={{ color: colors.text.primary }}
+            >
+              {result.title || "Writing Evidence Certificate"}
+            </h1>
+            <p
+              className="mt-2 text-[14px] leading-7"
               style={{ color: colors.text.secondary }}
             >
-              Verifying certificate...
-            </div>
-          )}
+              This page confirms a recorded TypeTrace writing session. It is
+              supporting behavioral evidence for academic review, not absolute
+              proof of authorship.
+            </p>
+          </div>
 
-          {apiError && (
+          <span
+            className="inline-flex rounded-md border px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em]"
+            style={{
+              background: style.background,
+              color: style.color,
+              borderColor: style.borderColor,
+            }}
+          >
+            {style.label}
+          </span>
+        </div>
+
+        <div className="mt-8 grid gap-4 md:grid-cols-2">
+          {[
+            ["Certificate ID", result.certificate_id],
+            ["Student", result.student_name],
+            ["Student ID", result.student_id || "Not provided"],
+            ["Course", result.course_name || "Personal session"],
+            ["Classification", result.classification_label],
+            ["Confidence", `${result.confidence}%`],
+            ["Risk level", result.risk_level],
+            ["Review status", result.review_status],
+            ["Generated", result.generated_at],
+            ["Document hash", result.document_hash],
+          ].map(([label, value]) => (
             <div
-              className="mt-6 rounded-md border px-4 py-3 text-[13px]"
+              key={label}
+              className="rounded-md border p-4"
               style={{
-                borderColor: brand.aiAccent,
-                background: brand.aiBg,
-                color: brand.aiText,
+                borderColor: colors.surface[200],
+                background: colors.surface[50],
               }}
             >
-              {apiError}
-            </div>
-          )}
-
-          {result && !result.valid && (
-            <div
-              className="mt-6 rounded-md border px-4 py-4"
-              style={{
-                borderColor: brand.aiAccent,
-                background: brand.aiBg,
-              }}
-            >
-              <h2
-                className="text-[15px] font-semibold"
-                style={{ color: brand.aiText }}
+              <p
+                className="text-[11px] font-bold uppercase tracking-[0.13em]"
+                style={{ color: colors.text.secondary }}
               >
-                Certificate not found
-              </h2>
-              <p className="mt-2 text-[13px]" style={{ color: brand.aiText }}>
-                {result.reason ||
-                  "This certificate ID is not recorded in the TypeTrace ledger."}
+                {label}
+              </p>
+              <p
+                className="mt-2 break-all text-[14px] font-semibold"
+                style={{ color: colors.text.primary }}
+              >
+                {value || "—"}
               </p>
             </div>
-          )}
+          ))}
+        </div>
 
-          {result && result.valid && (
-            <>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {[
-                  ["Certificate ID", result.certificate_id],
-                  ["Student", result.student_name],
-                  ["Student ID", result.student_id || "Not provided"],
-                  ["Institution", result.university_name || "Not provided"],
-                  ["Course", result.course_name || "Personal"],
-                  ["Classification", result.classification_label],
-                  ["Confidence", `${result.confidence}%`],
-                  ["Risk Level", result.risk_level],
-                  ["Word Count", result.word_count],
-                  ["WPM", result.wpm],
-                  ["Duration", `${result.duration_seconds}s`],
-                  ["Generated", result.generated_at],
-                ].map(([label, value]) => (
-                  <div
-                    key={label}
-                    className="rounded-md border px-3 py-2"
-                    style={{ borderColor: colors.surface[200] }}
-                  >
-                    <p
-                      className="text-[10px] font-semibold uppercase tracking-[0.12em]"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      {label}
-                    </p>
-                    <p
-                      className="mt-1 break-words text-[13px] font-semibold"
-                      style={{ color: colors.text.primary }}
-                    >
-                      {value || "—"}
-                    </p>
-                  </div>
-                ))}
-              </div>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <a
+            href={`${API_ROUTES.certificates.pdf(result.certificate_id)}`}
+            className="rounded-md px-4 py-2.5 text-[13px] font-bold"
+            style={{ background: colors.brand, color: colors.text.light }}
+          >
+            Download PDF
+          </a>
 
-              <div
-                className="mt-6 rounded-md border px-4 py-3"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <p
-                  className="text-[10px] font-semibold uppercase tracking-[0.12em]"
-                  style={{ color: colors.text.secondary }}
-                >
-                  Document Integrity Hash
-                </p>
-                <p
-                  className="mt-1 break-all font-mono text-[11px]"
-                  style={{ color: colors.text.primary }}
-                >
-                  {result.document_hash}
-                </p>
-              </div>
-
-              <div
-                className="mt-6 rounded-md border px-4 py-3"
-                style={{
-                  borderColor: colors.surface[200],
-                  background: colors.surface[50],
-                }}
-              >
-                <p
-                  className="text-[13px]"
-                  style={{ color: colors.text.secondary }}
-                >
-                  Ledger status:{" "}
-                  <span
-                    className="font-semibold"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {result.ledger_status}
-                  </span>
-                </p>
-                <p
-                  className="mt-1 text-[12px]"
-                  style={{ color: colors.text.secondary }}
-                >
-                  Review status: {result.review_status}
-                </p>
-              </div>
-
-              <div
-                className="mt-6 rounded-md border p-5"
-                style={{
-                  borderColor: colors.surface[200],
-                  background: colors.surface[50],
-                }}
-              >
-                <p
-                  className="text-[13px] font-bold uppercase tracking-[0.14em]"
-                  style={{ color: colors.text.secondary }}
-                >
-                  Interpretation guidance
-                </p>
-
-                <p
-                  className="mt-3 text-[14px] leading-7"
-                  style={{ color: colors.text.secondary }}
-                >
-                  This certificate confirms that TypeTrace recorded a writing
-                  session and associated behavioral evidence for the listed
-                  document. It should be treated as supporting authorship
-                  evidence, not as absolute proof of authorship or misconduct.
-                  Academic decisions should consider this record alongside
-                  institutional review procedures and other available evidence.
-                </p>
-              </div>
-
-              <div className="mt-6 flex flex-wrap gap-2">
-                <a
-                  href={`/api/v1/certificates/${result.certificate_id}/pdf`}
-                  className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
-                  style={{ background: colors.brand }}
-                >
-                  Download PDF
-                </a>
-
-                <Link
-                  to={ROUTES.VERIFY_LOOKUP}
-                  className="rounded-md border px-4 py-2 text-[13px] font-semibold"
-                  style={{
-                    borderColor: colors.surface[200],
-                    color: colors.text.primary,
-                  }}
-                >
-                  Verify another certificate
-                </Link>
-              </div>
-            </>
-          )}
+          <Link
+            to={ROUTES.VERIFY_LOOKUP}
+            className="rounded-md border px-4 py-2.5 text-[13px] font-bold"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.primary,
+              background: colors.surface[50],
+            }}
+          >
+            Verify another
+          </Link>
         </div>
       </div>
     </div>

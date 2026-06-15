@@ -1,10 +1,18 @@
+// frontend/src/pages/teacher/TeacherCoursesPage.tsx
+
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 
 import { api, getApiErrorMessage } from "../../lib/api";
 import { ROUTES } from "../../constants/routes";
-import { colors, brand } from "../../styles/colors";
+import { colors } from "../../styles/colors";
+import {
+  LoadingState,
+  ErrorState,
+  EmptyState,
+} from "../../components/ui/AsyncState";
+import { useToast } from "../../components/ui/ToastProvider";
 import type {
   TeacherCourse,
   TeacherCoursesResponse,
@@ -134,11 +142,11 @@ function CourseCard({ course }: { course: TeacherCourse }) {
 }
 
 export default function TeacherCoursesPage() {
+  const { showToast } = useToast();
   const [courses, setCourses] = useState<TeacherCourse[]>([]);
   const [courseName, setCourseName] = useState("");
   const [courseCode, setCourseCode] = useState("");
   const [apiError, setApiError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -153,11 +161,17 @@ export default function TeacherCoursesPage() {
 
       setCourses(response.data.courses ?? []);
     } catch (error) {
-      setApiError(getApiErrorMessage(error));
+      const message = getApiErrorMessage(error);
+      setApiError(message);
+      showToast({
+        type: "error",
+        title: "Failed to load courses",
+        message,
+      });
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     let mounted = true;
@@ -181,7 +195,11 @@ export default function TeacherCoursesPage() {
     const cleanCourseCode = courseCode.trim().toUpperCase();
 
     if (!cleanCourseName || !cleanCourseCode) {
-      setApiError("Course name and course code are required.");
+      showToast({
+        type: "warning",
+        title: "Missing information",
+        message: "Course name and course code are required.",
+      });
       return;
     }
 
@@ -189,25 +207,62 @@ export default function TeacherCoursesPage() {
 
     setIsCreating(true);
     setApiError(null);
-    setSuccessMsg(null);
 
     try {
-      const response = await api.post(API_ROUTES.teacher.courses, {
+      await api.post(API_ROUTES.teacher.courses, {
         course_name: cleanCourseName,
         course_code: cleanCourseCode,
       });
 
       setCourseName("");
       setCourseCode("");
-      setSuccessMsg(response.data?.message || "Course created successfully.");
+
+      showToast({
+        type: "success",
+        title: "Course created",
+        message: `${cleanCourseName} is ready for student enrollment.`,
+      });
 
       await loadCourses();
     } catch (error) {
-      setApiError(getApiErrorMessage(error));
+      const message = getApiErrorMessage(error);
+      showToast({
+        type: "error",
+        title: "Failed to create course",
+        message,
+      });
     } finally {
       setIsCreating(false);
     }
   };
+
+  if (isLoading && courses.length === 0) {
+    return (
+      <LoadingState
+        title="Loading courses"
+        message="Retrieving your course list."
+      />
+    );
+  }
+
+  if (apiError && courses.length === 0) {
+    return (
+      <ErrorState
+        title="Could not load courses"
+        message={apiError}
+        action={
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
+            style={{ background: colors.brand }}
+          >
+            Retry
+          </button>
+        }
+      />
+    );
+  }
 
   return (
     <div
@@ -280,60 +335,11 @@ export default function TeacherCoursesPage() {
           </div>
         </form>
 
-        {apiError && (
-          <div
-            className="mt-4 rounded-md border px-4 py-3 text-[13px]"
-            style={{
-              borderColor: brand.aiAccent,
-              background: brand.aiBg,
-              color: brand.aiText,
-            }}
-          >
-            {apiError}
-          </div>
-        )}
-
-        {successMsg && (
-          <div
-            className="mt-4 rounded-md border px-4 py-3 text-[13px]"
-            style={{
-              borderColor: brand.humanAccent,
-              background: brand.humanBg,
-              color: brand.humanText,
-            }}
-          >
-            {successMsg}
-          </div>
-        )}
-
-        {isLoading ? (
-          <div
-            className="mt-6 rounded-md border bg-white px-5 py-10 text-center text-[13px]"
-            style={{
-              borderColor: colors.surface[200],
-              color: colors.text.secondary,
-            }}
-          >
-            Loading courses...
-          </div>
-        ) : courses.length === 0 ? (
-          <div
-            className="mt-6 rounded-md border bg-white px-5 py-10 text-center"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <h2
-              className="text-[15px] font-semibold"
-              style={{ color: colors.text.primary }}
-            >
-              No courses yet
-            </h2>
-            <p
-              className="mt-2 text-[13px]"
-              style={{ color: colors.text.secondary }}
-            >
-              Create your first course and share the invite code with students.
-            </p>
-          </div>
+        {courses.length === 0 ? (
+          <EmptyState
+            title="No courses yet"
+            message="Create your first course and share the invite code with students."
+          />
         ) : (
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {courses.map((course) => (

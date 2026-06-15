@@ -4,6 +4,12 @@ import { Link, useParams } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
 import { api, getApiErrorMessage } from "../../lib/api";
 import { brand, colors } from "../../styles/colors";
+import {
+  LoadingState,
+  ErrorState,
+  EmptyState,
+} from "../../components/ui/AsyncState";
+import { useToast } from "../../components/ui/ToastProvider";
 import { API_ROUTES } from "../../constants/apiRoutes";
 
 interface TeacherCourse {
@@ -125,6 +131,7 @@ function MetricCard({
 
 export default function TeacherCourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>();
+  const { showToast } = useToast();
 
   const [data, setData] = useState<CourseDetailResponse | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -152,7 +159,13 @@ export default function TeacherCourseDetailPage() {
         setData(response.data);
       } catch (error) {
         if (!mounted) return;
-        setApiError(getApiErrorMessage(error));
+        const message = getApiErrorMessage(error);
+        setApiError(message);
+        showToast({
+          type: "error",
+          title: "Failed to load course",
+          message,
+        });
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -163,34 +176,50 @@ export default function TeacherCourseDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [courseId]);
+  }, [courseId, showToast]);
 
   if (isLoading) {
     return (
-      <div
-        className="rounded-md border bg-white px-5 py-12 text-center text-[13px]"
-        style={{
-          borderColor: colors.surface[200],
-          color: colors.text.secondary,
-        }}
-      >
-        Loading course workspace...
-      </div>
+      <LoadingState
+        title="Loading course"
+        message="Retrieving course workspace."
+      />
     );
   }
 
-  if (apiError || !data) {
+  if (apiError) {
     return (
-      <div
-        className="rounded-md border px-5 py-6"
-        style={{
-          borderColor: brand.aiAccent,
-          background: brand.aiBg,
-          color: brand.aiText,
-        }}
-      >
-        {apiError || "Course could not be loaded."}
-      </div>
+      <ErrorState
+        title="Could not load course"
+        message={apiError}
+        action={
+          <Link
+            to={ROUTES.TEACHER_COURSES}
+            className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
+            style={{ background: colors.brand }}
+          >
+            Back to courses
+          </Link>
+        }
+      />
+    );
+  }
+
+  if (!data) {
+    return (
+      <ErrorState
+        title="Course not found"
+        message="This course could not be found. It may have been removed."
+        action={
+          <Link
+            to={ROUTES.TEACHER_COURSES}
+            className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
+            style={{ background: colors.brand }}
+          >
+            Back to courses
+          </Link>
+        }
+      />
     );
   }
 
@@ -230,7 +259,7 @@ export default function TeacherCourseDetailPage() {
         </div>
 
         <Link
-          to={`${ROUTES.TEACHER_SUBMISSIONS}?course=${course.id}`}
+          to={ROUTES.TEACHER_SUBMISSIONS}
           className="w-fit rounded-md px-4 py-2 text-[13px] font-semibold text-white"
           style={{ background: colors.brand }}
         >
@@ -278,12 +307,10 @@ export default function TeacherCourseDetailPage() {
         </div>
 
         {submissions.length === 0 ? (
-          <p
-            className="px-5 py-8 text-[13px]"
-            style={{ color: colors.text.secondary }}
-          >
-            No submissions have been linked to this course yet.
-          </p>
+          <EmptyState
+            title="No submissions yet"
+            message="No submissions have been linked to this course yet."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[780px] text-left">
@@ -412,12 +439,10 @@ export default function TeacherCourseDetailPage() {
         </div>
 
         {students.length === 0 ? (
-          <p
-            className="px-5 py-8 text-[13px]"
-            style={{ color: colors.text.secondary }}
-          >
-            No students have joined this course yet.
-          </p>
+          <EmptyState
+            title="No students yet"
+            message="No students have joined this course yet."
+          />
         ) : (
           <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
             {students.map((student) => (

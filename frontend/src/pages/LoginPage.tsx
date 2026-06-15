@@ -1,5 +1,3 @@
-// frontend/src/pages/LoginPage.tsx
-
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -8,7 +6,6 @@ import {
   AuthButton,
   AuthField,
   AuthForm,
-  AuthMessage,
   AuthPanel,
 } from "../components/auth/AuthPanel";
 import { ROUTES } from "../constants/routes";
@@ -16,6 +13,8 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { useAuthStore, type AuthUser } from "../store/authStore";
 import { colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
+import { useToast } from "../components/ui/ToastProvider";
+import { normalizeEmail, isValidEmail } from "../lib/edgeCases";
 
 interface LoginResponse {
   message: string;
@@ -27,11 +26,10 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuthStore();
+  const { showToast } = useToast();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  const [apiError, setApiError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   function getDashboardPath(role?: string): string {
@@ -41,10 +39,23 @@ export default function LoginPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    setApiError(null);
+    const cleanEmail = normalizeEmail(email);
 
-    if (!email.trim() || !password.trim()) {
-      setApiError("Email and password are required.");
+    if (!isValidEmail(cleanEmail)) {
+      showToast({
+        type: "warning",
+        title: "Invalid email",
+        message: "Enter a valid email address.",
+      });
+      return;
+    }
+
+    if (!password.trim()) {
+      showToast({
+        type: "warning",
+        title: "Password required",
+        message: "Enter your account password.",
+      });
       return;
     }
 
@@ -52,11 +63,17 @@ export default function LoginPage() {
 
     try {
       const response = await api.post<LoginResponse>(API_ROUTES.auth.login, {
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
         password,
       });
 
       login(response.data.user, response.data.access_token);
+
+      showToast({
+        type: "success",
+        title: "Login successful",
+        message: "Opening your TypeTrace workspace.",
+      });
 
       const state = location.state as { from?: string } | null;
       const redirectTo =
@@ -64,7 +81,11 @@ export default function LoginPage() {
 
       navigate(redirectTo, { replace: true });
     } catch (error) {
-      setApiError(getApiErrorMessage(error));
+      showToast({
+        type: "error",
+        title: "Login failed",
+        message: getApiErrorMessage(error),
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -79,8 +100,6 @@ export default function LoginPage() {
       sideDescription="TypeTrace helps students and teachers move beyond final-text guessing by preserving the writing process itself."
     >
       <AuthForm onSubmit={handleSubmit}>
-        {apiError && <AuthMessage type="error">{apiError}</AuthMessage>}
-
         <AuthField
           label="Email address"
           type="email"

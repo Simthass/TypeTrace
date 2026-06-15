@@ -4,6 +4,12 @@ import { Link } from "react-router-dom";
 import { api, getApiErrorMessage } from "../../lib/api";
 import { ROUTES } from "../../constants/routes";
 import { colors, brand } from "../../styles/colors";
+import {
+  LoadingState,
+  ErrorState,
+  EmptyState,
+} from "../../components/ui/AsyncState";
+import { useToast } from "../../components/ui/ToastProvider";
 import type {
   TeacherSubmission,
   TeacherSubmissionsResponse,
@@ -139,7 +145,10 @@ function SubmissionCard({ submission }: { submission: TeacherSubmission }) {
         style={{ borderColor: colors.surface[200] }}
       >
         <Link
-          to={`/teacher/review/${submission.id}`}
+          to={ROUTES.TEACHER_REVIEW.replace(
+            ":sessionId",
+            String(submission.id),
+          )}
           className="rounded-md px-3 py-2 text-[12px] font-semibold text-white"
           style={{ background: colors.brand }}
         >
@@ -147,7 +156,7 @@ function SubmissionCard({ submission }: { submission: TeacherSubmission }) {
         </Link>
 
         <Link
-          to={`/session/${submission.id}/replay`}
+          to={ROUTES.REPLAY.replace(":sessionId", String(submission.id))}
           className="rounded-md border px-3 py-2 text-[12px] font-semibold"
           style={{
             borderColor: colors.surface[200],
@@ -159,7 +168,7 @@ function SubmissionCard({ submission }: { submission: TeacherSubmission }) {
 
         {submission.certificate_id && (
           <Link
-            to={`/verify/${submission.certificate_id}`}
+            to={ROUTES.VERIFY.replace(":certId", submission.certificate_id)}
             className="rounded-md border px-3 py-2 text-[12px] font-semibold"
             style={{
               borderColor: colors.surface[200],
@@ -175,6 +184,7 @@ function SubmissionCard({ submission }: { submission: TeacherSubmission }) {
 }
 
 export default function TeacherSubmissionsPage() {
+  const { showToast } = useToast();
   const [submissions, setSubmissions] = useState<TeacherSubmission[]>([]);
   const [total, setTotal] = useState(0);
   const [reviewStatus, setReviewStatus] = useState("ALL");
@@ -221,7 +231,13 @@ export default function TeacherSubmissionsPage() {
         setTotal(response.data.total || 0);
       } catch (error) {
         if (!mounted) return;
-        setApiError(getApiErrorMessage(error));
+        const message = getApiErrorMessage(error);
+        setApiError(message);
+        showToast({
+          type: "error",
+          title: "Failed to load submissions",
+          message,
+        });
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -232,7 +248,35 @@ export default function TeacherSubmissionsPage() {
     return () => {
       mounted = false;
     };
-  }, [requestParams]);
+  }, [requestParams, showToast]);
+
+  if (isLoading) {
+    return (
+      <LoadingState
+        title="Loading submissions"
+        message="Retrieving student submissions."
+      />
+    );
+  }
+
+  if (apiError) {
+    return (
+      <ErrorState
+        title="Could not load submissions"
+        message={apiError}
+        action={
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-md px-4 py-2 text-[13px] font-semibold text-white"
+            style={{ background: colors.brand }}
+          >
+            Retry
+          </button>
+        }
+      />
+    );
+  }
 
   return (
     <div
@@ -339,48 +383,11 @@ export default function TeacherSubmissionsPage() {
           </p>
         </div>
 
-        {apiError && (
-          <div
-            className="mt-6 rounded-md border px-4 py-3 text-[13px]"
-            style={{
-              borderColor: brand.aiAccent,
-              background: brand.aiBg,
-              color: brand.aiText,
-            }}
-          >
-            {apiError}
-          </div>
-        )}
-
-        {isLoading ? (
-          <div
-            className="mt-6 rounded-md border bg-white px-5 py-10 text-center text-[13px]"
-            style={{
-              borderColor: colors.surface[200],
-              color: colors.text.secondary,
-            }}
-          >
-            Loading submissions...
-          </div>
-        ) : submissions.length === 0 ? (
-          <div
-            className="mt-6 rounded-md border bg-white px-5 py-10 text-center"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <h2
-              className="text-[15px] font-semibold"
-              style={{ color: colors.text.primary }}
-            >
-              No submissions found
-            </h2>
-            <p
-              className="mt-2 text-[13px]"
-              style={{ color: colors.text.secondary }}
-            >
-              Adjust filters or wait for students to submit course-linked
-              writing sessions.
-            </p>
-          </div>
+        {submissions.length === 0 ? (
+          <EmptyState
+            title="No submissions found"
+            message="Adjust filters or wait for students to submit course-linked writing sessions."
+          />
         ) : (
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {submissions.map((submission) => (

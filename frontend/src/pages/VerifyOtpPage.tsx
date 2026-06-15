@@ -1,5 +1,3 @@
-// frontend/src/pages/VerifyOtpPage.tsx
-
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
@@ -8,7 +6,6 @@ import {
   AuthButton,
   AuthField,
   AuthForm,
-  AuthMessage,
   AuthPanel,
 } from "../components/auth/AuthPanel";
 import { ROUTES } from "../constants/routes";
@@ -16,6 +13,8 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { useAuthStore, type AuthUser } from "../store/authStore";
 import { colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
+import { useToast } from "../components/ui/ToastProvider";
+import { isValidOtp, normalizeEmail, isValidEmail } from "../lib/edgeCases";
 
 interface VerifyOtpResponse {
   message: string;
@@ -26,26 +25,35 @@ interface VerifyOtpResponse {
 export default function VerifyOtpPage() {
   const navigate = useNavigate();
   const { pendingEmail, login, setPendingEmail } = useAuthStore();
+  const { showToast } = useToast();
 
   const [email, setEmail] = useState(pendingEmail || "");
   const [otp, setOtp] = useState("");
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
-  const cleanEmail = useMemo(() => email.trim().toLowerCase(), [email]);
+  const cleanEmail = useMemo(() => normalizeEmail(email), [email]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    setApiError(null);
-    setSuccessMsg(null);
-
     const cleanOtp = otp.trim();
 
-    if (!cleanEmail || cleanOtp.length !== 6) {
-      setApiError("Enter your email and the 6-digit verification code.");
+    if (!isValidEmail(cleanEmail)) {
+      showToast({
+        type: "warning",
+        title: "Invalid email",
+        message: "Enter the email address used during registration.",
+      });
+      return;
+    }
+
+    if (!isValidOtp(cleanOtp)) {
+      showToast({
+        type: "warning",
+        title: "Invalid OTP",
+        message: "Enter the 6-digit verification code.",
+      });
       return;
     }
 
@@ -60,6 +68,12 @@ export default function VerifyOtpPage() {
       login(response.data.user, response.data.access_token);
       setPendingEmail(null);
 
+      showToast({
+        type: "success",
+        title: "Account verified",
+        message: "Your TypeTrace account is ready.",
+      });
+
       const next =
         response.data.user.role === "TEACHER"
           ? ROUTES.TEACHER_DASHBOARD
@@ -67,18 +81,23 @@ export default function VerifyOtpPage() {
 
       navigate(next, { replace: true });
     } catch (error) {
-      setApiError(getApiErrorMessage(error));
+      showToast({
+        type: "error",
+        title: "Verification failed",
+        message: getApiErrorMessage(error),
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const resend = async () => {
-    setApiError(null);
-    setSuccessMsg(null);
-
-    if (!cleanEmail) {
-      setApiError("Enter your email before requesting a new code.");
+    if (!isValidEmail(cleanEmail)) {
+      showToast({
+        type: "warning",
+        title: "Email required",
+        message: "Enter your email before requesting a new code.",
+      });
       return;
     }
 
@@ -88,9 +107,18 @@ export default function VerifyOtpPage() {
       await api.post(API_ROUTES.auth.resendOtp, {
         email: cleanEmail,
       });
-      setSuccessMsg("A new verification code has been sent.");
+
+      showToast({
+        type: "success",
+        title: "OTP sent",
+        message: "A new verification code has been sent to your email.",
+      });
     } catch (error) {
-      setApiError(getApiErrorMessage(error));
+      showToast({
+        type: "error",
+        title: "Could not resend OTP",
+        message: getApiErrorMessage(error),
+      });
     } finally {
       setIsResending(false);
     }
@@ -105,9 +133,6 @@ export default function VerifyOtpPage() {
       sideDescription="Every TypeTrace workspace starts with verified identity, role-aware routing, and controlled access to student or teacher tools."
     >
       <AuthForm onSubmit={submit}>
-        {apiError && <AuthMessage type="error">{apiError}</AuthMessage>}
-        {successMsg && <AuthMessage type="success">{successMsg}</AuthMessage>}
-
         <AuthField
           label="Email address"
           type="email"
