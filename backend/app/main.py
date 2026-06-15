@@ -14,6 +14,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
 
+from app.middleware.security_headers import SecurityHeadersMiddleware
+
 
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
@@ -48,7 +50,7 @@ def _error_payload(
     }
 
     if details is not None:
-      payload["error"]["details"] = details
+        payload["error"]["details"] = details
 
     return payload
 
@@ -61,6 +63,8 @@ def create_application() -> FastAPI:
         redoc_url="/redoc",
         openapi_url="/openapi.json",
     )
+    
+    app.add_middleware(SecurityHeadersMiddleware)
 
     app.add_middleware(
         CORSMiddleware,
