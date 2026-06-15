@@ -1,5 +1,3 @@
-// frontend/src/pages/EditorPage.tsx
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -10,10 +8,12 @@ import { useToast } from "../components/ui/ToastProvider";
 import { useAuthStore } from "../store/authStore";
 import { brand, colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const MINIMUM_KEYSTROKES = 30;
+import {
+  MAX_EDITOR_TEXT_LENGTH,
+  MAX_PASTE_LENGTH,
+  MINIMUM_KEYSTROKES,
+  truncateTitle,
+} from "../lib/edgeCases";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -292,7 +292,7 @@ function CourseSelectorModal({
           <button
             type="button"
             onClick={() => onSelect(null)}
-            className="group w-full rounded-lg border px-4 py-3 text-left transition-all duration-150 hover:border-[${colors.brand}]"
+            className="group w-full rounded-lg border px-4 py-3 text-left transition-all duration-150"
             style={{
               borderColor:
                 selectedCourseId === null ? colors.brand : colors.surface[200],
@@ -474,7 +474,7 @@ function ResultPanel({
           className="text-[10px] font-bold uppercase tracking-[0.18em]"
           style={{ color: style.text, opacity: 0.7 }}
         >
-          Authorship verdict
+          Behavioral classification
         </p>
 
         <div className="mt-3 flex items-end justify-between gap-3">
@@ -537,6 +537,18 @@ function ResultPanel({
             {result.kill_switch_reason}
           </div>
         )}
+      </div>
+
+      {/* Supporting evidence disclaimer */}
+      <div className="mt-4">
+        <p
+          className="text-[11px] leading-[1.6]"
+          style={{ color: colors.text.secondary }}
+        >
+          This result summarizes behavioral writing evidence captured during the
+          session. It should be interpreted as supporting authorship evidence,
+          not as absolute proof of authorship or misconduct.
+        </p>
       </div>
 
       {/* Behavioral stats */}
@@ -622,7 +634,9 @@ function ResultPanel({
         {result.certificate_id && (
           <button
             type="button"
-            onClick={() => navigate(`/verify/${result.certificate_id}`)}
+            onClick={() =>
+              navigate(ROUTES.VERIFY.replace(":certId", result.certificate_id!))
+            }
             className="flex w-full items-center justify-between rounded-lg border px-4 py-[11px] text-[13px] font-semibold transition-all duration-150 hover:brightness-95"
             style={{
               borderColor: colors.surface[200],
@@ -694,7 +708,7 @@ export default function EditorPage() {
     liveStats,
     handleKeyDown: baseHandleKeyDown,
     handleKeyUp,
-    handlePaste,
+    handlePaste: baseHandlePaste,
     getStats,
     resetCapture,
   } = useKeystrokeCapture({ text });
@@ -713,12 +727,60 @@ export default function EditorPage() {
   const initials =
     `${user?.first_name?.[0] ?? "S"}${user?.last_name?.[0] ?? ""}`.toUpperCase();
 
-  // Wrap keydown to also set isTyping
+  // Wrap keydown to also set isTyping and handle tab
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+
+      const target = e.currentTarget;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+
+      const nextText = `${text.slice(0, start)}    ${text.slice(end)}`;
+
+      if (nextText.length > MAX_EDITOR_TEXT_LENGTH) {
+        showToast({
+          type: "warning",
+          title: "Document limit reached",
+          message: "Cannot insert more characters into this session.",
+        });
+        return;
+      }
+
+      setText(nextText);
+
+      window.requestAnimationFrame(() => {
+        target.selectionStart = start + 4;
+        target.selectionEnd = start + 4;
+      });
+
+      return;
+    }
+
     baseHandleKeyDown(e);
     setIsTyping(true);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 1200);
+  };
+
+  // Wrap paste handler with size check
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedText = e.clipboardData.getData("text");
+
+    if (pastedText.length > MAX_PASTE_LENGTH) {
+      e.preventDefault();
+
+      showToast({
+        type: "warning",
+        title: "Large paste blocked",
+        message:
+          "Very large paste events reduce evidence quality. Type or paste smaller sections.",
+      });
+
+      return;
+    }
+
+    baseHandlePaste(e);
   };
 
   useEffect(() => {
@@ -804,7 +866,7 @@ export default function EditorPage() {
       showToast({
         type: "warning",
         title: "More typing required",
-        message: `Need ${MINIMUM_KEYSTROKES} keystrokes minimum. Currently at ${liveStats.keystrokes}.`,
+        message: `Type at least ${MINIMUM_KEYSTROKES} keystrokes. Current capture: ${liveStats.keystrokes}.`,
       });
       return;
     }
@@ -815,15 +877,24 @@ export default function EditorPage() {
     if (isSubmitting) return;
 
     const finalText = text.trim();
-    const finalTitle = title.trim() || "Untitled Document";
+    const finalTitle = truncateTitle(title);
     const finalStats = getStats();
     const evidence = keystrokeLogRef.current;
 
     if (!finalText) {
       showToast({
-        type: "error",
+        type: "warning",
         title: "Nothing to analyze",
         message: "Write something in the editor before running analysis.",
+      });
+      return;
+    }
+
+    if (finalText.length > MAX_EDITOR_TEXT_LENGTH) {
+      showToast({
+        type: "warning",
+        title: "Document too long",
+        message: "Reduce the document length before running analysis.",
       });
       return;
     }
@@ -832,7 +903,7 @@ export default function EditorPage() {
       showToast({
         type: "warning",
         title: "More typing required",
-        message: `Need ${MINIMUM_KEYSTROKES} keystrokes minimum. Currently at ${finalStats.keystrokes}.`,
+        message: `Type at least ${MINIMUM_KEYSTROKES} keystrokes. Current capture: ${finalStats.keystrokes}.`,
       });
       return;
     }
@@ -840,9 +911,19 @@ export default function EditorPage() {
     if (!Array.isArray(evidence) || evidence.length === 0) {
       showToast({
         type: "error",
-        title: "Keystroke evidence missing",
+        title: "Evidence missing",
         message:
-          "TypeTrace could not find the captured writing events for this session. Start a new session and try again.",
+          "No keystroke evidence was captured. Start a new session and type directly in the editor.",
+      });
+      return;
+    }
+
+    if (evidence.length < MINIMUM_KEYSTROKES) {
+      showToast({
+        type: "warning",
+        title: "Insufficient evidence",
+        message:
+          "The captured event stream is too small for reliable behavioral analysis.",
       });
       return;
     }
@@ -858,15 +939,27 @@ export default function EditorPage() {
         course_id: selectedCourseId,
       });
 
+      const data = response.data;
+
+      if (!data.session_id || !data.certificate_id || !data.document_hash) {
+        showToast({
+          type: "error",
+          title: "Incomplete analysis response",
+          message:
+            "The server analyzed the session but did not return a complete evidence record.",
+        });
+        return;
+      }
+
       setAnalysisResult({
-        classification: response.data.classification,
-        confidence: response.data.confidence_score,
+        classification: data.classification,
+        confidence: data.confidence_score,
         stats: finalStats,
-        kill_switch_triggered: response.data.kill_switch_triggered,
-        kill_switch_reason: response.data.kill_switch_reason,
-        certificate_id: response.data.certificate_id,
-        document_hash: response.data.document_hash,
-        session_id: response.data.session_id,
+        kill_switch_triggered: data.kill_switch_triggered,
+        kill_switch_reason: data.kill_switch_reason,
+        certificate_id: data.certificate_id,
+        document_hash: data.document_hash,
+        session_id: data.session_id,
       });
 
       setShowCourseModal(false);
@@ -1076,8 +1169,22 @@ export default function EditorPage() {
             <textarea
               value={text}
               onChange={(e) => {
-                setText(e.target.value);
+                const nextValue = e.target.value;
+
+                if (nextValue.length > MAX_EDITOR_TEXT_LENGTH) {
+                  showToast({
+                    type: "warning",
+                    title: "Document limit reached",
+                    message: `TypeTrace supports up to ${MAX_EDITOR_TEXT_LENGTH.toLocaleString()} characters per session.`,
+                  });
+
+                  setText(nextValue.slice(0, MAX_EDITOR_TEXT_LENGTH));
+                  return;
+                }
+
+                setText(nextValue);
                 setSaveState("unsaved");
+                setAnalysisResult(null);
               }}
               onKeyDown={handleKeyDown}
               onKeyUp={handleKeyUp}
