@@ -1,9 +1,9 @@
-# backend/app/api/routes/teacher.py
-
+from app.core.privacy import summarize_keystroke_events
 import secrets
 import string
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -741,15 +741,26 @@ async def get_teacher_submission_detail(
             detail="Submission not found.",
         )
 
+    text_content = row["text_content"] or ""
+
     payload = _submission_payload(dict(row))
-    payload["text_content"] = row["text_content"] or ""
-    payload["raw_keystroke_data"] = row["raw_keystroke_data"] or []
+    payload["text_preview"] = text_content[:1200]
+    payload["text_preview_truncated"] = len(text_content) > 1200
+    payload["has_text_content"] = bool(text_content)
+    payload["has_raw_keystroke_data"] = bool(row["raw_keystroke_data"])
+    payload["keystroke_summary"] = summarize_keystroke_events(
+        row["raw_keystroke_data"]
+    )
+    payload["raw_keystroke_data"] = None
 
     return {
         "status": "success",
         "session": payload,
+        "privacy_notice": (
+            "Raw keystroke events are not returned from this review endpoint. "
+            "Use the replay endpoint for structured authorized replay evidence."
+        ),
     }
-
 
 @router.patch("/teacher/sessions/{session_id}/review")
 async def review_teacher_submission(

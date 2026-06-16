@@ -1,4 +1,3 @@
-# backend/app/api/routes/auth.py
 
 from typing import Union
 
@@ -8,9 +7,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+
 from app.api.deps import get_current_user
 from app.core.jwt import create_access_token, create_reset_token, verify_reset_token
-from app.core.security import generate_otp, get_password_hash, verify_password
+from app.core.security import (
+    generate_otp,
+    get_password_hash,
+    secure_compare,
+    verify_password,
+)
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.user import (
@@ -207,7 +212,7 @@ async def verify_otp(
             detail="Verification session expired or invalid. Please register again.",
         )
 
-    if pending_user.get("otp") != otp_in.otp:
+    if not secure_compare(str(pending_user.get("otp") or ""), str(otp_in.otp)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid OTP code.",
@@ -428,7 +433,7 @@ async def verify_password_reset(
 
     saved_otp = await redis_cache.get_reset_otp(email)
 
-    if not saved_otp or saved_otp != req.otp:
+    if not saved_otp or not secure_compare(str(saved_otp), str(req.otp)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired reset code.",

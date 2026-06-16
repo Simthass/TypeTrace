@@ -1,4 +1,3 @@
-# backend/app/api/routes/certificates.py
 
 import io
 import re
@@ -16,6 +15,7 @@ from sqlalchemy import create_engine, text
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.models.user import User
+from app.core.privacy import safe_public_certificate_identity
 
 
 router = APIRouter()
@@ -188,7 +188,19 @@ def _authorize_certificate_audit(record: Dict[str, Any], user: User) -> None:
 
 
 def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dict[str, Any]:
-    verify_url = str(request.url_for("verify_certificate_public", cert_id=record["certificate_id"]))
+    verify_url = str(
+        request.url_for(
+            "verify_certificate_public",
+            cert_id=record["certificate_id"],
+        )
+    )
+
+    identity = safe_public_certificate_identity(
+        student_name=record["student_name"],
+        student_id=record["student_id"],
+        show_name=settings.PUBLIC_CERTIFICATE_SHOW_STUDENT_NAME,
+        show_student_id=settings.PUBLIC_CERTIFICATE_SHOW_STUDENT_ID,
+    )
 
     return {
         "valid": True,
@@ -196,8 +208,8 @@ def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dic
         "certificate_id": record["certificate_id"],
         "verify_url": verify_url,
         "title": record["title"],
-        "student_name": record["student_name"],
-        "student_id": record["student_id"],
+        "student_name": identity["student_name"],
+        "student_id": identity["student_id"],
         "university_name": record["university_name"],
         "course_name": record["course_name"],
         "course_code": record["course_code"],
@@ -213,7 +225,24 @@ def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dic
         "created_at": record["created_at"],
         "generated_at": record["generated_at"],
         "ledger_status": record["ledger_status"],
+        "privacy_notice": (
+            "Public verification does not expose essay text or raw keystroke evidence."
+        ),
     }
+    
+def _pdf_public_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    identity = safe_public_certificate_identity(
+        student_name=record["student_name"],
+        student_id=record["student_id"],
+        show_name=settings.PUBLIC_CERTIFICATE_SHOW_STUDENT_NAME,
+        show_student_id=settings.PUBLIC_CERTIFICATE_PDF_SHOW_STUDENT_ID,
+    )
+
+    safe_record = dict(record)
+    safe_record["student_name"] = identity["student_name"]
+    safe_record["student_id"] = identity["student_id"]
+
+    return safe_record
 
 
 @router.get("/verify/{cert_id}", name="verify_certificate_public")
@@ -578,7 +607,7 @@ async def download_certificate_pdf(
         )
 
     verify_url = str(request.url_for("verify_certificate_public", cert_id=record["certificate_id"]))
-    pdf_bytes = _build_certificate_pdf(record, verify_url)
+    pdf_bytes = _build_certificate_pdf(_pdf_public_record(record), verify_url)
 
     filename = f"TypeTrace_Certificate_{record['certificate_id']}.pdf"
 

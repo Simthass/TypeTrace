@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from statistics import mean
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import create_engine, text
 
 from app.api.deps import get_current_user
@@ -343,6 +343,7 @@ def _authorize_replay_access(row: Dict[str, Any], user: User) -> None:
 @router.get("/replay/{session_id}")
 async def get_replay_audit(
     session_id: int,
+    response: Response,
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -351,6 +352,9 @@ async def get_replay_audit(
     Students can replay their own sessions.
     Teachers can replay submissions linked to their courses.
     """
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+
     if session_id <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -426,6 +430,7 @@ async def get_replay_audit(
 @router.get("/sessions/{session_id}/replay")
 async def get_session_replay_compatible(
     session_id: int,
+    response: Response,
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -435,5 +440,6 @@ async def get_session_replay_compatible(
     """
     return await get_replay_audit(
         session_id=session_id,
+        response=response,
         current_user=current_user,
     )

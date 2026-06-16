@@ -1,4 +1,3 @@
-# backend/app/api/routes/user.py
 
 import json
 from datetime import datetime, timezone
@@ -12,6 +11,12 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.security import get_password_hash, verify_password
 from app.models.user import User
+
+from fastapi import Query, Response
+from app.core.config import settings
+from app.core.privacy import privacy_safe_export_session
+
+
 
 
 router = APIRouter()
@@ -340,6 +345,11 @@ async def get_privacy_summary(
 
 @router.get("/user/data-export")
 async def export_user_data(
+    response: Response,
+    include_sensitive: bool = Query(
+        default=settings.DATA_EXPORT_INCLUDE_SENSITIVE_BY_DEFAULT,
+        description="Include essay text and raw keystroke event data in the export.",
+    ),
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -347,6 +357,9 @@ async def export_user_data(
 
     This returns JSON so the frontend can download it as a file.
     """
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+
     user_id = str(current_user.id)
 
     with sync_engine.connect() as conn:
@@ -452,32 +465,21 @@ async def export_user_data(
     return {
         "status": "success",
         "exported_at": exported_at,
+        "privacy": {
+            "include_sensitive": include_sensitive,
+            "sensitive_fields": [
+                "text_content",
+                "raw_keystroke_data",
+            ],
+            "default_export_mode": "summary_without_raw_text_or_keystrokes",
+        },
         "profile": _serialize_user(current_user),
         "summary": _fetch_account_summary(user_id),
         "sessions": [
-            {
-                "id": row["id"],
-                "title": row["title"],
-                "text_content": row["text_content"],
-                "wpm": float(row["wpm"] or 0),
-                "total_keystrokes": int(row["total_keystrokes"] or 0),
-                "deletions": int(row["deletions"] or 0),
-                "pauses": int(row["pauses"] or 0),
-                "avg_iki": float(row["avg_iki"] or 0),
-                "duration_seconds": float(row["duration_seconds"] or 0),
-                "classification_result": row["classification_result"],
-                "ml_confidence_score": float(row["ml_confidence_score"] or 0),
-                "raw_keystroke_data": _parse_json(row["raw_keystroke_data"]),
-                "certificate_id": row["certificate_id"],
-                "document_hash": row["document_hash"],
-                "review_status": row["review_status"],
-                "review_notes": row["review_notes"],
-                "risk_level": row["risk_level"],
-                "course_name": row["course_name"],
-                "course_code": row["course_code"],
-                "created_at": _format_datetime(row["created_at"]),
-                "updated_at": _format_datetime(row["updated_at"]),
-            }
+            privacy_safe_export_session(
+                dict(row),
+                include_sensitive=include_sensitive,
+            )
             for row in session_rows
         ],
         "certificates": [
@@ -516,8 +518,7 @@ async def export_user_data(
             for row in owned_course_rows
         ],
     }
-
-
+    
 @router.delete("/user/account")
 async def delete_user_account(
     payload: DeleteAccountRequest,
