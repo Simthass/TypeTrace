@@ -284,7 +284,7 @@ export default function VerifyCertificatePage() {
                 className="mt-2 break-all text-[14px] font-semibold"
                 style={{ color: colors.text.primary }}
               >
-                {value || "—"}
+                {value || "-"}
               </p>
             </div>
           ))}

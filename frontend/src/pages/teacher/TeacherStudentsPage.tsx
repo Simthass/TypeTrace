@@ -248,7 +248,7 @@ export default function TeacherStudentsPage() {
                         className="mt-1 text-[13px] font-semibold"
                         style={{ color: colors.text.primary }}
                       >
-                        {value || "—"}
+                        {value || "-"}
                       </p>
                     </div>
                   ))}

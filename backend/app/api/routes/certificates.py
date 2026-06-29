@@ -2,18 +2,24 @@
 import io
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from reportlab.lib import colors as pdf_colors
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
+from PIL import Image, ImageDraw
+import qrcode
+from qrcode.constants import ERROR_CORRECT_H
 from sqlalchemy import create_engine, text
 
 from app.api.deps import get_current_user
-from app.core.config import settings
+from app.core.config import PROJECT_ROOT, settings
 from app.models.user import User
 from app.core.privacy import safe_public_certificate_identity
 
@@ -24,6 +30,34 @@ sync_engine = create_engine(settings.sync_database_url, pool_pre_ping=True)
 
 
 CERT_ID_PATTERN = re.compile(r"^[A-Za-z0-9\-_]{8,80}$")
+
+# Professional certificate asset locations. These keep the feature production-safe:
+# if the assets are missing in a deployed backend container, the PDF still renders
+# with a clean text fallback instead of crashing.
+FRONTEND_PUBLIC_DIR = PROJECT_ROOT / "frontend" / "public"
+BRAND_LOGO_CANDIDATES = (
+    FRONTEND_PUBLIC_DIR / "Logo.png",
+    FRONTEND_PUBLIC_DIR / "logo.png",
+    FRONTEND_PUBLIC_DIR / "QR-Logo.png",
+)
+QR_LOGO_CANDIDATES = (
+    FRONTEND_PUBLIC_DIR / "QR-Logo.png",
+    FRONTEND_PUBLIC_DIR / "Logo.png",
+    FRONTEND_PUBLIC_DIR / "logo.png",
+)
+
+# Premium PDF palette. Kept local to the backend PDF renderer so it does not
+# affect the frontend design system.
+PDF_BLUE = "#0B4F9C"
+PDF_BLUE_DARK = "#083B74"
+PDF_INK = "#111827"
+PDF_MUTED = "#6B7280"
+PDF_LINE = "#D7DEE8"
+PDF_PANEL = "#F7FAFC"
+PDF_SOFT_BLUE = "#EEF6FF"
+PDF_SUCCESS = "#047857"
+PDF_WARNING = "#B45309"
+PDF_DANGER = "#B91C1C"
 
 
 def _validate_certificate_id(cert_id: str) -> str:
@@ -187,13 +221,20 @@ def _authorize_certificate_audit(record: Dict[str, Any], user: User) -> None:
         )
 
 
+def _frontend_verify_url(cert_id: str) -> str:
+    """
+    URL encoded inside the certificate QR code.
+
+    This intentionally points to the React verification page, not the raw API
+    endpoint, so scanning the QR opens the public TypeTrace verification UI with
+    the certificate ID already loaded.
+    """
+    base_url = str(settings.FRONTEND_URL or "http://localhost:5173").rstrip("/")
+    return f"{base_url}/verify/{quote(str(cert_id).strip(), safe='')}"
+
+
 def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dict[str, Any]:
-    verify_url = str(
-        request.url_for(
-            "verify_certificate_public",
-            cert_id=record["certificate_id"],
-        )
-    )
+    verify_url = _frontend_verify_url(record["certificate_id"])
 
     identity = safe_public_certificate_identity(
         student_name=record["student_name"],
@@ -423,26 +464,51 @@ async def get_certificate_data_by_session(
     return payload
 
 
+def _find_existing_asset(candidates: tuple[Path, ...]) -> Optional[Path]:
+    for path in candidates:
+        try:
+            if path.exists() and path.is_file():
+                return path
+        except OSError:
+            continue
+    return None
+
+
 def _draw_wrapped_text(
     pdf: canvas.Canvas,
     text_value: str,
     x: float,
     y: float,
-    max_chars: int = 90,
-    line_height: float = 11,
+    max_width: float,
+    *,
+    font_name: str = "Helvetica",
+    font_size: float = 9,
+    line_height: float = 12,
+    color: str = PDF_INK,
 ) -> float:
-    value = text_value or ""
-    lines = []
+    """Draw text wrapped by actual PDF string width rather than raw character count."""
+    value = " ".join(str(text_value or "").split())
+    if not value:
+        return y
 
-    while len(value) > max_chars:
-        split_at = value.rfind(" ", 0, max_chars)
-        if split_at <= 0:
-            split_at = max_chars
-        lines.append(value[:split_at])
-        value = value[split_at:].strip()
+    pdf.setFont(font_name, font_size)
+    pdf.setFillColor(pdf_colors.HexColor(color))
 
-    if value:
-        lines.append(value)
+    words = value.split(" ")
+    lines: list[str] = []
+    current = ""
+
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if pdf.stringWidth(candidate, font_name, font_size) <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+
+    if current:
+        lines.append(current)
 
     for line in lines:
         pdf.drawString(x, y, line)
@@ -451,135 +517,413 @@ def _draw_wrapped_text(
     return y
 
 
+def _draw_pill(
+    pdf: canvas.Canvas,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    label: str,
+    *,
+    fill: str,
+    text_color: str = "#FFFFFF",
+) -> None:
+    pdf.setFillColor(pdf_colors.HexColor(fill))
+    pdf.setStrokeColor(pdf_colors.HexColor(fill))
+    pdf.roundRect(x, y, width, height, height / 2, fill=True, stroke=False)
+    pdf.setFillColor(pdf_colors.HexColor(text_color))
+    pdf.setFont("Helvetica-Bold", 8.5)
+    pdf.drawCentredString(x + width / 2, y + height / 2 - 3, label.upper())
+
+
+def _draw_key_value(
+    pdf: canvas.Canvas,
+    x: float,
+    y: float,
+    label: str,
+    value: Any,
+    *,
+    label_width: float = 92,
+    value_width: float = 275,
+    line_height: float = 13,
+) -> float:
+    pdf.setFont("Helvetica-Bold", 8.2)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_MUTED))
+    pdf.drawString(x, y, label.upper())
+
+    pdf.setFont("Helvetica", 9.4)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_INK))
+
+    text = str(value if value not in [None, ""] else "Not provided")
+    before_y = y
+    after_y = _draw_wrapped_text(
+        pdf,
+        text,
+        x + label_width,
+        y,
+        value_width,
+        font_name="Helvetica",
+        font_size=9.4,
+        line_height=line_height,
+        color=PDF_INK,
+    )
+    return min(before_y - 17, after_y - 4)
+
+
+def _draw_metric_card(
+    pdf: canvas.Canvas,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    label: str,
+    value: str,
+) -> None:
+    pdf.setFillColor(pdf_colors.white)
+    pdf.setStrokeColor(pdf_colors.HexColor(PDF_LINE))
+    pdf.roundRect(x, y, width, height, 8, fill=True, stroke=True)
+
+    pdf.setFont("Helvetica-Bold", 7.5)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_MUTED))
+    pdf.drawString(x + 10, y + height - 16, label.upper())
+
+    pdf.setFont("Helvetica-Bold", 15)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_INK))
+    pdf.drawString(x + 10, y + 13, value)
+
+
+def _make_logo_card(logo_path: Path, size: int) -> Image.Image:
+    """Create the rounded white centre card used inside the QR image."""
+    card_size = int(size * 0.28)
+    card = Image.new("RGBA", (card_size, card_size), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(card)
+    radius = int(card_size * 0.22)
+    draw.rounded_rectangle(
+        (0, 0, card_size - 1, card_size - 1),
+        radius=radius,
+        fill=(255, 255, 255, 255),
+        outline=(11, 79, 156, 255),
+        width=max(2, int(card_size * 0.025)),
+    )
+
+    with Image.open(logo_path) as logo:
+        logo = logo.convert("RGBA")
+        logo.thumbnail((int(card_size * 0.72), int(card_size * 0.72)), Image.LANCZOS)
+        lx = (card_size - logo.width) // 2
+        ly = (card_size - logo.height) // 2
+        card.alpha_composite(logo, (lx, ly))
+
+    return card
+
+
+def _build_branded_qr_image(verify_url: str) -> io.BytesIO:
+    """
+    Build a blue QR code with the TypeTrace QR logo in the centre.
+
+    The QR uses high error correction because the centre logo intentionally
+    covers part of the QR matrix. Keep the centre card below ~30% of the QR size.
+    """
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=ERROR_CORRECT_H,
+        box_size=12,
+        border=2,
+    )
+    qr.add_data(verify_url)
+    qr.make(fit=True)
+
+    qr_img = qr.make_image(fill_color=PDF_BLUE, back_color="white").convert("RGBA")
+    logo_path = _find_existing_asset(QR_LOGO_CANDIDATES)
+
+    if logo_path:
+        card = _make_logo_card(logo_path, qr_img.size[0])
+        position = ((qr_img.width - card.width) // 2, (qr_img.height - card.height) // 2)
+        qr_img.alpha_composite(card, position)
+
+    output = io.BytesIO()
+    qr_img.save(output, format="PNG")
+    output.seek(0)
+    return output
+
+
+def _draw_brand_logo(pdf: canvas.Canvas, x: float, y: float, max_width: float = 128, max_height: float = 38) -> None:
+    logo_path = _find_existing_asset(BRAND_LOGO_CANDIDATES)
+
+    if logo_path:
+        try:
+            pdf.drawImage(
+                ImageReader(str(logo_path)),
+                x,
+                y,
+                width=max_width,
+                height=max_height,
+                preserveAspectRatio=True,
+                mask="auto",
+                anchor="w",
+            )
+            return
+        except Exception:
+            pass
+
+    # Fallback wordmark if the backend container does not include frontend assets.
+    pdf.setFont("Helvetica-Bold", 18)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_BLUE))
+    pdf.drawString(x, y + 9, "TypeTrace")
+
+
+def _status_color(status: str) -> str:
+    normalized = str(status or "").upper()
+    if normalized == "VALID":
+        return PDF_SUCCESS
+    if normalized == "REVIEW_REQUIRED":
+        return PDF_WARNING
+    return PDF_DANGER
+
+
+def _format_duration_pdf(seconds: Any) -> str:
+    try:
+        total = int(float(seconds or 0))
+    except (TypeError, ValueError):
+        return "Unknown"
+
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h {minutes}m {secs}s"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
+
 def _build_certificate_pdf(record: Dict[str, Any], verify_url: str) -> bytes:
     buffer = io.BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=letter)
+    pdf = canvas.Canvas(buffer, pagesize=A4)
 
-    width, height = letter
-    margin = 54
-    y = height - 60
+    width, height = A4
+    margin = 0.72 * inch
+    content_width = width - (margin * 2)
 
     pdf.setTitle(f"TypeTrace Certificate {record['certificate_id']}")
+    pdf.setAuthor("TypeTrace")
+    pdf.setSubject("Behavioral authorship evidence certificate")
 
-    pdf.setFillColor(pdf_colors.HexColor("#111827"))
-    pdf.rect(0, height - 90, width, 90, fill=True, stroke=False)
-
+    # White page with premium border and subtle blue accent.
     pdf.setFillColor(pdf_colors.white)
-    pdf.setFont("Helvetica-Bold", 22)
-    pdf.drawString(margin, height - 48, "TypeTrace Writing Evidence Certificate")
+    pdf.rect(0, 0, width, height, fill=True, stroke=False)
 
-    pdf.setFont("Helvetica", 10)
-    pdf.drawString(margin, height - 68, "Behavioral writing evidence for academic review")
+    pdf.setStrokeColor(pdf_colors.HexColor(PDF_BLUE))
+    pdf.setLineWidth(1.25)
+    pdf.roundRect(margin * 0.62, margin * 0.62, width - margin * 1.24, height - margin * 1.24, 12, fill=False, stroke=True)
 
-    y -= 70
+    pdf.setStrokeColor(pdf_colors.HexColor(PDF_LINE))
+    pdf.setLineWidth(0.6)
+    pdf.roundRect(margin * 0.78, margin * 0.78, width - margin * 1.56, height - margin * 1.56, 9, fill=False, stroke=True)
 
-    status = record["status"]
-    status_color = "#047857" if status == "VALID" else "#B45309" if status == "REVIEW_REQUIRED" else "#B91C1C"
+    # Header.
+    top_y = height - margin - 8
+    _draw_brand_logo(pdf, margin, top_y - 32, max_width=124, max_height=34)
 
-    pdf.setFillColor(pdf_colors.HexColor(status_color))
-    pdf.roundRect(margin, y - 24, 170, 30, 6, fill=True, stroke=False)
-    pdf.setFillColor(pdf_colors.white)
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(margin + 14, y - 12, f"STATUS: {status}")
+    pdf.setFont("Helvetica-Bold", 7.8)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_MUTED))
+    pdf.drawRightString(width - margin, top_y - 2, "CERTIFICATE ID")
+    pdf.setFont("Courier-Bold", 9.4)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_INK))
+    pdf.drawRightString(width - margin, top_y - 17, record["certificate_id"])
 
-    pdf.setFillColor(pdf_colors.HexColor("#111827"))
-    pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawRightString(width - margin, y - 4, record["certificate_id"])
+    pdf.setStrokeColor(pdf_colors.HexColor(PDF_LINE))
+    pdf.line(margin, top_y - 47, width - margin, top_y - 47)
 
-    y -= 60
+    # Hero title.
+    y = top_y - 90
+    pdf.setFont("Helvetica-Bold", 24)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_INK))
+    pdf.drawCentredString(width / 2, y, "Writing Evidence Certificate")
 
-    pdf.setStrokeColor(pdf_colors.HexColor("#E5E7EB"))
-    pdf.line(margin, y, width - margin, y)
-    y -= 28
+    y -= 20
+    pdf.setFont("Helvetica", 9.8)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_MUTED))
+    pdf.drawCentredString(width / 2, y, "Behavioral keystroke evidence for academic authorship review")
 
-    pdf.setFillColor(pdf_colors.HexColor("#111827"))
-    pdf.setFont("Helvetica-Bold", 15)
-    pdf.drawString(margin, y, "Verified Writing Session")
-    y -= 24
+    y -= 32
+    status = str(record.get("status") or "UNKNOWN")
+    status_fill = _status_color(status)
+    _draw_pill(pdf, width / 2 - 63, y, 126, 24, status.replace("_", " "), fill=status_fill)
 
-    details = [
-        ("Student", record["student_name"]),
-        ("Student ID", record["student_id"] or "Not provided"),
-        ("Institution", record["university_name"] or "Not provided"),
-        ("Course", record["course_name"] or "Personal session"),
-        ("Document Title", record["title"]),
-        ("Generated", record["generated_at"]),
-        ("Classification", record["classification_label"]),
-        ("Confidence", f"{record['confidence']}%"),
-        ("Risk Level", record["risk_level"]),
-        ("Word Count", str(record["word_count"])),
-        ("WPM", str(record["wpm"])),
-        ("Duration", f"{record['duration_seconds']} seconds"),
-        ("Keystrokes", str(record["total_keystrokes"])),
-        ("Deletions", str(record["deletions"])),
-        ("Pauses", str(record["pauses"])),
+    # Main details panel.
+    y -= 42
+    panel_x = margin
+    panel_h = 184
+    panel_y = y - panel_h
+    pdf.setFillColor(pdf_colors.HexColor(PDF_PANEL))
+    pdf.setStrokeColor(pdf_colors.HexColor(PDF_LINE))
+    pdf.roundRect(panel_x, panel_y, content_width, panel_h, 11, fill=True, stroke=True)
+
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_BLUE_DARK))
+    pdf.drawString(panel_x + 18, y - 18, "Verified session details")
+
+    left_x = panel_x + 18
+    right_x = panel_x + content_width / 2 + 12
+    row_y_left = y - 44
+    row_y_right = y - 44
+    label_w = 86
+    value_w = content_width / 2 - 118
+
+    left_details = [
+        ("Student", record.get("student_name") or "Not provided"),
+        ("Student ID", record.get("student_id") or "Not provided"),
+        ("Institution", record.get("university_name") or "Not provided"),
+        ("Department", record.get("department") or "Not provided"),
+        ("Course", record.get("course_name") or "Personal session"),
+        ("Course code", record.get("course_code") or "Not provided"),
     ]
 
-    pdf.setFont("Helvetica", 10)
+    right_details = [
+        ("Document", record.get("title") or "Untitled Document"),
+        ("Generated", record.get("generated_at") or "Unknown"),
+        ("Classification", record.get("classification_label") or "Unknown"),
+        ("Risk level", record.get("risk_level") or "Unknown"),
+        ("Review", record.get("review_status") or "PENDING"),
+        ("Ledger", record.get("ledger_status") or "SESSION_RECORDED"),
+    ]
 
-    for label, value in details:
-        pdf.setFillColor(pdf_colors.HexColor("#6B7280"))
-        pdf.drawString(margin, y, f"{label}:")
-        pdf.setFillColor(pdf_colors.HexColor("#111827"))
-        pdf.drawString(margin + 110, y, str(value))
-        y -= 18
+    for label, value in left_details:
+        row_y_left = _draw_key_value(
+            pdf, left_x, row_y_left, label, value,
+            label_width=label_w,
+            value_width=value_w,
+        )
 
-    y -= 8
+    for label, value in right_details:
+        row_y_right = _draw_key_value(
+            pdf, right_x, row_y_right, label, value,
+            label_width=label_w,
+            value_width=value_w,
+        )
 
-    pdf.setFillColor(pdf_colors.HexColor("#111827"))
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(margin, y, "Document Integrity Hash")
-    y -= 18
+    # Evidence metrics.
+    metrics_y = panel_y - 66
+    card_gap = 10
+    card_w = (content_width - card_gap * 3) / 4
+    metric_values = [
+        ("Confidence", f"{record.get('confidence', 0)}%"),
+        ("Words", str(record.get("word_count") or 0)),
+        ("WPM", str(record.get("wpm") or 0)),
+        ("Duration", _format_duration_pdf(record.get("duration_seconds"))),
+    ]
+    for i, (label, value) in enumerate(metric_values):
+        _draw_metric_card(
+            pdf,
+            margin + i * (card_w + card_gap),
+            metrics_y,
+            card_w,
+            50,
+            label,
+            value,
+        )
 
-    pdf.setFont("Courier", 8)
-    pdf.setFillColor(pdf_colors.HexColor("#111827"))
-    y = _draw_wrapped_text(
-        pdf=pdf,
-        text_value=record["document_hash"],
-        x=margin,
-        y=y,
-        max_chars=88,
-        line_height=10,
+    # Behavioral evidence row.
+    evidence_y = metrics_y - 44
+    pdf.setFont("Helvetica-Bold", 10.5)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_BLUE_DARK))
+    pdf.drawString(margin, evidence_y, "Behavioral evidence summary")
+
+    evidence_y -= 18
+    pdf.setFont("Helvetica", 8.8)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_INK))
+    evidence_items = [
+        f"Keystrokes: {record.get('total_keystrokes') or 0}",
+        f"Deletions: {record.get('deletions') or 0}",
+        f"Pauses: {record.get('pauses') or 0}",
+        f"Average IKI: {record.get('avg_iki') or 0} ms",
+    ]
+    pdf.drawString(margin, evidence_y, "   •   ".join(evidence_items))
+
+    # Integrity hash block.
+    hash_y = evidence_y - 32
+    pdf.setFillColor(pdf_colors.HexColor(PDF_SOFT_BLUE))
+    pdf.setStrokeColor(pdf_colors.HexColor("#C9E2FF"))
+    pdf.roundRect(margin, hash_y - 52, content_width, 66, 8, fill=True, stroke=True)
+
+    pdf.setFont("Helvetica-Bold", 8.5)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_BLUE_DARK))
+    pdf.drawString(margin + 14, hash_y - 6, "DOCUMENT INTEGRITY HASH (SHA-256)")
+    _draw_wrapped_text(
+        pdf,
+        str(record.get("document_hash") or "Not available"),
+        margin + 14,
+        hash_y - 24,
+        content_width - 28,
+        font_name="Courier",
+        font_size=7.8,
+        line_height=9.5,
+        color=PDF_INK,
     )
 
-    y -= 14
+    # QR verification block.
+    qr_size = 102
+    qr_x = width - margin - qr_size
+    qr_y = margin + 30
+    qr_stream = _build_branded_qr_image(verify_url)
+    pdf.drawImage(ImageReader(qr_stream), qr_x, qr_y, width=qr_size, height=qr_size, mask="auto")
+    pdf.linkURL(verify_url, (qr_x, qr_y, qr_x + qr_size, qr_y + qr_size), relative=0)
 
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.setFillColor(pdf_colors.HexColor("#111827"))
-    pdf.drawString(margin, y, "Public Verification URL")
-    y -= 18
+    pdf.setFont("Helvetica-Bold", 8.8)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_BLUE_DARK))
+    pdf.drawCentredString(qr_x + qr_size / 2, qr_y - 12, "SCAN TO VERIFY")
 
-    pdf.setFont("Helvetica", 9)
-    pdf.setFillColor(pdf_colors.HexColor("#374151"))
-    y = _draw_wrapped_text(
-        pdf=pdf,
-        text_value=verify_url,
-        x=margin,
-        y=y,
-        max_chars=88,
-        line_height=10,
+    verify_text_x = margin
+    verify_text_y = qr_y + qr_size - 4
+    pdf.setFont("Helvetica-Bold", 10.5)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_INK))
+    pdf.drawString(verify_text_x, verify_text_y, "Public verification")
+
+    verify_text_y -= 17
+    _draw_wrapped_text(
+        pdf,
+        "Scan the QR code or open the verification link to view the live TypeTrace certificate record. The public page does not expose essay text or raw keystroke data.",
+        verify_text_x,
+        verify_text_y,
+        qr_x - margin - 22,
+        font_name="Helvetica",
+        font_size=8.8,
+        line_height=11,
+        color=PDF_MUTED,
     )
 
-    y -= 28
-
-    pdf.setFillColor(pdf_colors.HexColor("#6B7280"))
-    pdf.setFont("Helvetica", 8)
-    footer_text = (
-        "This certificate summarizes a recorded TypeTrace writing session using "
-        "keystroke dynamics, behavioral timing signals, cryptographic hashing, "
-        "and ML-assisted authorship analysis. It provides supporting evidence for "
-        "academic review and should be interpreted alongside institutional academic "
-        "integrity procedures."
+    verify_text_y -= 42
+    pdf.setFont("Helvetica-Bold", 8.2)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_MUTED))
+    pdf.drawString(verify_text_x, verify_text_y, "VERIFICATION URL")
+    _draw_wrapped_text(
+        pdf,
+        verify_url,
+        verify_text_x,
+        verify_text_y - 14,
+        qr_x - margin - 22,
+        font_name="Helvetica",
+        font_size=7.8,
+        line_height=9,
+        color=PDF_BLUE_DARK,
     )
-    _draw_wrapped_text(pdf, footer_text, margin, y, max_chars=105, line_height=10)
+    pdf.linkURL(verify_url, (verify_text_x, verify_text_y - 34, qr_x - 22, verify_text_y + 3), relative=0)
 
-    pdf.setFillColor(pdf_colors.HexColor("#F4F4F5"))
-    pdf.rect(0, 0, width, 38, fill=True, stroke=False)
+    # Footer/legal note.
+    footer_y = margin * 0.84
+    pdf.setStrokeColor(pdf_colors.HexColor(PDF_LINE))
+    pdf.line(margin, footer_y + 20, width - margin, footer_y + 20)
 
-    pdf.setFillColor(pdf_colors.HexColor("#6B7280"))
-    pdf.setFont("Helvetica", 8)
-    pdf.drawString(margin, 18, "TypeTrace — Behavioral Authorship Verification")
-    pdf.drawRightString(width - margin, 18, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
+    pdf.setFont("Helvetica", 7.4)
+    pdf.setFillColor(pdf_colors.HexColor(PDF_MUTED))
+    pdf.drawString(margin, footer_y, "TypeTrace - Behavioral Authorship Verification")
+    pdf.drawRightString(width - margin, footer_y, datetime.now(timezone.utc).strftime("Generated %Y-%m-%d %H:%M UTC"))
+
+    disclaimer = (
+        "This certificate provides probabilistic behavioural evidence for academic review. "
+        "It should support, not replace, institutional judgement and academic integrity procedures."
+    )
+    pdf.setFont("Helvetica", 6.8)
+    pdf.drawCentredString(width / 2, margin * 0.66, disclaimer)
 
     pdf.showPage()
     pdf.save()
@@ -606,7 +950,7 @@ async def download_certificate_pdf(
             detail="Certificate not found.",
         )
 
-    verify_url = str(request.url_for("verify_certificate_public", cert_id=record["certificate_id"]))
+    verify_url = _frontend_verify_url(record["certificate_id"])
     pdf_bytes = _build_certificate_pdf(_pdf_public_record(record), verify_url)
 
     filename = f"TypeTrace_Certificate_{record['certificate_id']}.pdf"
@@ -619,3 +963,4 @@ async def download_certificate_pdf(
             "Cache-Control": "no-store",
         },
     )
+

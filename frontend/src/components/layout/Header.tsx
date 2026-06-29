@@ -463,7 +463,7 @@ function ProductDropdown({ onClose }: { onClose: () => void }) {
           <span style={{ color: colors.brand, fontWeight: 600 }}>
             TypeTrace
           </span>{" "}
-          — Behavioral authorship verification
+          - Behavioral authorship verification
         </p>
       </div>
     </motion.div>
@@ -1134,7 +1134,7 @@ function AnnouncementBanner({ onDismiss }: { onDismiss: () => void }) {
           whiteSpace: "nowrap",
         }}
       >
-        TypeTrace v1.0 — Behavioral authorship verification now in early access
+        TypeTrace v1.0 - Behavioral authorship verification now in early access
       </span>
       <Link
         to={ROUTES.HOW_IT_WORKS}
@@ -1530,7 +1530,7 @@ export default function Header() {
 
   return (
     <>
-      {/* ── Announcement banner — only when not logged in and not dismissed ── */}
+      {/* ── Announcement banner - only when not logged in and not dismissed ── */}
       <AnimatePresence>
         {!user && showBanner && (
           <motion.div

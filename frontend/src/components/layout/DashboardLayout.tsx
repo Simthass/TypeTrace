@@ -424,7 +424,7 @@ export default function DashboardLayout() {
                 <Icon type="menu" />
               </button>
 
-              {/* Page title area — matches PolicyPilot's "Dashboard" header style */}
+              {/* Page title area - matches PolicyPilot's "Dashboard" header style */}
               <div className="hidden lg:block">
                 <p
                   className="text-[11px] font-bold uppercase tracking-[0.16em]"

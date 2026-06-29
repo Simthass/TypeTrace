@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "../constants/routes";
 import { useKeystrokeCapture } from "../hooks/useKeystrokeCapture";
+import {
+  useEditorDraftRecovery,
+  type EditorDraftSnapshot,
+} from "../hooks/useEditorDraftRecovery";
 import { api, getApiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/ToastProvider";
 import { useAuthStore } from "../store/authStore";
@@ -31,6 +35,22 @@ interface AnalysisResult {
   session_id?: number | null;
   kill_switch_triggered?: boolean;
   kill_switch_reason?: string | null;
+  risk_level?: string;
+  risk_score?: number;
+  advanced_stats?: {
+    paste_count?: number;
+    paste_ratio?: number;
+    deletion_ratio?: number;
+    risk_signals?: string[];
+    human_signals?: string[];
+    decision_source?: string;
+    model_available?: boolean;
+    model_version?: string;
+    model_accuracy?: number | string | null;
+    model_cv_accuracy?: number | string | null;
+    academic_interpretation?: string;
+    [key: string]: unknown;
+  };
   stats: {
     keystrokes: number;
     deletions: number;
@@ -54,6 +74,21 @@ function formatDuration(seconds: number): string {
   const m = Math.floor(safe / 60);
   const s = safe % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function countPasteEvents(
+  events: Array<{ type?: string; key?: string }>,
+): number {
+  return events.filter(
+    (event) => event?.type === "paste" || event?.key === "__PASTE_EVENT__",
+  ).length;
+}
+
+function getEvidenceCount(
+  events: Array<{ type?: string; key?: string }>,
+  keydowns: number,
+): number {
+  return Math.max(keydowns, countPasteEvents(events));
 }
 
 function getResultStyle(classification: string) {
@@ -141,7 +176,7 @@ function SidebarLabel({ children }: { children: string }) {
   );
 }
 
-/** Animated capture bar — the signature element.
+/** Animated capture bar - the signature element.
  *  A thin bar below the textarea header that grows as keystrokes accumulate
  *  toward the MINIMUM_KEYSTROKES threshold, then pulses green when ready.
  */
@@ -162,7 +197,7 @@ function CaptureBar({
       style={{ background: colors.surface[200] }}
       title={
         ready
-          ? "Capture threshold reached — ready to analyze"
+          ? "Capture threshold reached - ready to analyze"
           : `${keystrokes}/${MINIMUM_KEYSTROKES} keystrokes captured`
       }
     >
@@ -188,7 +223,7 @@ function CaptureBar({
   );
 }
 
-/** Inline save state badge — top of editor */
+/** Inline save state badge - top of editor */
 function SaveIndicator({ state }: { state: "saved" | "saving" | "unsaved" }) {
   const cfg = {
     saved: {
@@ -449,232 +484,509 @@ function CourseSelectorModal({
   );
 }
 
-/** Result panel shown in sidebar after analysis */
-function ResultPanel({
+/** Draft recovery prompt shown when an unfinished local draft exists */
+function DraftRecoveryModal({
+  draft,
+  onContinue,
+  onDiscard,
+}: {
+  draft: EditorDraftSnapshot;
+  onContinue: () => void;
+  onDiscard: () => void;
+}) {
+  const savedDate = new Date(draft.savedAt).toLocaleString();
+  const words = countWords(draft.text);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+      <div
+        className="absolute inset-0"
+        style={{ background: "rgba(15, 23, 42, 0.58)" }}
+      />
+      <div
+        className="relative z-10 w-full max-w-[560px] overflow-hidden rounded-2xl border bg-white"
+        style={{
+          borderColor: colors.surface[200],
+          boxShadow: "0 34px 90px rgba(15,23,42,0.28)",
+        }}
+      >
+        <div className="px-6 pb-5 pt-6">
+          <div
+            className="mb-5 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em]"
+            style={{
+              borderColor: colors.amber,
+              background: colors.amberTint,
+              color: colors.text.primary,
+            }}
+          >
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ background: colors.amber }}
+            />
+            Unsaved writing session found
+          </div>
+
+          <h2
+            className="text-[26px] font-extrabold leading-tight tracking-[-0.045em]"
+            style={{ color: colors.text.primary }}
+          >
+            Continue your previous unfinished session?
+          </h2>
+          <p
+            className="mt-3 max-w-[48ch] text-[14px] leading-7"
+            style={{ color: colors.text.secondary }}
+          >
+            TypeTrace found a locally saved editor draft. Continuing restores
+            the document text, course selection, captured keystroke evidence,
+            and timing state so the session can keep building a single evidence
+            trail.
+          </p>
+
+          <div
+            className="mt-5 grid gap-3 rounded-xl border p-4 sm:grid-cols-3"
+            style={{
+              borderColor: colors.surface[200],
+              background: colors.surface[50],
+            }}
+          >
+            {[
+              ["Title", draft.title || "Untitled document"],
+              ["Words", words.toLocaleString()],
+              ["Captured events", draft.keystrokeLog.length.toLocaleString()],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <p
+                  className="text-[10px] font-bold uppercase tracking-[0.15em]"
+                  style={{ color: colors.text.muted }}
+                >
+                  {label}
+                </p>
+                <p
+                  className="mt-1 truncate text-[13px] font-bold"
+                  style={{ color: colors.text.primary }}
+                >
+                  {value}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-3 text-[12px]" style={{ color: colors.text.muted }}>
+            Last saved locally: {savedDate}
+          </p>
+        </div>
+
+        <div
+          className="flex flex-col-reverse gap-2 border-t px-6 py-4 sm:flex-row sm:justify-end"
+          style={{ borderColor: colors.surface[200] }}
+        >
+          <button
+            type="button"
+            onClick={onDiscard}
+            className="rounded-lg border px-4 py-[10px] text-[13px] font-semibold transition hover:brightness-95"
+            style={{
+              borderColor: colors.surface[200],
+              background: colors.surface[50],
+              color: colors.text.secondary,
+            }}
+          >
+            Discard local draft
+          </button>
+          <button
+            type="button"
+            onClick={onContinue}
+            className="rounded-lg px-5 py-[10px] text-[13px] font-bold text-white transition hover:brightness-110"
+            style={{ background: colors.brand }}
+          >
+            Continue session
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Full-screen SaaS-style result modal shown after analysis */
+function AnalysisResultModal({
   result,
+  onClose,
   onNewSession,
 }: {
   result: AnalysisResult;
+  onClose: () => void;
   onNewSession: () => void;
 }) {
   const style = getResultStyle(result.classification);
   const navigate = useNavigate();
+  const riskSignals = result.advanced_stats?.risk_signals ?? [];
+  const humanSignals = result.advanced_stats?.human_signals ?? [];
+  const pasteCount = Number(result.advanced_stats?.paste_count ?? 0);
+  const riskScore = Math.round(
+    Number(result.risk_score ?? result.advanced_stats?.risk_score ?? 0),
+  );
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* Classification verdict */}
-      <div
-        className="rounded-lg border p-5"
+    <div className="fixed inset-0 z-[65] flex items-center justify-center px-4 py-6">
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
         style={{
-          borderColor: style.accent,
-          background: style.bg,
+          background: "rgba(15, 23, 42, 0.62)",
+          backdropFilter: "blur(6px)",
         }}
+        onClick={onClose}
+        aria-label="Close analysis result"
+      />
+
+      <div
+        className="relative z-10 flex max-h-[92vh] w-full max-w-[980px] flex-col overflow-hidden rounded-2xl border bg-white"
+        style={{
+          borderColor: colors.surface[200],
+          boxShadow: "0 34px 110px rgba(15,23,42,0.32)",
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Behavioral analysis result"
       >
-        <p
-          className="text-[10px] font-bold uppercase tracking-[0.18em]"
-          style={{ color: style.text, opacity: 0.7 }}
+        <div
+          className="border-b px-6 py-5"
+          style={{
+            borderColor: colors.surface[200],
+            background: colors.surface[50],
+          }}
         >
-          Behavioral classification
-        </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p
+                className="text-[10px] font-bold uppercase tracking-[0.18em]"
+                style={{ color: colors.brand }}
+              >
+                Behavioral evidence report
+              </p>
+              <h2
+                className="mt-1 text-[24px] font-extrabold tracking-[-0.04em]"
+                style={{ color: colors.text.primary }}
+              >
+                Analysis complete
+              </h2>
+              <p
+                className="mt-2 max-w-[70ch] text-[13px] leading-6"
+                style={{ color: colors.text.secondary }}
+              >
+                This report summarizes writing-process evidence. It should
+                support academic review, not act as automatic proof of
+                authorship or misconduct.
+              </p>
+            </div>
 
-        <div className="mt-3 flex items-end justify-between gap-3">
-          <div>
-            <p
-              className="text-[3rem] font-extrabold leading-none tracking-[-0.04em]"
-              style={{ color: style.text }}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border px-3 py-2 text-[12px] font-semibold transition hover:brightness-95"
+              style={{
+                borderColor: colors.surface[200],
+                background: colors.surface[100],
+                color: colors.text.secondary,
+              }}
             >
-              {Math.round(result.confidence)}%
-            </p>
-            <p
-              className="mt-2 text-[13px] font-bold"
-              style={{ color: style.text }}
-            >
-              {style.label}
-            </p>
-            <p
-              className="mt-1 text-[11px] leading-[1.5]"
-              style={{ color: style.text, opacity: 0.75 }}
-            >
-              {style.sublabel}
-            </p>
+              Close
+            </button>
           </div>
-
-          {/* Confidence arc indicator */}
-          <svg width="52" height="52" viewBox="0 0 52 52" className="shrink-0">
-            <circle
-              cx="26"
-              cy="26"
-              r="22"
-              fill="none"
-              stroke={style.accent}
-              strokeOpacity="0.2"
-              strokeWidth="4"
-            />
-            <circle
-              cx="26"
-              cy="26"
-              r="22"
-              fill="none"
-              stroke={style.barColor}
-              strokeWidth="4"
-              strokeLinecap="round"
-              strokeDasharray={`${2 * Math.PI * 22}`}
-              strokeDashoffset={`${2 * Math.PI * 22 * (1 - result.confidence / 100)}`}
-              transform="rotate(-90 26 26)"
-            />
-          </svg>
         </div>
 
-        {result.kill_switch_triggered && result.kill_switch_reason && (
-          <div
-            className="mt-3 rounded-md border px-3 py-2 text-[11px] leading-[1.6]"
-            style={{
-              borderColor: style.accent,
-              color: style.text,
-              background: "rgba(0,0,0,0.04)",
-            }}
-          >
-            {result.kill_switch_reason}
+        <div className="overflow-y-auto px-6 py-6">
+          <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+            <section
+              className="rounded-2xl border p-6"
+              style={{ borderColor: style.accent, background: style.bg }}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-[0.18em]"
+                    style={{ color: style.text, opacity: 0.72 }}
+                  >
+                    Classification
+                  </p>
+                  <p
+                    className="mt-3 text-[42px] font-black leading-none tracking-[-0.055em]"
+                    style={{ color: style.text }}
+                  >
+                    {Math.round(result.confidence)}%
+                  </p>
+                  <p
+                    className="mt-3 text-[16px] font-extrabold"
+                    style={{ color: style.text }}
+                  >
+                    {style.label}
+                  </p>
+                  <p
+                    className="mt-2 text-[12px] leading-6"
+                    style={{ color: style.text, opacity: 0.78 }}
+                  >
+                    {style.sublabel}
+                  </p>
+                </div>
+
+                <svg
+                  width="84"
+                  height="84"
+                  viewBox="0 0 84 84"
+                  className="shrink-0"
+                >
+                  <circle
+                    cx="42"
+                    cy="42"
+                    r="34"
+                    fill="none"
+                    stroke={style.accent}
+                    strokeOpacity="0.2"
+                    strokeWidth="7"
+                  />
+                  <circle
+                    cx="42"
+                    cy="42"
+                    r="34"
+                    fill="none"
+                    stroke={style.barColor}
+                    strokeWidth="7"
+                    strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 34}`}
+                    strokeDashoffset={`${2 * Math.PI * 34 * (1 - result.confidence / 100)}`}
+                    transform="rotate(-90 42 42)"
+                  />
+                </svg>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                {[
+                  [
+                    "Risk level",
+                    result.risk_level ??
+                      result.advanced_stats?.risk_level ??
+                      "LOW",
+                  ],
+                  ["Risk score", `${riskScore}%`],
+                  ["Paste events", pasteCount],
+                  [
+                    "Decision",
+                    result.advanced_stats?.decision_source ?? "model/rules",
+                  ],
+                ].map(([label, value]) => (
+                  <div
+                    key={String(label)}
+                    className="rounded-xl border px-3 py-3"
+                    style={{
+                      borderColor: style.accent,
+                      background: "rgba(255,255,255,0.45)",
+                    }}
+                  >
+                    <p
+                      className="text-[10px] font-bold uppercase tracking-[0.14em]"
+                      style={{ color: style.text, opacity: 0.65 }}
+                    >
+                      {label}
+                    </p>
+                    <p
+                      className="mt-1 text-[14px] font-extrabold"
+                      style={{ color: style.text }}
+                    >
+                      {String(value)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {result.kill_switch_triggered && result.kill_switch_reason && (
+                <div
+                  className="mt-4 rounded-xl border px-4 py-3 text-[12px] leading-6"
+                  style={{
+                    borderColor: style.accent,
+                    color: style.text,
+                    background: "rgba(0,0,0,0.04)",
+                  }}
+                >
+                  {result.kill_switch_reason}
+                </div>
+              )}
+            </section>
+
+            <section
+              className="rounded-2xl border bg-white p-5"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <SidebarLabel>Core behavioral metrics</SidebarLabel>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ["Words per minute", result.stats.wpm],
+                  ["Avg. IKI", `${result.stats.avgIki} ms`],
+                  ["Keystrokes", result.stats.keystrokes],
+                  ["Deletions", result.stats.deletions],
+                  ["Pauses", result.stats.pauses],
+                  ["Duration", formatDuration(result.stats.sessionSeconds)],
+                ].map(([label, value]) => (
+                  <div
+                    key={String(label)}
+                    className="rounded-xl border px-4 py-3"
+                    style={{
+                      borderColor: colors.surface[200],
+                      background: colors.surface[50],
+                    }}
+                  >
+                    <p
+                      className="text-[10px] font-bold uppercase tracking-[0.14em]"
+                      style={{ color: colors.text.muted }}
+                    >
+                      {label}
+                    </p>
+                    <p
+                      className="mt-1 text-[16px] font-extrabold"
+                      style={{ color: colors.text.primary }}
+                    >
+                      {value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {result.document_hash && (
+                <div className="mt-5">
+                  <SidebarLabel>Document fingerprint</SidebarLabel>
+                  <p
+                    className="rounded-xl border px-4 py-3 font-mono text-[10px] leading-6"
+                    style={{
+                      borderColor: colors.surface[200],
+                      background: colors.surface[100],
+                      color: colors.text.muted,
+                    }}
+                  >
+                    {result.document_hash}
+                  </p>
+                </div>
+              )}
+            </section>
           </div>
-        )}
-      </div>
 
-      {/* Supporting evidence disclaimer */}
-      <div className="mt-4">
-        <p
-          className="text-[11px] leading-[1.6]"
-          style={{ color: colors.text.secondary }}
-        >
-          This result summarizes behavioral writing evidence captured during the
-          session. It should be interpreted as supporting authorship evidence,
-          not as absolute proof of authorship or misconduct.
-        </p>
-      </div>
+          <div className="mt-5 grid gap-5 lg:grid-cols-2">
+            <section
+              className="rounded-2xl border p-5"
+              style={{
+                borderColor: colors.surface[200],
+                background: colors.surface[50],
+              }}
+            >
+              <SidebarLabel>Human-supporting signals</SidebarLabel>
+              <div className="space-y-2">
+                {(humanSignals.length
+                  ? humanSignals
+                  : [
+                      "No explicit human-supporting signals were returned by the analysis engine.",
+                    ]
+                ).map((signal) => (
+                  <div
+                    key={signal}
+                    className="rounded-lg border px-3 py-2 text-[12px] leading-5"
+                    style={{
+                      borderColor: colors.surface[200],
+                      background: colors.surface[100],
+                      color: colors.text.secondary,
+                    }}
+                  >
+                    {signal}
+                  </div>
+                ))}
+              </div>
+            </section>
 
-      {/* Behavioral stats */}
-      <div className="mt-5">
-        <SidebarLabel>Behavioral metrics</SidebarLabel>
-        <div className="divide-y" style={{ borderColor: colors.surface[200] }}>
-          <StatRow
-            label="Words per minute"
-            value={result.stats.wpm}
-            highlight
-          />
-          <StatRow
-            label="Avg. inter-key interval"
-            value={`${result.stats.avgIki} ms`}
-          />
-          <StatRow label="Total keystrokes" value={result.stats.keystrokes} />
-          <StatRow label="Deletions" value={result.stats.deletions} />
-          <StatRow label="Detected pauses" value={result.stats.pauses} />
-          <StatRow
-            label="Session duration"
-            value={formatDuration(result.stats.sessionSeconds)}
-          />
+            <section
+              className="rounded-2xl border p-5"
+              style={{
+                borderColor: colors.surface[200],
+                background: colors.surface[50],
+              }}
+            >
+              <SidebarLabel>Review-risk signals</SidebarLabel>
+              <div className="space-y-2">
+                {(riskSignals.length
+                  ? riskSignals
+                  : [
+                      "No major review-risk signals were returned by the analysis engine.",
+                    ]
+                ).map((signal) => (
+                  <div
+                    key={signal}
+                    className="rounded-lg border px-3 py-2 text-[12px] leading-5"
+                    style={{
+                      borderColor: colors.surface[200],
+                      background: colors.surface[100],
+                      color: colors.text.secondary,
+                    }}
+                  >
+                    {signal}
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
         </div>
-      </div>
 
-      {/* Document hash */}
-      {result.document_hash && (
-        <div className="mt-5">
-          <SidebarLabel>Document fingerprint</SidebarLabel>
-          <div
-            className="rounded-lg border px-3 py-3"
+        <div
+          className="flex flex-col-reverse gap-2 border-t px-6 py-4 sm:flex-row sm:justify-end"
+          style={{
+            borderColor: colors.surface[200],
+            background: colors.surface[50],
+          }}
+        >
+          <button
+            type="button"
+            onClick={onNewSession}
+            className="rounded-lg border px-4 py-[10px] text-[13px] font-semibold transition hover:brightness-95"
             style={{
               borderColor: colors.surface[200],
               background: colors.surface[100],
+              color: colors.text.secondary,
             }}
           >
-            <p
-              className="break-all font-mono text-[10px] leading-[1.7]"
-              style={{ color: colors.text.muted }}
+            Start new session
+          </button>
+
+          {result.session_id && (
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  ROUTES.REPLAY.replace(
+                    ":sessionId",
+                    String(result.session_id),
+                  ),
+                )
+              }
+              className="rounded-lg border px-4 py-[10px] text-[13px] font-bold transition hover:brightness-95"
+              style={{
+                borderColor: colors.brand,
+                background: colors.brandSoft,
+                color: colors.brand,
+              }}
             >
-              {result.document_hash}
-            </p>
-          </div>
+              View replay audit
+            </button>
+          )}
+
+          {result.certificate_id && (
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  ROUTES.VERIFY.replace(":certId", result.certificate_id!),
+                )
+              }
+              className="rounded-lg px-5 py-[10px] text-[13px] font-bold text-white transition hover:brightness-110"
+              style={{ background: colors.brand }}
+            >
+              Verify certificate
+            </button>
+          )}
         </div>
-      )}
-
-      {/* Actions */}
-      <div className="mt-5 flex flex-col gap-2">
-        {result.session_id && (
-          <button
-            type="button"
-            onClick={() =>
-              navigate(
-                ROUTES.REPLAY.replace(":sessionId", String(result.session_id)),
-              )
-            }
-            className="flex w-full items-center justify-between rounded-lg border px-4 py-[11px] text-[13px] font-semibold transition-all duration-150 hover:brightness-95"
-            style={{
-              borderColor: colors.brand,
-              background: colors.brandSoft,
-              color: colors.brand,
-            }}
-          >
-            <span>View replay audit</span>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              aria-hidden
-            >
-              <path
-                d="M3 7h8M7.5 3.5L11 7l-3.5 3.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        )}
-
-        {result.certificate_id && (
-          <button
-            type="button"
-            onClick={() =>
-              navigate(ROUTES.VERIFY.replace(":certId", result.certificate_id!))
-            }
-            className="flex w-full items-center justify-between rounded-lg border px-4 py-[11px] text-[13px] font-semibold transition-all duration-150 hover:brightness-95"
-            style={{
-              borderColor: colors.surface[200],
-              background: colors.surface[50],
-              color: colors.text.primary,
-            }}
-          >
-            <span>Verify certificate</span>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              aria-hidden
-            >
-              <path
-                d="M3 7h8M7.5 3.5L11 7l-3.5 3.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={onNewSession}
-          className="w-full rounded-lg border px-4 py-[11px] text-[13px] font-medium transition-all duration-150 hover:brightness-95"
-          style={{
-            borderColor: colors.surface[200],
-            color: colors.text.secondary,
-            background: colors.surface[100],
-          }}
-        >
-          Start new session
-        </button>
       </div>
     </div>
   );
@@ -694,6 +1006,8 @@ export default function EditorPage() {
     null,
   );
   const [showCourseModal, setShowCourseModal] = useState(false);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [showDraftRecoveryModal, setShowDraftRecoveryModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved">(
     "saved",
@@ -711,12 +1025,34 @@ export default function EditorPage() {
     handlePaste: baseHandlePaste,
     getStats,
     resetCapture,
+    hydrateCapture,
+    getCaptureSnapshot,
   } = useKeystrokeCapture({ text });
+
+  const userDraftId = String(user?.id ?? user?.email ?? "anonymous");
+  const {
+    recoveredDraft,
+    hasCheckedDraft,
+    isSavingDraft,
+    saveDraft,
+    clearDraft,
+    dismissRecoveredDraft,
+  } = useEditorDraftRecovery({ userId: userDraftId });
 
   const wordCount = useMemo(() => countWords(text), [text]);
   const charCount = text.length;
+  const pasteEventCount = useMemo(
+    () => countPasteEvents(keystrokeLogRef.current),
+    [liveStats.keystrokes, liveStats.sessionSeconds, text.length],
+  );
+  const evidenceCount = getEvidenceCount(
+    keystrokeLogRef.current,
+    liveStats.keystrokes,
+  );
+  const hasPasteEvidence = pasteEventCount > 0 && text.trim().length > 0;
   const canAnalyze =
-    liveStats.keystrokes >= MINIMUM_KEYSTROKES && text.trim().length > 0;
+    (liveStats.keystrokes >= MINIMUM_KEYSTROKES || hasPasteEvidence) &&
+    text.trim().length > 0;
   const keystrokePct = Math.min(
     100,
     Math.round((liveStats.keystrokes / MINIMUM_KEYSTROKES) * 100),
@@ -730,6 +1066,10 @@ export default function EditorPage() {
   // Wrap keydown to also set isTyping and handle tab
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Tab") {
+      baseHandleKeyDown(e);
+      setIsTyping(true);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 1200);
       e.preventDefault();
 
       const target = e.currentTarget;
@@ -807,23 +1147,73 @@ export default function EditorPage() {
     };
   }, []);
 
-  // Autosave state
+  const buildDraftSnapshot = useCallback(() => {
+    const snapshot = getCaptureSnapshot();
+
+    return {
+      title,
+      text,
+      selectedCourseId,
+      keystrokeLog: snapshot.events,
+      startedAt: snapshot.startedAt,
+      lastActivityAt: snapshot.lastActivityAt,
+      lastKeyDownTimestamp: snapshot.lastKeyDownTimestamp,
+    };
+  }, [getCaptureSnapshot, selectedCourseId, text, title]);
+
+  const hasRecoverableDraft = useMemo(() => {
+    return Boolean(
+      !analysisResult &&
+      (text.trim().length > 0 ||
+        title.trim().length > 0 ||
+        keystrokeLogRef.current.length > 0),
+    );
+  }, [analysisResult, text, title, liveStats.keystrokes]);
+
+  // Real autosave: persists text, title, course, keystroke evidence, and timing state.
   useEffect(() => {
-    if (!text && !title) return;
-
-    const savingTimer = window.setTimeout(() => {
-      setSaveState("saving");
-    }, 0);
-
-    const savedTimer = window.setTimeout(() => {
+    if (!hasRecoverableDraft) {
       setSaveState("saved");
-    }, 800);
+      return;
+    }
+
+    setSaveState("unsaved");
+
+    const timer = window.setTimeout(() => {
+      void saveDraft(buildDraftSnapshot()).then(() => setSaveState("saved"));
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [buildDraftSnapshot, hasRecoverableDraft, saveDraft]);
+
+  // Emergency save on tab hide/reload. The hook writes a localStorage mirror first,
+  // then IndexedDB, so this protects against refresh/crash as much as the browser allows.
+  useEffect(() => {
+    if (!hasRecoverableDraft) return;
+
+    const persistImmediately = () => {
+      void saveDraft(buildDraftSnapshot());
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") persistImmediately();
+    };
+
+    window.addEventListener("pagehide", persistImmediately);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.clearTimeout(savingTimer);
-      window.clearTimeout(savedTimer);
+      window.removeEventListener("pagehide", persistImmediately);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [text, title]);
+  }, [buildDraftSnapshot, hasRecoverableDraft, saveDraft]);
+
+  // Show recovery prompt only after local draft lookup finishes.
+  useEffect(() => {
+    if (!hasCheckedDraft || !recoveredDraft) return;
+    if (text.trim() || keystrokeLogRef.current.length > 0) return;
+    setShowDraftRecoveryModal(true);
+  }, [hasCheckedDraft, recoveredDraft, text, liveStats.keystrokes]);
 
   // Cleanup typing timeout
   useEffect(
@@ -853,6 +1243,44 @@ export default function EditorPage() {
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
+  const continueRecoveredDraft = () => {
+    if (!recoveredDraft) return;
+
+    setTitle(recoveredDraft.title || "");
+    setText(recoveredDraft.text || "");
+    setSelectedCourseId(recoveredDraft.selectedCourseId ?? null);
+    setAnalysisResult(null);
+    setShowResultModal(false);
+    hydrateCapture({
+      events: recoveredDraft.keystrokeLog,
+      startedAt: recoveredDraft.startedAt,
+      lastActivityAt: recoveredDraft.lastActivityAt,
+      lastKeyDownTimestamp: recoveredDraft.lastKeyDownTimestamp,
+    });
+    dismissRecoveredDraft();
+    setShowDraftRecoveryModal(false);
+    setSaveState("saved");
+
+    showToast({
+      type: "success",
+      title: "Session restored",
+      message:
+        "Your unfinished document and captured evidence were restored locally.",
+    });
+  };
+
+  const discardRecoveredDraft = () => {
+    void clearDraft();
+    dismissRecoveredDraft();
+    setShowDraftRecoveryModal(false);
+
+    showToast({
+      type: "info",
+      title: "Draft discarded",
+      message: "The local unfinished session was removed from this browser.",
+    });
+  };
+
   const openAnalyzeModal = () => {
     if (!text.trim()) {
       showToast({
@@ -862,11 +1290,11 @@ export default function EditorPage() {
       });
       return;
     }
-    if (liveStats.keystrokes < MINIMUM_KEYSTROKES) {
+    if (liveStats.keystrokes < MINIMUM_KEYSTROKES && pasteEventCount === 0) {
       showToast({
         type: "warning",
-        title: "More typing required",
-        message: `Type at least ${MINIMUM_KEYSTROKES} keystrokes. Current capture: ${liveStats.keystrokes}.`,
+        title: "More evidence required",
+        message: `Type at least ${MINIMUM_KEYSTROKES} keystrokes or capture a paste event. Current key capture: ${liveStats.keystrokes}.`,
       });
       return;
     }
@@ -899,11 +1327,13 @@ export default function EditorPage() {
       return;
     }
 
-    if (finalStats.keystrokes < MINIMUM_KEYSTROKES) {
+    const finalPasteEvents = countPasteEvents(evidence);
+
+    if (finalStats.keystrokes < MINIMUM_KEYSTROKES && finalPasteEvents === 0) {
       showToast({
         type: "warning",
-        title: "More typing required",
-        message: `Type at least ${MINIMUM_KEYSTROKES} keystrokes. Current capture: ${finalStats.keystrokes}.`,
+        title: "More evidence required",
+        message: `Type at least ${MINIMUM_KEYSTROKES} keystrokes or capture a paste event. Current key capture: ${finalStats.keystrokes}.`,
       });
       return;
     }
@@ -918,12 +1348,12 @@ export default function EditorPage() {
       return;
     }
 
-    if (evidence.length < MINIMUM_KEYSTROKES) {
+    if (finalStats.keystrokes < MINIMUM_KEYSTROKES && finalPasteEvents === 0) {
       showToast({
         type: "warning",
         title: "Insufficient evidence",
         message:
-          "The captured event stream is too small for reliable behavioral analysis.",
+          "The captured event stream must contain either human typing evidence or paste evidence.",
       });
       return;
     }
@@ -960,10 +1390,15 @@ export default function EditorPage() {
         certificate_id: data.certificate_id,
         document_hash: data.document_hash,
         session_id: data.session_id,
+        risk_level: data.risk_level,
+        risk_score: data.risk_score,
+        advanced_stats: data.advanced_stats,
       });
 
       setShowCourseModal(false);
+      setShowResultModal(true);
       setSaveState("saved");
+      void clearDraft();
 
       showToast({
         type: "success",
@@ -987,8 +1422,10 @@ export default function EditorPage() {
     setSelectedCourseId(null);
     setAnalysisResult(null);
     setShowCourseModal(false);
+    setShowResultModal(false);
     setSaveState("saved");
     resetCapture();
+    void clearDraft();
 
     showToast({
       type: "info",
@@ -1041,7 +1478,7 @@ export default function EditorPage() {
 
         {/* Right: status + actions */}
         <div className="flex items-center gap-4">
-          <SaveIndicator state={saveState} />
+          <SaveIndicator state={isSavingDraft ? "saving" : saveState} />
 
           {/* Capture status pill */}
           <div
@@ -1066,7 +1503,9 @@ export default function EditorPage() {
             >
               {canAnalyze
                 ? "Ready"
-                : `${liveStats.keystrokes}/${MINIMUM_KEYSTROKES}`}
+                : pasteEventCount > 0
+                  ? `${pasteEventCount} paste`
+                  : `${liveStats.keystrokes}/${MINIMUM_KEYSTROKES}`}
             </span>
           </div>
 
@@ -1157,7 +1596,7 @@ export default function EditorPage() {
             </div>
           </div>
 
-          {/* Capture progress bar — the signature element */}
+          {/* Capture progress bar - the signature element */}
           <CaptureBar
             keystrokes={liveStats.keystrokes}
             ready={canAnalyze}
@@ -1189,7 +1628,7 @@ export default function EditorPage() {
               onKeyDown={handleKeyDown}
               onKeyUp={handleKeyUp}
               onPaste={handlePaste}
-              placeholder="Start writing here. TypeTrace quietly captures your behavioral evidence in the background — timing, pauses, deletions, and rhythm that only a human writer produces."
+              placeholder="Start writing here. TypeTrace quietly captures your behavioral evidence in the background - timing, pauses, deletions, and rhythm that only a human writer produces."
               className="h-full min-h-[480px] w-full resize-none border-none bg-transparent text-[16px] leading-[1.85] outline-none placeholder:text-[15px]"
               style={{
                 color: colors.text.primary,
@@ -1208,256 +1647,249 @@ export default function EditorPage() {
             background: colors.surface[50],
           }}
         >
-          {analysisResult ? (
-            /* Result view */
-            <div className="p-5">
-              <ResultPanel result={analysisResult} onNewSession={newSession} />
-            </div>
-          ) : (
-            /* Live telemetry view */
-            <>
-              {/* Session identity */}
-              <div
-                className="border-b p-5"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[11px] font-bold text-white"
-                    style={{ background: colors.brand }}
-                  >
-                    {initials}
-                  </div>
-                  <div className="min-w-0">
-                    <p
-                      className="truncate text-[13px] font-semibold"
-                      style={{ color: colors.text.primary }}
-                    >
-                      {fullName}
-                    </p>
-                    <p
-                      className="truncate text-[11px]"
-                      style={{ color: colors.text.muted }}
-                    >
-                      {user?.email}
-                    </p>
-                  </div>
+          {/* Live telemetry view */}
+          <>
+            {/* Session identity */}
+            <div
+              className="border-b p-5"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[11px] font-bold text-white"
+                  style={{ background: colors.brand }}
+                >
+                  {initials}
                 </div>
+                <div className="min-w-0">
+                  <p
+                    className="truncate text-[13px] font-semibold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {fullName}
+                  </p>
+                  <p
+                    className="truncate text-[11px]"
+                    style={{ color: colors.text.muted }}
+                  >
+                    {user?.email}
+                  </p>
+                </div>
+              </div>
 
-                {/* Capture status */}
-                <div className="mt-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span
-                      className="text-[10px] font-bold uppercase tracking-[0.16em]"
-                      style={{ color: colors.text.muted }}
-                    >
-                      Capture threshold
-                    </span>
-                    <span
-                      className="text-[11px] font-bold tabular-nums"
-                      style={{
-                        color: canAnalyze ? colors.green : colors.brand,
-                      }}
-                    >
-                      {canAnalyze
-                        ? "Ready"
+              {/* Capture status */}
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-[0.16em]"
+                    style={{ color: colors.text.muted }}
+                  >
+                    Capture threshold
+                  </span>
+                  <span
+                    className="text-[11px] font-bold tabular-nums"
+                    style={{
+                      color: canAnalyze ? colors.green : colors.brand,
+                    }}
+                  >
+                    {canAnalyze
+                      ? "Ready"
+                      : pasteEventCount > 0
+                        ? `${pasteEventCount} paste event`
                         : `${liveStats.keystrokes} / ${MINIMUM_KEYSTROKES}`}
-                    </span>
-                  </div>
+                  </span>
+                </div>
+                <div
+                  className="h-[4px] w-full overflow-hidden rounded-full"
+                  style={{ background: colors.surface[200] }}
+                >
                   <div
-                    className="h-[4px] w-full overflow-hidden rounded-full"
-                    style={{ background: colors.surface[200] }}
-                  >
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${keystrokePct}%`,
-                        background: canAnalyze ? colors.green : colors.brand,
-                      }}
-                    />
-                  </div>
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${keystrokePct}%`,
+                      background: canAnalyze ? colors.green : colors.brand,
+                    }}
+                  />
                 </div>
               </div>
+            </div>
 
-              {/* Live writing metrics */}
-              <div
-                className="border-b px-5 pt-5 pb-4"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <SidebarLabel>Writing</SidebarLabel>
-                <StatRow
-                  label="Words"
-                  value={wordCount.toLocaleString()}
-                  highlight
-                />
-                <StatRow
-                  label="Characters"
-                  value={charCount.toLocaleString()}
-                />
-                <StatRow label="WPM" value={liveStats.wpm} accent />
-                <StatRow
-                  label="Duration"
-                  value={formatDuration(liveStats.sessionSeconds)}
-                />
-              </div>
+            {/* Live writing metrics */}
+            <div
+              className="border-b px-5 pt-5 pb-4"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <SidebarLabel>Writing</SidebarLabel>
+              <StatRow
+                label="Words"
+                value={wordCount.toLocaleString()}
+                highlight
+              />
+              <StatRow label="Characters" value={charCount.toLocaleString()} />
+              <StatRow label="WPM" value={liveStats.wpm} accent />
+              <StatRow
+                label="Duration"
+                value={formatDuration(liveStats.sessionSeconds)}
+              />
+            </div>
 
-              {/* Live behavioral metrics */}
-              <div
-                className="border-b px-5 pt-5 pb-4"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <SidebarLabel>Behavioral signal</SidebarLabel>
-                <StatRow
-                  label="Keystrokes"
-                  value={liveStats.keystrokes}
-                  highlight
-                />
-                <StatRow label="Deletions" value={liveStats.deletions} />
-                <StatRow label="Pauses (>1s)" value={liveStats.pauses} />
-                <StatRow
-                  label="Avg IKI"
-                  value={`${liveStats.avgIki} ms`}
-                  accent
-                />
-              </div>
+            {/* Live behavioral metrics */}
+            <div
+              className="border-b px-5 pt-5 pb-4"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <SidebarLabel>Behavioral signal</SidebarLabel>
+              <StatRow
+                label="Keystrokes"
+                value={liveStats.keystrokes}
+                highlight
+              />
+              <StatRow label="Deletions" value={liveStats.deletions} />
+              <StatRow label="Paste events" value={pasteEventCount} />
+              <StatRow label="Pauses (>1s)" value={liveStats.pauses} />
+              <StatRow
+                label="Avg IKI"
+                value={`${liveStats.avgIki} ms`}
+                accent
+              />
+            </div>
 
-              {/* Evidence trail info */}
-              <div className="p-5">
-                <SidebarLabel>What's being captured</SidebarLabel>
-                <div className="space-y-3">
-                  {[
-                    {
-                      icon: (
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 12 12"
-                          fill="none"
-                        >
-                          <rect
-                            x="1"
-                            y="1"
-                            width="10"
-                            height="10"
-                            rx="2"
-                            stroke="currentColor"
-                            strokeWidth="1.2"
-                          />
-                          <path
-                            d="M4 6h4M6 4v4"
-                            stroke="currentColor"
-                            strokeWidth="1.2"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      ),
-                      label: "Keystroke timing",
-                      detail: "Dwell & flight times per key",
-                    },
-                    {
-                      icon: (
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 12 12"
-                          fill="none"
-                        >
-                          <circle
-                            cx="6"
-                            cy="6"
-                            r="4.5"
-                            stroke="currentColor"
-                            strokeWidth="1.2"
-                          />
-                          <path
-                            d="M6 3.5V6l1.5 1.5"
-                            stroke="currentColor"
-                            strokeWidth="1.2"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      ),
-                      label: "Pause detection",
-                      detail: "Cognitive breaks >1 second",
-                    },
-                    {
-                      icon: (
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 12 12"
-                          fill="none"
-                        >
-                          <path
-                            d="M2 9l2-2 2 2 4-6"
-                            stroke="currentColor"
-                            strokeWidth="1.2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      ),
-                      label: "Revision patterns",
-                      detail: "Deletions and corrections",
-                    },
-                    {
-                      icon: (
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 12 12"
-                          fill="none"
-                        >
-                          <path
-                            d="M3 6a3 3 0 016 0"
-                            stroke="currentColor"
-                            strokeWidth="1.2"
-                            strokeLinecap="round"
-                          />
-                          <path
-                            d="M1 6h10"
-                            stroke="currentColor"
-                            strokeWidth="1.2"
-                            strokeLinecap="round"
-                            strokeOpacity="0.4"
-                          />
-                          <circle cx="6" cy="9" r="1.5" fill="currentColor" />
-                        </svg>
-                      ),
-                      label: "Document hash",
-                      detail: "Tamper-proof content fingerprint",
-                    },
-                  ].map(({ icon, label, detail }) => (
-                    <div key={label} className="flex items-start gap-3">
-                      <div
-                        className="mt-[2px] flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md"
-                        style={{
-                          background: colors.brandSoft,
-                          color: colors.brand,
-                        }}
+            {/* Evidence trail info */}
+            <div className="p-5">
+              <SidebarLabel>What's being captured</SidebarLabel>
+              <div className="space-y-3">
+                {[
+                  {
+                    icon: (
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
                       >
-                        {icon}
-                      </div>
-                      <div>
-                        <p
-                          className="text-[12px] font-semibold"
-                          style={{ color: colors.text.primary }}
-                        >
-                          {label}
-                        </p>
-                        <p
-                          className="text-[11px]"
-                          style={{ color: colors.text.muted }}
-                        >
-                          {detail}
-                        </p>
-                      </div>
+                        <rect
+                          x="1"
+                          y="1"
+                          width="10"
+                          height="10"
+                          rx="2"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                        />
+                        <path
+                          d="M4 6h4M6 4v4"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    ),
+                    label: "Keystroke timing",
+                    detail: "Dwell & flight times per key",
+                  },
+                  {
+                    icon: (
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                      >
+                        <circle
+                          cx="6"
+                          cy="6"
+                          r="4.5"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                        />
+                        <path
+                          d="M6 3.5V6l1.5 1.5"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    ),
+                    label: "Pause detection",
+                    detail: "Cognitive breaks >1 second",
+                  },
+                  {
+                    icon: (
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                      >
+                        <path
+                          d="M2 9l2-2 2 2 4-6"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    ),
+                    label: "Revision patterns",
+                    detail: "Deletions and corrections",
+                  },
+                  {
+                    icon: (
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                      >
+                        <path
+                          d="M3 6a3 3 0 016 0"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                        />
+                        <path
+                          d="M1 6h10"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                          strokeOpacity="0.4"
+                        />
+                        <circle cx="6" cy="9" r="1.5" fill="currentColor" />
+                      </svg>
+                    ),
+                    label: "Document hash",
+                    detail: "Tamper-proof content fingerprint",
+                  },
+                ].map(({ icon, label, detail }) => (
+                  <div key={label} className="flex items-start gap-3">
+                    <div
+                      className="mt-[2px] flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md"
+                      style={{
+                        background: colors.brandSoft,
+                        color: colors.brand,
+                      }}
+                    >
+                      {icon}
                     </div>
-                  ))}
-                </div>
+                    <div>
+                      <p
+                        className="text-[12px] font-semibold"
+                        style={{ color: colors.text.primary }}
+                      >
+                        {label}
+                      </p>
+                      <p
+                        className="text-[11px]"
+                        style={{ color: colors.text.muted }}
+                      >
+                        {detail}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </>
-          )}
+            </div>
+          </>
         </aside>
       </div>
 
@@ -1498,6 +1930,7 @@ export default function EditorPage() {
           {[
             { label: "Words", value: wordCount },
             { label: "Keys", value: liveStats.keystrokes },
+            { label: "Paste", value: pasteEventCount },
             { label: "WPM", value: liveStats.wpm },
             { label: "Time", value: formatDuration(liveStats.sessionSeconds) },
           ].map(({ label, value }) => (
@@ -1552,6 +1985,22 @@ export default function EditorPage() {
           onCancel={() => setShowCourseModal(false)}
           onConfirm={confirmSubmit}
           isSubmitting={isSubmitting}
+        />
+      )}
+
+      {showDraftRecoveryModal && recoveredDraft && (
+        <DraftRecoveryModal
+          draft={recoveredDraft}
+          onContinue={continueRecoveredDraft}
+          onDiscard={discardRecoveredDraft}
+        />
+      )}
+
+      {showResultModal && analysisResult && (
+        <AnalysisResultModal
+          result={analysisResult}
+          onClose={() => setShowResultModal(false)}
+          onNewSession={newSession}
         />
       )}
 

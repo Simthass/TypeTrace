@@ -1,5 +1,3 @@
-// frontend/src/hooks/useKeystrokeCapture.ts
-
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { KeystrokeEvent, SessionStats } from "../types/editor";
 
@@ -10,6 +8,21 @@ interface UseKeystrokeCaptureOptions {
 interface ActiveKey {
   index: number;
   downTime: number;
+  downTimestamp: number;
+}
+
+export interface CaptureHydrationPayload {
+  events?: KeystrokeEvent[];
+  startedAt?: number | null;
+  lastActivityAt?: number | null;
+  lastKeyDownTimestamp?: number | null;
+}
+
+export interface CaptureSnapshot {
+  events: KeystrokeEvent[];
+  startedAt: number | null;
+  lastActivityAt: number | null;
+  lastKeyDownTimestamp: number | null;
 }
 
 function countWords(value: string): number {
@@ -18,13 +31,30 @@ function countWords(value: string): number {
   return clean.split(/\s+/).filter(Boolean).length;
 }
 
+function safeNumber(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function getLastKeyDownTimestamp(events: KeystrokeEvent[]): number | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.type === "keydown" && typeof event.timestamp === "number") {
+      return event.timestamp;
+    }
+  }
+  return null;
+}
+
 export function useKeystrokeCapture({ text }: UseKeystrokeCaptureOptions) {
+  // Wall-clock timestamps are used for session duration and resume safety.
+  // performance.now() resets after reload, so it must not be used for persisted duration.
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [lastActivityAt, setLastActivityAt] = useState<number | null>(null);
 
   const logRef = useRef<KeystrokeEvent[]>([]);
   const activeKeysRef = useRef<Record<string, ActiveKey>>({});
-  const lastKeyDownAtRef = useRef<number | null>(null);
+  const lastKeyDownTimestampRef = useRef<number | null>(null);
 
   const ensureStarted = useCallback((timestamp: number) => {
     setStartedAt((current) => current ?? timestamp);
@@ -45,25 +75,26 @@ export function useKeystrokeCapture({ text }: UseKeystrokeCaptureOptions) {
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (event.repeat) return;
 
-      const now = performance.now();
-      ensureStarted(now);
+      const wallNow = Date.now();
+      const perfNow = performance.now();
+      ensureStarted(wallNow);
 
       const keyId = `${event.code || event.key}-${event.keyCode}`;
-      const previousKeyDownAt = lastKeyDownAtRef.current;
+      const previousKeyDownAt = lastKeyDownTimestampRef.current;
       const flightTime =
         previousKeyDownAt === null
           ? null
-          : Math.max(0, Math.round(now - previousKeyDownAt));
+          : Math.max(0, Math.round(wallNow - previousKeyDownAt));
 
-      lastKeyDownAtRef.current = now;
+      lastKeyDownTimestampRef.current = wallNow;
 
       const entry: KeystrokeEvent = {
         key: event.key,
         keyCode: event.keyCode,
         code: event.code,
         type: "keydown",
-        timestamp: Date.now(),
-        down_time: Math.round(now),
+        timestamp: wallNow,
+        down_time: Math.round(perfNow),
         up_time: null,
         dwell_time: null,
         flight_time: flightTime,
@@ -74,7 +105,8 @@ export function useKeystrokeCapture({ text }: UseKeystrokeCaptureOptions) {
       logRef.current.push(entry);
       activeKeysRef.current[keyId] = {
         index: logRef.current.length - 1,
-        downTime: now,
+        downTime: perfNow,
+        downTimestamp: wallNow,
       };
     },
     [ensureStarted, getCursorPosition, text.length],
@@ -82,17 +114,18 @@ export function useKeystrokeCapture({ text }: UseKeystrokeCaptureOptions) {
 
   const handleKeyUp = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      const now = performance.now();
+      const wallNow = Date.now();
+      const perfNow = performance.now();
       const keyId = `${event.code || event.key}-${event.keyCode}`;
       const activeKey = activeKeysRef.current[keyId];
 
       if (!activeKey) return;
 
-      const dwellTime = Math.max(0, Math.round(now - activeKey.downTime));
+      const dwellTime = Math.max(0, Math.round(perfNow - activeKey.downTime));
 
       const keydownEntry = logRef.current[activeKey.index];
       if (keydownEntry) {
-        keydownEntry.up_time = Math.round(now);
+        keydownEntry.up_time = Math.round(perfNow);
         keydownEntry.dwell_time = dwellTime;
       }
 
@@ -101,9 +134,9 @@ export function useKeystrokeCapture({ text }: UseKeystrokeCaptureOptions) {
         keyCode: event.keyCode,
         code: event.code,
         type: "keyup",
-        timestamp: Date.now(),
+        timestamp: wallNow,
         down_time: Math.round(activeKey.downTime),
-        up_time: Math.round(now),
+        up_time: Math.round(perfNow),
         dwell_time: dwellTime,
         flight_time: null,
         documentLength: text.length,
@@ -111,15 +144,16 @@ export function useKeystrokeCapture({ text }: UseKeystrokeCaptureOptions) {
       });
 
       delete activeKeysRef.current[keyId];
-      setLastActivityAt(now);
+      setLastActivityAt(wallNow);
     },
     [getCursorPosition, text.length],
   );
 
   const handlePaste = useCallback(
     (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      const now = performance.now();
-      ensureStarted(now);
+      const wallNow = Date.now();
+      const perfNow = performance.now();
+      ensureStarted(wallNow);
 
       const pastedText = event.clipboardData.getData("text") || "";
 
@@ -128,21 +162,24 @@ export function useKeystrokeCapture({ text }: UseKeystrokeCaptureOptions) {
         keyCode: 0,
         code: "Paste",
         type: "paste",
-        timestamp: Date.now(),
-        down_time: Math.round(now),
-        up_time: Math.round(now),
+        timestamp: wallNow,
+        down_time: Math.round(perfNow),
+        up_time: Math.round(perfNow),
         dwell_time: 0,
         flight_time:
-          lastKeyDownAtRef.current === null
+          lastKeyDownTimestampRef.current === null
             ? null
-            : Math.max(0, Math.round(now - lastKeyDownAtRef.current)),
+            : Math.max(
+                0,
+                Math.round(wallNow - lastKeyDownTimestampRef.current),
+              ),
         documentLength: text.length,
         cursorPosition: getCursorPosition(event.currentTarget),
         pastedLength: pastedText.length,
       });
 
-      lastKeyDownAtRef.current = now;
-      setLastActivityAt(now);
+      lastKeyDownTimestampRef.current = wallNow;
+      setLastActivityAt(wallNow);
     },
     [ensureStarted, getCursorPosition, text.length],
   );
@@ -150,10 +187,35 @@ export function useKeystrokeCapture({ text }: UseKeystrokeCaptureOptions) {
   const resetCapture = useCallback(() => {
     logRef.current = [];
     activeKeysRef.current = {};
-    lastKeyDownAtRef.current = null;
+    lastKeyDownTimestampRef.current = null;
     setStartedAt(null);
     setLastActivityAt(null);
   }, []);
+
+  const hydrateCapture = useCallback((payload: CaptureHydrationPayload) => {
+    const events = Array.isArray(payload.events) ? payload.events : [];
+    logRef.current = events;
+    activeKeysRef.current = {};
+
+    const hydratedStartedAt = safeNumber(payload.startedAt);
+    const hydratedLastActivityAt = safeNumber(payload.lastActivityAt);
+    const hydratedLastKeyDown =
+      safeNumber(payload.lastKeyDownTimestamp) ??
+      getLastKeyDownTimestamp(events);
+
+    setStartedAt(hydratedStartedAt);
+    setLastActivityAt(hydratedLastActivityAt);
+    lastKeyDownTimestampRef.current = hydratedLastKeyDown;
+  }, []);
+
+  const getCaptureSnapshot = useCallback((): CaptureSnapshot => {
+    return {
+      events: logRef.current,
+      startedAt,
+      lastActivityAt,
+      lastKeyDownTimestamp: lastKeyDownTimestampRef.current,
+    };
+  }, [lastActivityAt, startedAt]);
 
   const getStats = useCallback((): SessionStats => {
     const keydownEvents = logRef.current.filter(
@@ -180,7 +242,7 @@ export function useKeystrokeCapture({ text }: UseKeystrokeCaptureOptions) {
         : 0;
 
     const firstTime = startedAt;
-    const endTime = lastActivityAt ?? performance.now();
+    const endTime = lastActivityAt ?? Date.now();
 
     const sessionSeconds =
       firstTime === null
@@ -213,5 +275,7 @@ export function useKeystrokeCapture({ text }: UseKeystrokeCaptureOptions) {
     handlePaste,
     getStats,
     resetCapture,
+    hydrateCapture,
+    getCaptureSnapshot,
   };
 }

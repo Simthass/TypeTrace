@@ -417,7 +417,7 @@ function AuthorshipBar({ summary }: { summary: StudentSummary }) {
             className="mt-1 text-[1.6rem] font-bold tracking-tight leading-none"
             style={{ color: colors.text.primary }}
           >
-            {total === 0 ? "—" : `${humanPct}%`}
+            {total === 0 ? "-" : `${humanPct}%`}
             <span
               className="ml-2 text-[14px] font-normal"
               style={{ color: colors.text.secondary }}
@@ -772,7 +772,7 @@ function SessionRow({
           </span>
         ) : (
           <span className="text-[11px]" style={{ color: colors.text.muted }}>
-            —
+            -
           </span>
         )}
       </div>
@@ -1139,7 +1139,7 @@ export default function DashboardPage() {
               className="mt-1 text-[13px]"
               style={{ color: colors.text.secondary }}
             >
-              Write your first session to generate behavioral evidence —
+              Write your first session to generate behavioral evidence -
               keystroke timing, pauses, and revision patterns AI cannot
               replicate.
             </p>

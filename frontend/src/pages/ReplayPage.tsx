@@ -155,7 +155,7 @@ function markerColor(type: ReplayTimelineMarker["type"]) {
 }
 
 function metricValue(value: number | string | null | undefined) {
-  if (value === null || value === undefined || value === "") return "—";
+  if (value === null || value === undefined || value === "") return "-";
   return value;
 }
 

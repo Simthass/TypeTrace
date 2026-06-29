@@ -682,7 +682,7 @@ function VerificationResult({ result }: { result: VerifyResult }) {
               style={{ color: colors.text.secondary }}
             >
               This certificate confirms TypeTrace recorded the writing session.
-              The SHA-256 hash cryptographically seals the keystroke data — any
+              The SHA-256 hash cryptographically seals the keystroke data - any
               tampering invalidates verification. A confidence score above 80%
               indicates strong human behavioral signatures such as variable IKI,
               natural pauses, and organic edit patterns. This certificate is
@@ -998,7 +998,7 @@ export default function VerifyLookupPage() {
             >
               TypeTrace
             </Link>{" "}
-            — Behavioral Authorship Verification Platform
+            - Behavioral Authorship Verification Platform
           </p>
         </div>
       </div>

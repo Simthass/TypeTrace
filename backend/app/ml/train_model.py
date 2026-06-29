@@ -247,7 +247,7 @@ def _is_plausible_human_session(feats: dict) -> bool:
     Conservative heuristic to decide whether a DB session is plausibly human.
 
     A session is accepted as HUMAN only if it passes ALL of these checks.
-    Sessions that fail are excluded entirely — we do NOT add them as SYNTHETIC
+    Sessions that fail are excluded entirely - we do NOT add them as SYNTHETIC
     because we cannot be certain they are adversarial; they may be edge cases
     (e.g. accessibility-tool users, speech-to-text). Exclusion is safer than
     mislabelling.
@@ -263,19 +263,19 @@ def _is_plausible_human_session(feats: dict) -> bool:
 
     # Reject sessions that look mechanically generated
     if ft_std < 8:
-        # Near-zero variance — likely auto-typer or synthetic replay
+        # Near-zero variance - likely auto-typer or synthetic replay
         return False
     if net_wpm > 220:
         # Beyond the absolute human typing speed ceiling (~200 WPM world record)
         return False
     if entropy < 0.3:
-        # Extremely low entropy — robotic rhythm
+        # Extremely low entropy - robotic rhythm
         return False
     if ft_mean < 5:
         # Flight times below 5ms are physically impossible for human fingers
         return False
     if pause < 0.0005 and net_wpm > 80:
-        # No pauses at high speed — suspicious for genuine writing sessions
+        # No pauses at high speed - suspicious for genuine writing sessions
         return False
 
     return True
@@ -293,7 +293,7 @@ def load_typetrace_db_sessions() -> pd.DataFrame:
     load_dotenv()
     db_url = os.getenv("DATABASE_URL", "")
     if not db_url:
-        log.warning("No DATABASE_URL — skipping DB sessions.")
+        log.warning("No DATABASE_URL - skipping DB sessions.")
         return pd.DataFrame()
 
     sync_url = db_url.replace("+asyncpg", "")
@@ -367,7 +367,7 @@ def load_typetrace_db_sessions() -> pd.DataFrame:
             accepted += 1
 
         log.info(
-            f"DB sessions — accepted: {accepted} HUMAN | "
+            f"DB sessions - accepted: {accepted} HUMAN | "
             f"rejected mechanical: {rejected_mechanical} | "
             f"rejected no-data: {rejected_nodata}"
         )
@@ -391,8 +391,8 @@ def generate_fallback_human_data(n: int = 600) -> pd.DataFrame:
     statistics (Dhakal et al. 2018; Killourhy & Maxion 2009).
 
     Key design choices to prevent artificial inflation of accuracy:
-    - ft_std drawn from N(90, 30) — realistic ~60–120ms range
-    - ht_std drawn from N(55, 18) — same
+    - ft_std drawn from N(90, 30) - realistic ~60–120ms range
+    - ht_std drawn from N(55, 18) - same
     - Distributions overlap with synthetic data on all features
     - No artificially extreme values
     """
@@ -569,7 +569,7 @@ def build_and_train_ensemble(X_train, y_train, X_test, y_test, feature_cols):
     except ImportError:
         model      = rf
         model_name = "Random Forest"
-        log.warning("XGBoost not found — pip install xgboost for ensemble.")
+        log.warning("XGBoost not found - pip install xgboost for ensemble.")
 
     model.fit(X_train, y_train_enc)
 
@@ -580,7 +580,7 @@ def build_and_train_ensemble(X_train, y_train, X_test, y_test, feature_cols):
 
     # ── Academic-quality metrics output ─────────────────────────────────────
     log.info(f"\n{'='*60}")
-    log.info(f"  TypeTrace {model_name} — Test Set Evaluation")
+    log.info(f"  TypeTrace {model_name} - Test Set Evaluation")
     log.info(f"{'='*60}")
     log.info(f"  Accuracy   : {accuracy*100:.2f}%")
     log.info(f"  Precision  : {precision_score(y_test_enc, y_pred, average='weighted'):.4f}")
@@ -592,7 +592,7 @@ def build_and_train_ensemble(X_train, y_train, X_test, y_test, feature_cols):
     except Exception:
         auc = None
 
-    # Warn if accuracy is suspiciously high — academic integrity check
+    # Warn if accuracy is suspiciously high - academic integrity check
     if accuracy > 0.97:
         log.warning(
             f"⚠  Accuracy {accuracy*100:.2f}% exceeds 97%. This may indicate:\n"
@@ -638,7 +638,7 @@ def build_and_train_ensemble(X_train, y_train, X_test, y_test, feature_cols):
         log.info(imp_df.head(10).to_string(index=False))
 
     except ImportError:
-        log.info("SHAP not installed — pip install shap for feature importance.")
+        log.info("SHAP not installed - pip install shap for feature importance.")
     except Exception as e:
         log.warning(f"SHAP failed: {e}")
 
@@ -672,14 +672,14 @@ def train_typetrace_model(data_dir: str = None, output_dir: str = None):
                 f"{(df_g['label']=='SYNTHETIC').sum()} SYNTHETIC"
             )
         else:
-            log.warning("González loaded 0 sessions — using fallback data.")
+            log.warning("González loaded 0 sessions - using fallback data.")
             all_dfs += [generate_fallback_human_data(), generate_fallback_synthetic_data()]
     else:
         log.warning("González dataset not found. Using fallback synthetic data.")
         log.warning("Download from: https://doi.org/10.17632/y2s8f7xkg7.2")
         log.warning(
             "NOTE: Fallback accuracy will be lower than with real data. "
-            "This is intentional — real data has more variation."
+            "This is intentional - real data has more variation."
         )
         all_dfs += [generate_fallback_human_data(), generate_fallback_synthetic_data()]
 
@@ -701,7 +701,7 @@ def train_typetrace_model(data_dir: str = None, output_dir: str = None):
     log.info(f"\nPre-cap: {len(full_df)} sessions | HUMAN: {h_count} | SYNTHETIC: {s_count}")
 
     if len(np.unique(full_df["label"].values)) < 2:
-        log.error("Only one class present — cannot train. Check dataset paths.")
+        log.error("Only one class present - cannot train. Check dataset paths.")
         return
 
     full_df = cap_class_imbalance(full_df, max_ratio=MAX_SYNTH_RATIO)
@@ -813,7 +813,7 @@ def train_typetrace_model(data_dir: str = None, output_dir: str = None):
             "https://doi.org/10.1016/j.sasc.2022.200037"
         ),
 
-        # Academic limitations — include in dissertation
+        # Academic limitations - include in dissertation
         "limitations": (
             "This model detects statistical deviations in keystroke timing consistent "
             "with synthetic forgery methods described in González et al. (2022). "
@@ -835,7 +835,7 @@ def train_typetrace_model(data_dir: str = None, output_dir: str = None):
     log.info(f"✅  typetrace_scaler.joblib    → {output_dir}")
     log.info(f"✅  model_metadata.json        → {output_dir}")
     log.info(f"\n  CV Accuracy    : {reportable_accuracy*100:.2f}% ± {cv_std*100:.2f}%")
-    log.info(f"  Test Accuracy  : {test_accuracy*100:.2f}%  (single split — do not report alone)")
+    log.info(f"  Test Accuracy  : {test_accuracy*100:.2f}%  (single split - do not report alone)")
     log.info(f"  ROC-AUC        : {roc_auc:.4f}" if roc_auc else "  ROC-AUC        : N/A")
     log.info(f"  Features       : {len(feature_cols)}")
 
