@@ -12,6 +12,7 @@ import RootLayout from "./components/layout/RootLayout";
 import TeacherLayout from "./components/layout/TeacherLayout";
 
 import ErrorBoundary from "./components/errors/ErrorBoundary";
+import PageTitleManager from "./components/seo/PageTitleManager";
 import ScrollToTop from "./components/ui/ScrollToTop";
 import { ToastProvider } from "./components/ui/ToastProvider";
 
@@ -52,6 +53,7 @@ export default function App() {
     <BrowserRouter>
       <ToastProvider>
         <ErrorBoundary>
+          <PageTitleManager />
           <AuthSessionGate>
             <ScrollToTop />
 

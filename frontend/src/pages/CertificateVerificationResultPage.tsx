@@ -1,5 +1,3 @@
-// frontend/src/pages/VerifyCertificatePage.tsx
-
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
@@ -9,11 +7,11 @@ import { API_ROUTES } from "../constants/apiRoutes";
 import { ROUTES } from "../constants/routes";
 import { API_BASE_URL, api, getApiErrorMessage } from "../lib/api";
 import { isValidCertificateId, normalizeCertificateId } from "../lib/edgeCases";
-import { brand, colors } from "../styles/colors";
+import { shortId } from "../lib/documentMetadata";
+import { usePageTitle } from "../hooks/usePageTitle";
+import { colors } from "../styles/colors";
 import {
-  PublicIcon,
   PublicShell,
-  PublicSection,
   SectionEyebrow,
 } from "../components/public/PublicVisualSystem";
 import type { PublicCertificateVerification } from "../types/certificate";
@@ -49,6 +47,13 @@ function formatDate(dateStr?: string) {
   } catch {
     return dateStr;
   }
+}
+
+function formatPercent(value: unknown): string {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "0%";
+  const percent = numeric <= 1 ? numeric * 100 : numeric;
+  return `${Math.round(Math.max(0, Math.min(100, percent)))}%`;
 }
 
 // ─── Icon primitives ──────────────────────────────────────────────────────────
@@ -389,6 +394,45 @@ export default function VerifyCertificatePage() {
     };
   }, [cleanCertId, showToast]);
 
+  // ─── Dynamic page title ──────────────────────────────────────────────────────
+  const pageTitle = useMemo(() => {
+    const displayId = shortId(result?.certificate_id || cleanCertId);
+
+    if (isLoading) {
+      return displayId
+        ? `Verifying Certificate ${displayId}`
+        : "Verifying Certificate";
+    }
+    if (apiError || !result || !result.valid) {
+      return displayId
+        ? `Certificate Not Found ${displayId}`
+        : "Certificate Not Found";
+    }
+    if (result.status === "VALID") {
+      return displayId
+        ? `Verified Certificate ${displayId}`
+        : "Verified Certificate";
+    }
+    if (result.status === "REVIEW_REQUIRED") {
+      return displayId
+        ? `Certificate Review Required ${displayId}`
+        : "Certificate Review Required";
+    }
+    return displayId
+      ? `Certificate Verification ${displayId}`
+      : "Certificate Verification";
+  }, [apiError, cleanCertId, isLoading, result]);
+
+  const pageDescription = useMemo(() => {
+    if (isLoading)
+      return "TypeTrace is checking the public certificate ledger for this authorship evidence record.";
+    if (apiError || !result || !result.valid)
+      return "This certificate ID could not be verified in the TypeTrace public ledger.";
+    return `${result.classification_label || "Writing evidence"} for ${result.title || "Untitled Document"}. Public verification does not expose essay text or raw keystroke evidence.`;
+  }, [apiError, isLoading, result]);
+
+  usePageTitle({ title: pageTitle, description: pageDescription });
+
   if (isLoading) return <LoadingPanel />;
   if (apiError)
     return <ErrorPanel title="Verification failed" message={apiError} />;
@@ -401,6 +445,7 @@ export default function VerifyCertificatePage() {
     );
 
   const confidence = Number(result.confidence || 0);
+  const confidenceLabel = formatPercent(result.confidence);
   const certificateUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/verify/${encodeURIComponent(result.certificate_id)}`
@@ -798,7 +843,6 @@ export default function VerifyCertificatePage() {
                 background: colors.surface[50],
               }}
             >
-              {/* Decision header */}
               <div className="p-6 pb-4">
                 <h2
                   className="text-[11px] font-bold uppercase tracking-[0.16em] mb-4"
@@ -825,7 +869,7 @@ export default function VerifyCertificatePage() {
                     className="text-[28px] font-bold tracking-[-0.04em] tabular-nums"
                     style={{ color: decisionColor }}
                   >
-                    {confidence}%
+                    {confidenceLabel}
                   </span>
                 </div>
                 <p
