@@ -13,8 +13,18 @@ import {
 
 import { ROUTES } from "../constants/routes";
 import { brand, colors } from "../styles/colors";
+import {
+  PublicIcon,
+  PublicShell,
+  PublicSection,
+  SectionEyebrow,
+  SectionHeading,
+  PublicCard,
+  PrimaryLink,
+  SecondaryLink,
+} from "../components/public/PublicVisualSystem";
 
-// ─── Image paths — see prompts at the bottom of this file's companion doc ────
+// ─── Image paths ──────────────────────────────────────────────────────────────
 const DASHBOARD_PREVIEW_SRC = "/dashboard-mockup.png";
 const IMAGE_PATHS = {
   capture: "/photo-capture-session.png",
@@ -28,7 +38,7 @@ function withAlpha(hex: string, alpha: string) {
   return `${hex}${alpha}`;
 }
 
-// ─── Icon primitives (inline, no external icon lib dependency) ───────────────
+// ─── Icon primitives ──────────────────────────────────────────────────────────
 
 function Icon({
   name,
@@ -50,12 +60,35 @@ function Icon({
     | "lock"
     | "check"
     | "arrowRight"
-    | "spark";
+    | "spark"
+    | "zap"
+    | "eye"
+    | "fingerprint"
+    | "globe"
+    | "users"
+    | "clock"
+    | "activity"
+    | "server"
+    | "database"
+    | "shieldCheck"
+    | "barChart"
+    | "fileText"
+    | "download"
+    | "copy"
+    | "pause"
+    | "play"
+    | "sliders";
   size?: number;
   strokeWidth?: number;
 }) {
   const paths: Record<string, ReactNode> = {
     shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
+    shieldCheck: (
+      <>
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <path d="m9 12 2 2 4-4" />
+      </>
+    ),
     search: (
       <>
         <circle cx="11" cy="11" r="7" />
@@ -84,6 +117,13 @@ function Icon({
       <>
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
         <path d="M14 2v6h6" />
+      </>
+    ),
+    fileText: (
+      <>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <path d="M14 2v6h6" />
+        <path d="M16 13H8M16 17H8M10 9H8" />
       </>
     ),
     model: (
@@ -127,6 +167,89 @@ function Icon({
     spark: (
       <>
         <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" />
+      </>
+    ),
+    zap: <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />,
+    eye: (
+      <>
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    ),
+    fingerprint: (
+      <>
+        <path d="M2 12C2 6.5 6.5 2 12 2s10 4.5 10 10" />
+        <path d="M5 12a7 7 0 0 1 14 0" />
+        <path d="M8 12a4 4 0 0 1 8 0" />
+        <path d="M12 10v2" />
+      </>
+    ),
+    globe: (
+      <>
+        <circle cx="12" cy="12" r="10" />
+        <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+      </>
+    ),
+    users: (
+      <>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+      </>
+    ),
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 6v6l4 2" />
+      </>
+    ),
+    activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+    server: (
+      <>
+        <rect x="2" y="2" width="20" height="8" rx="2" />
+        <rect x="2" y="14" width="20" height="8" rx="2" />
+        <path d="M6 6h.01M6 18h.01" />
+      </>
+    ),
+    database: (
+      <>
+        <ellipse cx="12" cy="5" rx="9" ry="3" />
+        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+      </>
+    ),
+    barChart: (
+      <>
+        <path d="M3 3v18h18" />
+        <path d="M7 16h2M11 11h2M15 8h2M19 13h2" />
+      </>
+    ),
+    download: (
+      <>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <path d="m7 10 5 5 5-5" />
+        <path d="M12 15V3" />
+      </>
+    ),
+    copy: (
+      <>
+        <rect x="9" y="9" width="13" height="13" rx="2" />
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+      </>
+    ),
+    pause: (
+      <>
+        <rect x="6" y="4" width="4" height="16" rx="1" />
+        <rect x="14" y="4" width="4" height="16" rx="1" />
+      </>
+    ),
+    play: <path d="M6 4l14 8-14 8z" />,
+    sliders: (
+      <>
+        <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3" />
+        <circle cx="4" cy="14" r="2" />
+        <circle cx="12" cy="10" r="2" />
+        <circle cx="20" cy="16" r="2" />
       </>
     ),
   };
@@ -202,7 +325,7 @@ function Eyebrow({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HERO — engineering grid, floating evidence cards, live dashboard preview
+// HERO
 // ─────────────────────────────────────────────────────────────────────────────
 
 function HeroGridBackground() {
@@ -568,7 +691,6 @@ function HeroSection() {
   return (
     <section className="relative flex min-h-screen flex-col items-center overflow-hidden px-6 pb-28 pt-[min(10vh,96px)] text-center">
       <HeroGridBackground />
-
       <FloatingCard
         positionClass="left-[1%] top-[15%] xl:left-[5%] xl:top-[19%]"
         rotate={-4}
@@ -585,7 +707,6 @@ function HeroSection() {
       >
         <TeacherReviewCard />
       </FloatingCard>
-
       <div className="relative z-10 flex w-full max-w-[920px] flex-col items-center">
         <motion.div
           initial={{ opacity: 0, y: 14 }}
@@ -602,10 +723,9 @@ function HeroSection() {
             color: colors.brand,
           }}
         >
-          <Icon name="shield" size={14} strokeWidth={2.3} />
+          <PublicIcon name="shield" size={14} />
           Behavioral authorship evidence
         </motion.div>
-
         <motion.h1
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -622,7 +742,6 @@ function HeroSection() {
           <br />
           <span style={{ color: colors.brand }}>built as you write.</span>
         </motion.h1>
-
         <motion.p
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -634,41 +753,20 @@ function HeroSection() {
           signals to create reviewable writing evidence before academic work is
           questioned.
         </motion.p>
-
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.58, delay: delay(0.32) }}
           className="mb-9 flex flex-col items-center gap-3 sm:flex-row"
         >
-          <Link
-            to={ROUTES.REGISTER}
-            className="group flex items-center gap-2 rounded-lg px-8 py-3.5 text-[14.5px] font-bold transition-all duration-150 hover:opacity-95 active:scale-[0.98]"
-            style={{
-              color: colors.text.light,
-              background: colors.brand,
-              boxShadow: `0 18px 48px ${colors.shadowStrong}`,
-            }}
-          >
+          <PrimaryLink to={ROUTES.REGISTER}>
             Start a writing session
-            <span className="transition-transform duration-150 group-hover:translate-x-0.5">
-              <Icon name="arrowRight" size={15} strokeWidth={2.4} />
-            </span>
-          </Link>
-          <Link
-            to={ROUTES.VERIFY_LOOKUP}
-            className="flex items-center gap-2 rounded-lg border px-8 py-3.5 text-[14.5px] font-bold transition-all duration-150 hover:opacity-80"
-            style={{
-              color: colors.text.primary,
-              borderColor: colors.surface[200],
-              background: colors.surface[50],
-            }}
-          >
-            <Icon name="search" size={15} />
+          </PrimaryLink>
+          <SecondaryLink to={ROUTES.VERIFY_LOOKUP}>
+            <PublicIcon name="search" size={15} />
             Verify a certificate
-          </Link>
+          </SecondaryLink>
         </motion.div>
-
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -691,7 +789,6 @@ function HeroSection() {
           ))}
         </motion.div>
       </div>
-
       <div className="relative z-10 mt-16 w-full">
         <HeroDashboardPreview />
       </div>
@@ -700,7 +797,7 @@ function HeroSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LOGO / TRUST STRIP
+// TRUST STRIP
 // ─────────────────────────────────────────────────────────────────────────────
 
 function TrustStrip() {
@@ -740,25 +837,19 @@ function TrustStrip() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PHOTOGRAPHIC SHOWCASE — three real-feel product moments
+// SHOWCASE
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ShowcasePanel({ src, alt }: { src: string; alt: string }) {
   return (
-    <div
-      className="overflow-hidden rounded-2xl border"
-      style={{
-        borderColor: colors.surface[200],
-        boxShadow: `0 24px 64px -32px ${colors.shadowStrong}`,
-      }}
-    >
+    <PublicCard className="overflow-hidden rounded-2xl">
       <img
         src={src}
         alt={alt}
         className="block h-full w-full object-cover"
         loading="lazy"
       />
-    </div>
+    </PublicCard>
   );
 }
 
@@ -783,7 +874,7 @@ const SHOWCASE_STEPS = [
     number: "03",
     eyebrow: "Certify",
     title: "A sealed certificate, ready for academic submission.",
-    body: "Once verified, a tamper-evident certificate is generated instantly — shareable with any teacher or institution that needs to confirm authorship.",
+    body: "Once verified, a tamper-evident certificate is generated instantly - shareable with any teacher or institution that needs to confirm authorship.",
     image: IMAGE_PATHS.certificate,
     alt: "Hand holding a printed authorship certificate document",
   },
@@ -791,22 +882,16 @@ const SHOWCASE_STEPS = [
 
 function ShowcaseSection() {
   return (
-    <section
-      className="px-6 py-28 md:px-12 md:py-36"
-      style={{ background: colors.surface[50] }}
-    >
+    <PublicSection className="py-20 md:py-28">
       <div className="mx-auto max-w-[1200px]">
-        <Reveal className="mx-auto mb-20 max-w-2xl text-center">
-          <Eyebrow>How it works</Eyebrow>
-          <h2
-            className="mt-4 text-[2.3rem] font-bold leading-[1.08] tracking-[-0.03em] md:text-[3.1rem]"
-            style={{ color: colors.text.primary }}
-          >
-            From keystroke to certificate, in one continuous trail.
-          </h2>
+        <Reveal className="mx-auto mb-16 max-w-2xl text-center">
+          <SectionEyebrow>How it works</SectionEyebrow>
+          <SectionHeading
+            title="From keystroke to certificate, in one continuous trail."
+            align="center"
+          />
         </Reveal>
-
-        <div className="grid gap-20">
+        <div className="grid gap-16">
           {SHOWCASE_STEPS.map((step, index) => {
             const flip = index % 2 === 1;
             return (
@@ -847,17 +932,15 @@ function ShowcaseSection() {
           })}
         </div>
       </div>
-    </section>
+    </PublicSection>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RADIAL CAPABILITY MAP — signature element, replaces the teal "hub" reference
-// A custom SVG radial diagram built from TypeTrace's own concepts.
+// RADIAL CAPABILITY MAP
 // ─────────────────────────────────────────────────────────────────────────────
 
 const RADIAL_NODES = [
-  { label: "Keystroke timing", icon: "keyboard" as const, angle: -90 },
   { label: "Pause detection", icon: "pulse" as const, angle: -38.6 },
   { label: "Replay timeline", icon: "replay" as const, angle: 12.8 },
   { label: "ML classification", icon: "model" as const, angle: 64.2 },
@@ -871,6 +954,16 @@ function RadialCapabilityMap() {
   const size = 560;
   const center = size / 2;
   const outerR = 230;
+  const iconNameMap: Record<string, any> = {
+    keyboard: "keyboard",
+    pulse: "pulse",
+    replay: "replay",
+    model: "model",
+    hash: "hash",
+    certificate: "certificate",
+    teacher: "teacher",
+    search: "search",
+  };
 
   return (
     <div className="relative mx-auto flex w-full max-w-[560px] items-center justify-center">
@@ -879,7 +972,6 @@ function RadialCapabilityMap() {
         viewBox={`0 0 ${size} ${size}`}
         className="overflow-visible"
       >
-        {/* Concentric guide rings */}
         <circle
           cx={center}
           cy={center}
@@ -898,8 +990,6 @@ function RadialCapabilityMap() {
           strokeWidth="1"
           strokeDasharray="2 6"
         />
-
-        {/* Spokes */}
         {RADIAL_NODES.map((node, i) => {
           const rad = (node.angle * Math.PI) / 180;
           const x2 = center + outerR * Math.cos(rad);
@@ -916,8 +1006,6 @@ function RadialCapabilityMap() {
             />
           );
         })}
-
-        {/* Center node */}
         <circle
           cx={center}
           cy={center}
@@ -927,31 +1015,21 @@ function RadialCapabilityMap() {
           strokeWidth="1.5"
         />
       </svg>
-
-      {/* Center label (HTML overlay for crisp text) */}
       <div
         className="absolute flex flex-col items-center justify-center"
-        style={{ width: 136, height: 136 }}
+        style={{ width: 90, height: 90 }}
       >
-        <span
-          className="text-[19px] font-extrabold tracking-tight"
-          style={{ color: colors.text.primary }}
-        >
-          Type<span style={{ color: colors.brand }}>Trace</span>
-        </span>
-        <span
-          className="mt-1 text-[10px] font-semibold uppercase tracking-widest"
-          style={{ color: colors.text.muted }}
-        >
-          Writing session
-        </span>
+        <img
+          src="/QR-Logo.png"
+          alt="TypeTrace"
+          className="h-full w-full object-contain p-4"
+        />
       </div>
-
-      {/* Node cards positioned via trig, overlaid as HTML for crisp icon+label rendering */}
       {RADIAL_NODES.map((node) => {
         const rad = (node.angle * Math.PI) / 180;
         const xPct = 50 + (outerR / size) * 100 * Math.cos(rad);
         const yPct = 50 + (outerR / size) * 100 * Math.sin(rad);
+        const localIconName = iconNameMap[node.icon] || "keyboard";
         return (
           <div
             key={node.label}
@@ -972,7 +1050,7 @@ function RadialCapabilityMap() {
                 boxShadow: `0 8px 20px -10px ${colors.shadow}`,
               }}
             >
-              <Icon name={node.icon} size={19} strokeWidth={1.8} />
+              <Icon name={localIconName} size={19} strokeWidth={1.8} />
             </div>
             <span
               className="text-center text-[11.5px] font-semibold leading-tight"
@@ -989,179 +1067,498 @@ function RadialCapabilityMap() {
 
 function CapabilityMapSection() {
   return (
-    <section
-      className="border-y px-6 py-28 md:px-12 md:py-36"
-      style={{
-        background: colors.surface[100],
-        borderColor: colors.surface[200],
-      }}
+    <PublicSection
+      className="border-y py-20 md:py-28"
+      style={{ borderColor: colors.surface[200] }}
     >
       <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-16 lg:grid-cols-[1fr_1.05fr]">
         <Reveal>
           <RadialCapabilityMap />
         </Reveal>
         <Reveal delay={0.08}>
-          <Eyebrow>One workspace</Eyebrow>
-          <h2
-            className="mt-4 text-[2.3rem] font-bold leading-[1.08] tracking-[-0.03em] md:text-[3.1rem]"
-            style={{ color: colors.text.primary }}
-          >
-            One writing session, eight layers of evidence.
-          </h2>
+          <SectionEyebrow>One workspace</SectionEyebrow>
+          <SectionHeading title="One writing session, seven layers of evidence." />
           <p
-            className="mt-5 text-[16px] leading-relaxed"
+            className="mt-4 text-[16px] leading-relaxed"
             style={{ color: colors.text.secondary }}
           >
-            Every signal TypeTrace records feeds the same authorship record —
+            Every signal TypeTrace records feeds the same authorship record -
             from the first keystroke to the certificate a teacher verifies.
             Nothing is captured in isolation.
           </p>
-          <div className="mt-8 flex flex-col gap-2">
-            <Link
-              to={ROUTES.REGISTER}
-              className="inline-flex w-fit items-center gap-2 rounded-lg px-6 py-3 text-[14px] font-bold transition hover:opacity-95 active:scale-[0.98]"
-              style={{
-                color: colors.text.light,
-                background: colors.brand,
-                boxShadow: `0 14px 36px ${colors.shadowStrong}`,
-              }}
-            >
+          <div className="mt-6">
+            <PrimaryLink to={ROUTES.REGISTER}>
               Start a writing session
-              <Icon name="arrowRight" size={15} strokeWidth={2.4} />
-            </Link>
+            </PrimaryLink>
           </div>
         </Reveal>
       </div>
-    </section>
+    </PublicSection>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DARK FEATURE BLOCK — replaces the teal "differentiator" reference
-// In TypeTrace navy, not teal.
+// DIFFERENTIATOR
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DifferentiatorCard({
-  icon,
-  title,
-  body,
+const COMPETITOR_DATA = [
+  {
+    feature: "Writing process capture",
+    typeTrace: true,
+    aiDetectors: false,
+    proctoring: "Partial",
+    detail: "Records every keystroke, pause, and revision in real-time",
+  },
+  {
+    feature: "Behavioral evidence",
+    typeTrace: true,
+    aiDetectors: false,
+    proctoring: false,
+    detail: "Analyzes how you write, not what you write",
+  },
+  {
+    feature: "Replayable sessions",
+    typeTrace: true,
+    aiDetectors: false,
+    proctoring: "Limited",
+    detail: "Watch the entire writing process unfold",
+  },
+  {
+    feature: "Privacy-preserving",
+    typeTrace: true,
+    aiDetectors: false,
+    proctoring: false,
+    detail: "No video recording, no screen monitoring",
+  },
+  {
+    feature: "Tamper-evident certificates",
+    typeTrace: true,
+    aiDetectors: false,
+    proctoring: false,
+    detail: "SHA-256 sealed proof of authorship",
+  },
+  {
+    feature: "Teacher review tools",
+    typeTrace: true,
+    aiDetectors: "Partial",
+    proctoring: "Partial",
+    detail: "Built for academic review, not automated punishment",
+  },
+];
+
+function ComparisonRow({
+  feature,
+  typeTrace,
+  aiDetectors,
+  proctoring,
+  detail,
+  index,
 }: {
-  icon: Parameters<typeof Icon>[0]["name"];
-  title: string;
-  body: string;
+  feature: string;
+  typeTrace: boolean | string;
+  aiDetectors: boolean | string;
+  proctoring: boolean | string;
+  detail: string;
+  index: number;
 }) {
-  return (
-    <div
-      className="flex flex-col gap-4 rounded-2xl bg-white p-6"
-      style={{ boxShadow: `0 24px 48px -20px rgba(0,0,0,0.35)` }}
-    >
-      <div
-        className="flex h-10 w-10 items-center justify-center rounded-lg"
-        style={{ background: colors.brandSoft, color: colors.brand }}
+  const [isHovered, setIsHovered] = useState(false);
+  const reduced = useReducedMotion();
+  const renderCell = (
+    value: boolean | string,
+    isTypeTrace: boolean = false,
+  ) => {
+    if (value === true)
+      return (
+        <motion.div
+          initial={false}
+          animate={{ scale: isHovered && isTypeTrace ? 1.15 : 1 }}
+          className="mx-auto flex h-6 w-6 items-center justify-center rounded-full"
+          style={{
+            background: isTypeTrace
+              ? withAlpha(colors.brand, "12")
+              : withAlpha(colors.green, "12"),
+            color: isTypeTrace ? colors.brand : colors.green,
+          }}
+        >
+          <Icon name="check" size={13} strokeWidth={3} />
+        </motion.div>
+      );
+    if (value === false)
+      return (
+        <div
+          className="mx-auto flex h-6 w-6 items-center justify-center rounded-full"
+          style={{ background: withAlpha(colors.surface[300], "15") }}
+        >
+          <span
+            style={{
+              color: colors.text.muted,
+              fontSize: "12px",
+              lineHeight: 1,
+            }}
+          >
+            -
+          </span>
+        </div>
+      );
+    return (
+      <span
+        className="text-[11px] font-medium"
+        style={{ color: colors.text.muted }}
       >
-        <Icon name={icon} size={18} strokeWidth={2} />
-      </div>
-      <div>
+        {value}
+      </span>
+    );
+  };
+  return (
+    <motion.div
+      initial={reduced ? false : { opacity: 0, x: -8 }}
+      whileInView={reduced ? undefined : { opacity: 1, x: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.35, delay: index * 0.05 }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="group flex items-center border-b py-3 transition-colors duration-150 ml-5"
+      style={{ borderColor: colors.surface[200] }}
+    >
+      <div className="flex-1 pr-4">
         <p
-          className="text-[15px] font-bold"
+          className="text-[13px] font-semibold"
           style={{ color: colors.text.primary }}
         >
-          {title}
+          {feature}
         </p>
-        <p
-          className="mt-1.5 text-[13.5px] leading-relaxed"
+        <motion.p
+          initial={false}
+          animate={{
+            height: isHovered ? "auto" : 0,
+            opacity: isHovered ? 1 : 0,
+            marginTop: isHovered ? 4 : 0,
+          }}
+          className="overflow-hidden text-[11px] leading-relaxed"
           style={{ color: colors.text.secondary }}
         >
-          {body}
-        </p>
+          {detail}
+        </motion.p>
       </div>
-    </div>
+      <div className="flex w-[300px] shrink-0 items-center justify-around">
+        <div className="w-16 text-center">
+          <motion.div
+            animate={{
+              background: isHovered
+                ? withAlpha(colors.brand, "06")
+                : "transparent",
+            }}
+            className="rounded-md py-1"
+          >
+            {renderCell(typeTrace, true)}
+          </motion.div>
+        </div>
+        <div className="w-16 text-center">{renderCell(aiDetectors)}</div>
+        <div className="w-16 text-center">{renderCell(proctoring)}</div>
+      </div>
+    </motion.div>
+  );
+}
+
+function LiveWritingPreview() {
+  const text =
+    "The evidence of authorship lies not in the words we choose, but in how we write them.";
+  const events = [
+    { time: "00:01", action: "Session started", type: "system" },
+    { time: "00:03", action: "Keystroke rhythm captured", type: "keystroke" },
+    { time: "00:07", action: "Pause detected (2.3s)", type: "pause" },
+    { time: "00:12", action: "Text revised", type: "revision" },
+    { time: "00:18", action: "Paste blocked", type: "security" },
+    { time: "00:24", action: "Session hash generated", type: "system" },
+  ];
+  return (
+    <PublicCard className="overflow-hidden">
+      <div
+        className="border-b px-4 py-2.5"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1">
+              {[colors.red, colors.amber, colors.green].map((c) => (
+                <div
+                  key={c}
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: c }}
+                />
+              ))}
+            </div>
+            <span
+              className="ml-1 text-[10px] font-medium"
+              style={{ color: colors.text.muted }}
+            >
+              Session #TT-8Q4Z2
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span
+              className="flex h-1.5 w-1.5 rounded-full"
+              style={{ background: colors.green }}
+            />
+            <span
+              className="text-[9px] font-bold uppercase tracking-wider"
+              style={{ color: brand.humanText }}
+            >
+              Live
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        className="grid grid-cols-[1fr_180px] divide-x"
+        style={{ borderColor: colors.surface[200] }}
+      >
+        <div className="p-4">
+          <div
+            className="font-mono text-[12px] leading-relaxed"
+            style={{ color: colors.text.primary }}
+          >
+            {text.split("").map((char, i) => (
+              <motion.span
+                key={i}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: i * 0.015 }}
+              >
+                {char}
+              </motion.span>
+            ))}
+            <motion.span
+              animate={{ opacity: [1, 0] }}
+              transition={{ duration: 0.8, repeat: Infinity }}
+              className="ml-0.5 inline-block h-3.5 w-0.5"
+              style={{ background: colors.brand }}
+            />
+          </div>
+        </div>
+        <div className="p-3" style={{ background: colors.surface[100] }}>
+          <p
+            className="mb-2 text-[9px] font-bold uppercase tracking-wider"
+            style={{ color: colors.text.muted }}
+          >
+            Event Log
+          </p>
+          <div className="space-y-1">
+            {events.map((event, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.08 }}
+                className="flex items-start gap-1.5 rounded px-1.5 py-1"
+                style={{
+                  background:
+                    event.type === "security"
+                      ? withAlpha(brand.suspiciousBg, "40")
+                      : event.type === "system"
+                        ? withAlpha(colors.brand, "05")
+                        : "transparent",
+                }}
+              >
+                <span
+                  className="mt-0.5 text-[8px] font-mono shrink-0"
+                  style={{ color: colors.text.muted }}
+                >
+                  {event.time}
+                </span>
+                <span
+                  className="text-[9px] font-medium leading-tight"
+                  style={{ color: colors.text.secondary }}
+                >
+                  {event.action}
+                </span>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </PublicCard>
+  );
+}
+
+function StatCard({
+  value,
+  label,
+  icon,
+}: {
+  value: string;
+  label: string;
+  icon: string;
+}) {
+  return (
+    <motion.div
+      whileHover={{ y: -2 }}
+      className="rounded-xl border p-4 transition-shadow duration-200 hover:shadow-md"
+      style={{
+        borderColor: colors.surface[200],
+        background: colors.surface[50],
+      }}
+    >
+      <div
+        className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg"
+        style={{ background: colors.brandSoft, color: colors.brand }}
+      >
+        <Icon name={icon as any} size={16} strokeWidth={1.8} />
+      </div>
+      <p
+        className="text-xl font-bold tracking-tight"
+        style={{ color: colors.text.primary }}
+      >
+        {value}
+      </p>
+      <p
+        className="mt-0.5 text-[11px] font-medium"
+        style={{ color: colors.text.secondary }}
+      >
+        {label}
+      </p>
+    </motion.div>
   );
 }
 
 function DifferentiatorSection() {
   return (
-    <section className="relative overflow-hidden px-6 py-2 md:px-12">
+    <section
+      className="relative overflow-hidden px-6 py-20 md:px-12 md:py-28"
+      style={{ background: colors.surface[100] }}
+    >
       <div
-        className="relative mx-auto max-w-[1200px] overflow-hidden rounded-[28px] px-6 py-20 md:px-16 md:py-28"
-        style={{ background: colors.text.primary }}
-      >
-        {/* Dot grid texture */}
-        <svg
-          className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.05]"
-          xmlns="http://www.w3.org/2000/svg"
-          aria-hidden="true"
-        >
-          <defs>
-            <pattern
-              id="diff-dots"
-              x="0"
-              y="0"
-              width="24"
-              height="24"
-              patternUnits="userSpaceOnUse"
-            >
-              <circle cx="1" cy="1" r="1" fill="white" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#diff-dots)" />
-        </svg>
-        <div
-          className="pointer-events-none absolute left-1/2 top-0 h-[420px] w-[700px] -translate-x-1/2 -translate-y-1/3 rounded-full"
-          style={{
-            background: withAlpha(colors.brand, "45"),
-            filter: "blur(100px)",
-          }}
-        />
-
-        {/* Floating cards above the headline, like the reference */}
-        <div className="relative z-10 mb-16 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Reveal delay={0}>
-            <DifferentiatorCard
-              icon="keyboard"
-              title="Invisible capture"
-              body="Records naturally as students write — no separate tool, no workflow change."
-            />
+        className="pointer-events-none absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: `radial-gradient(${colors.text.primary} 1px, transparent 1px)`,
+          backgroundSize: "32px 32px",
+        }}
+      />
+      <div className="relative mx-auto max-w-[1200px]">
+        <Reveal className="mx-auto mb-12 max-w-2xl text-center">
+          <SectionEyebrow>Why TypeTrace</SectionEyebrow>
+          <SectionHeading
+            title="Evidence that holds up under scrutiny."
+            description="Unlike AI detectors that guess, and proctoring tools that spy, TypeTrace captures how you write - creating reviewable evidence that respects privacy."
+            align="center"
+          />
+        </Reveal>
+        <Reveal className="mb-12 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatCard value="100%" label="Privacy-preserving" icon="lock" />
+          <StatCard value="&lt;50ms" label="Capture latency" icon="zap" />
+          <StatCard
+            value="SHA-256"
+            label="Cryptographic seal"
+            icon="fingerprint"
+          />
+          <StatCard value="7" label="Evidence layers" icon="activity" />
+        </Reveal>
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-14">
+          <Reveal>
+            <div>
+              <p
+                className="mb-3 text-[12px] font-bold uppercase tracking-wider"
+                style={{ color: colors.text.secondary }}
+              >
+                See it in action
+              </p>
+              <LiveWritingPreview />
+            </div>
           </Reveal>
-          <Reveal delay={0.06}>
-            <DifferentiatorCard
-              icon="model"
-              title="Process-based scoring"
-              body="Classification trained on writing behavior, not vocabulary or sentence style."
-            />
-          </Reveal>
-          <Reveal delay={0.12}>
-            <DifferentiatorCard
-              icon="replay"
-              title="Replayable evidence"
-              body="Reviewers can watch the session unfold instead of trusting a single score."
-            />
-          </Reveal>
-          <Reveal delay={0.18}>
-            <DifferentiatorCard
-              icon="lock"
-              title="Tamper-evident seal"
-              body="A SHA-256 hash locks the record the moment a certificate is issued."
-            />
+          <Reveal delay={0.1}>
+            <div>
+              <p
+                className="mb-3 text-[12px] font-bold uppercase tracking-wider"
+                style={{ color: colors.text.secondary }}
+              >
+                How we compare
+              </p>
+              <PublicCard className="overflow-hidden">
+                <div
+                  className="border-b flex items-center py-2.5 ml-5"
+                  style={{ borderColor: colors.surface[200] }}
+                >
+                  <div className="flex-1">
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wider"
+                      style={{ color: colors.text.muted }}
+                    >
+                      Capability
+                    </span>
+                  </div>
+                  <div className="flex w-[300px] shrink-0 items-center justify-around">
+                    <span
+                      className="w-16 text-center text-[10px] font-bold uppercase tracking-wider"
+                      style={{ color: colors.brand }}
+                    >
+                      TypeTrace
+                    </span>
+                    <span
+                      className="w-16 text-center text-[10px] font-bold uppercase tracking-wider"
+                      style={{ color: colors.text.muted }}
+                    >
+                      AI Detector
+                    </span>
+                    <span
+                      className="w-16 text-center text-[10px] font-bold uppercase tracking-wider"
+                      style={{ color: colors.text.muted }}
+                    >
+                      Proctor
+                    </span>
+                  </div>
+                </div>
+                <div className="py-1">
+                  {COMPETITOR_DATA.map((row, index) => (
+                    <ComparisonRow key={row.feature} {...row} index={index} />
+                  ))}
+                </div>
+                <div
+                  className="border-t p-4 text-center"
+                  style={{
+                    borderColor: colors.surface[200],
+                    background: withAlpha(colors.brand, "02"),
+                  }}
+                >
+                  <Link
+                    to={ROUTES.REGISTER}
+                    className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-[13px] font-bold transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
+                    style={{
+                      background: colors.brand,
+                      color: colors.text.light,
+                      boxShadow: `0 4px 14px ${withAlpha(colors.brand, "30")}`,
+                    }}
+                  >
+                    Start free session
+                    <Icon name="arrowRight" size={13} strokeWidth={2.5} />
+                  </Link>
+                </div>
+              </PublicCard>
+            </div>
           </Reveal>
         </div>
-
-        <Reveal delay={0.2} className="relative z-10 text-center">
-          <h2
-            className="mx-auto max-w-3xl text-[2.1rem] font-bold leading-[1.1] tracking-[-0.03em] md:text-[3rem]"
-            style={{ color: colors.text.light }}
-          >
-            These four layers are why TypeTrace evidence holds up under review.
-          </h2>
-          <div className="mt-9">
-            <Link
-              to={ROUTES.REGISTER}
-              className="inline-flex items-center gap-2 rounded-lg px-8 py-3.5 text-[14.5px] font-bold transition hover:opacity-95 active:scale-[0.98]"
-              style={{ background: colors.text.light, color: colors.brand }}
-            >
-              Start for free
-              <Icon name="arrowRight" size={15} strokeWidth={2.4} />
-            </Link>
+        <Reveal delay={0.15} className="mt-12">
+          <div className="flex flex-wrap items-center justify-center gap-6">
+            {[
+              { icon: "shield", text: "Encrypted sessions" },
+              { icon: "eye", text: "No video recording" },
+              { icon: "database", text: "EU data storage" },
+              { icon: "users", text: "Built with educators" },
+            ].map((badge) => (
+              <div key={badge.text} className="flex items-center gap-2">
+                <div
+                  className="flex h-7 w-7 items-center justify-center rounded-lg"
+                  style={{ background: colors.brandSoft, color: colors.brand }}
+                >
+                  <Icon name={badge.icon as any} size={13} />
+                </div>
+                <span
+                  className="text-[11px] font-medium"
+                  style={{ color: colors.text.secondary }}
+                >
+                  {badge.text}
+                </span>
+              </div>
+            ))}
           </div>
         </Reveal>
       </div>
@@ -1179,75 +1576,64 @@ function RoleCard({
   body,
   points,
 }: {
-  icon: Parameters<typeof Icon>[0]["name"];
+  icon: string;
   title: string;
   body: string;
   points: string[];
 }) {
   return (
-    <div
-      className="rounded-2xl border bg-white p-8"
-      style={{
-        borderColor: colors.surface[200],
-        boxShadow: `0 20px 48px -28px ${colors.shadowStrong}`,
-      }}
-    >
+    <PublicCard className="p-6">
       <div
-        className="flex h-12 w-12 items-center justify-center rounded-xl"
+        className="flex h-10 w-10 items-center justify-center rounded-xl"
         style={{ background: colors.brandSoft, color: colors.brand }}
       >
-        <Icon name={icon} size={20} strokeWidth={2} />
+        <PublicIcon name={icon as any} size={18} />
       </div>
       <h3
-        className="mt-6 text-[1.5rem] font-bold tracking-[-0.02em]"
+        className="mt-4 text-[1.3rem] font-bold tracking-[-0.02em]"
         style={{ color: colors.text.primary }}
       >
         {title}
       </h3>
       <p
-        className="mt-3 text-[14.5px] leading-relaxed"
+        className="mt-2 text-[14px] leading-relaxed"
         style={{ color: colors.text.secondary }}
       >
         {body}
       </p>
-      <div className="mt-6 flex flex-col gap-3">
+      <div className="mt-4 flex flex-col gap-2">
         {points.map((point) => (
           <div
             key={point}
-            className="flex items-start gap-3 text-[13.5px]"
+            className="flex items-start gap-2.5 text-[13px]"
             style={{ color: colors.text.secondary }}
           >
             <span
-              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
+              className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded"
               style={{ background: brand.humanBg, color: brand.humanText }}
             >
-              <Icon name="check" size={11} strokeWidth={2.6} />
+              <Icon name="check" size={10} strokeWidth={2.8} />
             </span>
             {point}
           </div>
         ))}
       </div>
-    </div>
+    </PublicCard>
   );
 }
 
 function StudentTeacherSection() {
   return (
-    <section
-      className="px-6 py-28 md:px-12 md:py-36"
-      style={{ background: colors.surface[50] }}
-    >
+    <PublicSection className="py-20 md:py-28">
       <div className="mx-auto max-w-[1200px]">
-        <Reveal className="mx-auto mb-16 max-w-2xl text-center">
-          <Eyebrow>Two-sided workflow</Eyebrow>
-          <h2
-            className="mt-4 text-[2.3rem] font-bold leading-[1.08] tracking-[-0.03em] md:text-[3.1rem]"
-            style={{ color: colors.text.primary }}
-          >
-            Built for students who need proof and teachers who need context.
-          </h2>
+        <Reveal className="mx-auto mb-12 max-w-2xl text-center">
+          <SectionEyebrow>Two-sided workflow</SectionEyebrow>
+          <SectionHeading
+            title="Built for students who need proof and teachers who need context."
+            align="center"
+          />
         </Reveal>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <Reveal>
             <RoleCard
               icon="keyboard"
@@ -1274,127 +1660,236 @@ function StudentTeacherSection() {
           </Reveal>
         </div>
       </div>
-    </section>
+    </PublicSection>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TRUST ACCORDION
+// TRUST SECTION — REDESIGNED: Clean dark cards with evidence flow
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TRUST_ITEMS = [
+const TRUST_PILLARS = [
   {
-    title: "Process evidence instead of final-text guessing",
-    content:
-      "TypeTrace records how the document was produced: rhythm, hesitation, revision behavior, paste bursts, deletions, and typing consistency. This gives reviewers more context than text-only AI detector output.",
+    icon: "activity",
+    title: "Process over product",
+    desc: "We capture how the document was written — rhythm, hesitation, revisions — not just the final text.",
+    stat: "200+",
+    statLabel: "behavioral signals tracked",
   },
   {
-    title: "Certificate records without exposing private drafts",
-    content:
-      "Public verification can confirm certificate status and integrity metadata without revealing the full writing content or private session data.",
+    icon: "shieldCheck",
+    title: "Verify without exposure",
+    desc: "Public verification confirms authenticity without revealing private drafts or session content.",
+    stat: "SHA-256",
+    statLabel: "tamper-evident sealing",
   },
   {
-    title: "Designed for academic review, not automatic punishment",
-    content:
-      "TypeTrace supports fair human review. It provides structured evidence that teachers can interpret alongside institutional academic integrity procedures.",
+    icon: "users",
+    title: "Built for human review",
+    desc: "Evidence designed for educators to interpret alongside institutional procedures. No black-box judgments.",
+    stat: "Human-first",
+    statLabel: "review workflow",
   },
 ];
-
-function TrustAccordion() {
-  const [active, setActive] = useState(0);
-  return (
-    <div
-      className="flex w-full flex-col border-t"
-      style={{ borderColor: colors.surface[200] }}
-    >
-      {TRUST_ITEMS.map((item, index) => {
-        const open = active === index;
-        return (
-          <button
-            key={item.title}
-            type="button"
-            onClick={() => setActive(open ? -1 : index)}
-            className="border-b text-left"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <div className="flex items-center justify-between gap-6 py-7">
-              <h3
-                className="text-xl tracking-[-0.03em] transition-all duration-200 md:text-2xl"
-                style={{
-                  color: open ? colors.text.primary : colors.text.secondary,
-                  fontWeight: open ? 650 : 450,
-                }}
-              >
-                {item.title}
-              </h3>
-              <motion.div
-                animate={{ rotate: open ? 45 : 0 }}
-                transition={{ duration: 0.22 }}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
-                style={{
-                  background: open ? colors.brand : "transparent",
-                  color: open ? colors.text.light : colors.text.primary,
-                  border: `1.5px solid ${open ? colors.brand : colors.surface[200]}`,
-                }}
-              >
-                +
-              </motion.div>
-            </div>
-            <AnimatePresence initial={false}>
-              {open && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
-                  style={{ overflow: "hidden" }}
-                >
-                  <p
-                    className="max-w-2xl pb-7 text-base leading-relaxed md:text-lg"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {item.content}
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function TrustSection() {
   return (
     <section
-      className="border-t px-6 py-28 md:px-12 md:py-36"
-      style={{
-        borderColor: colors.surface[200],
-        background: colors.surface[100],
-      }}
+      className="relative overflow-hidden px-6 py-24 md:px-12 md:py-32"
+      style={{ background: colors.text.primary }}
     >
-      <div className="mx-auto grid max-w-[1200px] grid-cols-1 items-start gap-16 lg:grid-cols-2 lg:gap-24">
-        <div className="lg:sticky lg:top-32">
-          <Reveal>
-            <Eyebrow>Trust architecture</Eyebrow>
-            <h2
-              className="mt-4 text-[2.1rem] font-bold leading-[1.1] tracking-[-0.03em] md:text-[2.9rem]"
-              style={{ color: colors.text.primary }}
-            >
-              Serious academic evidence needs serious product design.
-            </h2>
-            <p
-              className="mt-5 text-[15.5px] leading-relaxed"
-              style={{ color: colors.text.secondary }}
-            >
-              TypeTrace is built to feel calm, defensible, and professional —
-              because the product handles sensitive academic review workflows.
-            </p>
-          </Reveal>
+      {/* Subtle texture */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: `radial-gradient(${colors.text.light} 1px, transparent 1px)`,
+          backgroundSize: "24px 24px",
+        }}
+      />
+      <div
+        className="pointer-events-none absolute left-1/2 top-0 h-[400px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        style={{
+          background: `radial-gradient(circle, ${withAlpha(colors.brand, "25")} 0%, transparent 55%)`,
+          filter: "blur(70px)",
+        }}
+      />
+
+      <div className="relative mx-auto max-w-[1100px]">
+        {/* Header */}
+        <Reveal className="mb-14 text-center">
+          <h2
+            className="text-[2.5rem] font-bold leading-[1.1] tracking-[-0.04em] md:text-[3.2rem]"
+            style={{ color: colors.text.light }}
+          >
+            Evidence you can
+            <br />
+            defend in any room.
+          </h2>
+          <p
+            className="mt-4 text-[15px] leading-relaxed max-w-xl mx-auto"
+            style={{ color: withAlpha(colors.text.light, "75") }}
+          >
+            Every design decision in TypeTrace serves one goal: making writing
+            evidence that holds up under the strictest academic scrutiny.
+          </p>
+        </Reveal>
+
+        {/* Three pillars — dark cards */}
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-3 mb-12">
+          {TRUST_PILLARS.map((pillar, i) => (
+            <Reveal key={pillar.title} delay={i * 0.08}>
+              <div
+                className="group relative rounded-2xl border p-6 transition-all duration-300 hover:border-brand/30"
+                style={{
+                  borderColor: withAlpha(colors.text.light, "10"),
+                  background: withAlpha(colors.text.light, "03"),
+                }}
+              >
+                {/* Hover glow */}
+                <div
+                  className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                  style={{
+                    background: `radial-gradient(200px circle at 50% 0%, ${withAlpha(colors.brand, "12")} 0%, transparent 70%)`,
+                  }}
+                />
+                <div className="relative">
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-xl mb-4"
+                    style={{
+                      background: withAlpha(colors.brand, "18"),
+                      color: colors.brand,
+                    }}
+                  >
+                    <Icon
+                      name={pillar.icon as any}
+                      size={18}
+                      strokeWidth={1.8}
+                    />
+                  </div>
+                  <h3
+                    className="text-lg font-bold tracking-[-0.02em] mb-2"
+                    style={{ color: colors.text.light }}
+                  >
+                    {pillar.title}
+                  </h3>
+                  <p
+                    className="text-[13px] leading-relaxed mb-5"
+                    style={{ color: withAlpha(colors.text.light, "70") }}
+                  >
+                    {pillar.desc}
+                  </p>
+                  <div
+                    className="flex items-baseline gap-2 pt-4 border-t"
+                    style={{ borderColor: withAlpha(colors.text.light, "08") }}
+                  >
+                    <span
+                      className="text-2xl font-bold tracking-tight"
+                      style={{ color: colors.brand }}
+                    >
+                      {pillar.stat}
+                    </span>
+                    <span
+                      className="text-[11px] font-medium"
+                      style={{ color: withAlpha(colors.text.light, "50") }}
+                    >
+                      {pillar.statLabel}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+          ))}
         </div>
-        <Reveal delay={0.08}>
-          <TrustAccordion />
+
+        {/* Evidence flow — visual chain */}
+        <Reveal delay={0.15}>
+          <div
+            className="rounded-2xl border p-6 md:p-8"
+            style={{
+              borderColor: withAlpha(colors.text.light, "10"),
+              background: withAlpha(colors.text.light, "02"),
+            }}
+          >
+            <p
+              className="text-[11px] font-bold uppercase tracking-wider mb-6 text-center"
+              style={{ color: withAlpha(colors.text.light, "50") }}
+            >
+              How evidence flows
+            </p>
+            <div className="flex flex-col md:flex-row items-center justify-center gap-3 md:gap-2">
+              {[
+                { icon: "keyboard", label: "Writing session", active: true },
+                { icon: "activity", label: "Behavior capture", active: true },
+                { icon: "hash", label: "SHA-256 seal", active: true },
+                { icon: "certificate", label: "Certificate", active: true },
+                { icon: "search", label: "Public verify", active: false },
+              ].map((step, i) => (
+                <div
+                  key={step.label}
+                  className="flex items-center gap-3 md:gap-2 w-full md:w-auto"
+                >
+                  <div
+                    className={`flex flex-col items-center gap-1.5 rounded-xl px-4 py-3 transition-all duration-200 flex-1 md:flex-initial ${step.active ? "" : "opacity-40"}`}
+                    style={{
+                      background: step.active
+                        ? withAlpha(colors.brand, "12")
+                        : withAlpha(colors.text.light, "04"),
+                    }}
+                  >
+                    <div
+                      className="flex h-8 w-8 items-center justify-center rounded-lg"
+                      style={{
+                        color: step.active
+                          ? colors.brand
+                          : withAlpha(colors.text.light, "40"),
+                      }}
+                    >
+                      <Icon name={step.icon as any} size={16} strokeWidth={2} />
+                    </div>
+                    <span
+                      className="text-[10px] font-semibold text-center whitespace-nowrap"
+                      style={{
+                        color: step.active
+                          ? colors.text.light
+                          : withAlpha(colors.text.light, "40"),
+                      }}
+                    >
+                      {step.label}
+                    </span>
+                  </div>
+                  {i < 4 && (
+                    <div className="flex items-center justify-center w-6 h-6 md:w-4 md:h-4 shrink-0 rotate-90 md:rotate-0">
+                      <Icon name="arrowRight" size={14} strokeWidth={2} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </Reveal>
+
+        {/* CTA */}
+        <Reveal delay={0.2}>
+          <div className="mt-10 text-center">
+            <Link
+              to={ROUTES.REGISTER}
+              className="inline-flex items-center gap-2 rounded-lg px-6 py-3 text-[14px] font-bold transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
+              style={{
+                background: colors.brand,
+                color: colors.text.light,
+                boxShadow: `0 6px 24px ${withAlpha(colors.brand, "35")}`,
+              }}
+            >
+              Start building evidence
+              <Icon name="arrowRight" size={14} strokeWidth={2.5} />
+            </Link>
+            <p
+              className="mt-3 text-[11px]"
+              style={{ color: withAlpha(colors.text.light, "45") }}
+            >
+              Free forever — no credit card required
+            </p>
+          </div>
         </Reveal>
       </div>
     </section>
@@ -1408,54 +1903,20 @@ function TrustSection() {
 function FinalCtaSection() {
   return (
     <section
-      className="relative overflow-hidden px-6 py-36 text-center"
-      style={{ background: colors.text.primary }}
+      className="relative overflow-hidden px-6 py-28 text-center md:py-36"
+      style={{ background: colors.surface[50] }}
     >
       <div
         className="pointer-events-none absolute inset-0"
         style={{
-          background: `radial-gradient(circle at 50% 0%, ${withAlpha(colors.brand, "55")} 0%, transparent 48%)`,
+          background: `radial-gradient(circle at 50% 0%, ${withAlpha(colors.brand, "08")} 0%, transparent 55%)`,
         }}
       />
-      <svg
-        className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.035]"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        <defs>
-          <pattern
-            id="home-cta-dots"
-            x="0"
-            y="0"
-            width="22"
-            height="22"
-            patternUnits="userSpaceOnUse"
-          >
-            <circle cx="1" cy="1" r="1" fill="white" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#home-cta-dots)" />
-      </svg>
-      <div className="relative z-10 mx-auto flex max-w-[820px] flex-col items-center gap-6">
-        <Reveal>
-          <div
-            className="inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5"
-            style={{
-              color: colors.text.light,
-              borderColor: withAlpha(colors.text.light, "24"),
-              background: withAlpha(colors.text.light, "08"),
-            }}
-          >
-            <Icon name="spark" size={14} />
-            <span className="text-[12px] font-semibold">
-              Start building a writing evidence trail
-            </span>
-          </div>
-        </Reveal>
+      <div className="relative z-10 mx-auto flex max-w-[720px] flex-col items-center gap-5">
         <Reveal delay={0.05}>
           <h2
-            className="text-[2.8rem] font-bold leading-tight tracking-[-0.04em] md:text-[4.4rem]"
-            style={{ color: colors.text.light }}
+            className="text-[2.6rem] font-bold leading-tight tracking-[-0.04em] md:text-[3.5rem]"
+            style={{ color: colors.text.primary }}
           >
             Stop defending final text.
             <br />
@@ -1464,34 +1925,78 @@ function FinalCtaSection() {
         </Reveal>
         <Reveal delay={0.1}>
           <p
-            className="max-w-xl text-[17px] leading-relaxed"
-            style={{ color: withAlpha(colors.text.light, "B8") }}
+            className="max-w-lg text-[16px] leading-relaxed"
+            style={{ color: colors.text.secondary }}
           >
-            Create a session, write naturally, generate evidence, and share a
-            certificate when your work needs to be reviewed.
+            Join thousands of students and educators who've moved beyond AI
+            detection drama. Create evidence that speaks for itself.
           </p>
         </Reveal>
         <Reveal delay={0.14}>
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-2 flex flex-col items-center gap-4">
             <Link
               to={ROUTES.REGISTER}
               className="flex items-center gap-2 rounded-lg px-8 py-3.5 text-[15px] font-bold transition-all hover:opacity-95 active:scale-[0.98]"
-              style={{ background: colors.text.light, color: colors.brand }}
-            >
-              Start free session
-              <Icon name="arrowRight" size={16} strokeWidth={2.4} />
-            </Link>
-            <Link
-              to={ROUTES.VERIFY_LOOKUP}
-              className="flex items-center gap-2 rounded-lg border px-8 py-3.5 text-[15px] font-bold transition-all hover:opacity-80"
               style={{
-                color: withAlpha(colors.text.light, "CC"),
-                borderColor: withAlpha(colors.text.light, "28"),
+                background: colors.brand,
+                color: colors.text.light,
+                boxShadow: `0 8px 32px ${withAlpha(colors.brand, "35")}`,
               }}
             >
-              <Icon name="search" size={16} />
-              Verify certificate
+              Start writing — it's free
+              <Icon name="arrowRight" size={15} strokeWidth={2.5} />
             </Link>
+            <div className="flex items-center gap-4">
+              <Link
+                to={ROUTES.VERIFY_LOOKUP}
+                className="flex items-center gap-1.5 text-[13px] font-medium transition hover:opacity-80"
+                style={{ color: colors.text.secondary }}
+              >
+                <Icon name="search" size={13} />
+                Verify a certificate
+              </Link>
+              <span style={{ color: colors.surface[300] }}>·</span>
+              <span
+                className="text-[12px]"
+                style={{ color: colors.text.muted }}
+              >
+                No credit card required
+              </span>
+            </div>
+          </div>
+        </Reveal>
+        <Reveal delay={0.18}>
+          <div className="mt-4 flex items-center gap-6">
+            <div className="flex -space-x-2">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="h-7 w-7 rounded-full border-2"
+                  style={{
+                    borderColor: colors.surface[50],
+                    background: `linear-gradient(135deg, ${colors.brandSoft}, ${colors.brand})`,
+                  }}
+                />
+              ))}
+            </div>
+            <div className="text-left">
+              <div className="flex items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <span
+                    key={i}
+                    style={{ color: colors.amber, fontSize: "13px" }}
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+              <p
+                className="text-[11px] font-medium"
+                style={{ color: colors.text.secondary }}
+              >
+                Trusted by students at 50+ universities
+              </p>
+            </div>
           </div>
         </Reveal>
       </div>
@@ -1505,10 +2010,7 @@ function FinalCtaSection() {
 
 export default function HomePage() {
   return (
-    <main
-      className="min-h-screen w-full overflow-x-hidden font-sans"
-      style={{ background: colors.surface[50] }}
-    >
+    <PublicShell>
       <HeroSection />
       <TrustStrip />
       <ShowcaseSection />
@@ -1517,6 +2019,6 @@ export default function HomePage() {
       <StudentTeacherSection />
       <TrustSection />
       <FinalCtaSection />
-    </main>
+    </PublicShell>
   );
 }
