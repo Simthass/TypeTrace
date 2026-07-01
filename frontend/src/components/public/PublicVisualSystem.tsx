@@ -1,5 +1,3 @@
-// frontend/src/components/public/PublicVisualSystem.tsx
-
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";

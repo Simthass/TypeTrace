@@ -34,7 +34,7 @@ import ReplayPage from "./pages/ReplayPage";
 import SessionsPage from "./pages/SessionsPage";
 import SettingsPage from "./pages/SettingsPage";
 import SettingsRedirectPage from "./pages/SettingsRedirectPage";
-import VerifyCertificatePage from "./pages/VerifyCertificatePage";
+import CertificateVerificationResultPage from "./pages/CertificateVerificationResultPage";
 import VerifyLookupPage from "./pages/VerifyLookupPage";
 import VerifyOtpPage from "./pages/VerifyOtpPage";
 
@@ -72,7 +72,7 @@ export default function App() {
                 />
                 <Route
                   path={ROUTES.VERIFY}
-                  element={<VerifyCertificatePage />}
+                  element={<CertificateVerificationResultPage />}
                 />
               </Route>
 

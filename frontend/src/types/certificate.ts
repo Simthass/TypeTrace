@@ -51,4 +51,5 @@ export interface PublicCertificateVerification {
   created_at?: string;
   generated_at?: string;
   ledger_status?: string;
+  privacy_notice?: string;
 }
