@@ -1,4 +1,3 @@
-# backend/app/ml/behavioral_analysis.py
 
 import math
 from statistics import mean, median, pstdev
@@ -96,6 +95,115 @@ def _extract_timing_values(events: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        result = int(round(float(value)))
+        return max(0, result)
+    except (TypeError, ValueError):
+        return default
+
+
+def _is_keyup_event(event: Dict[str, Any]) -> bool:
+    return str(event.get("type") or "").lower() == "keyup"
+
+
+def _is_delete_keydown_event(event: Dict[str, Any]) -> bool:
+    return (
+        str(event.get("type") or "").lower() == "keydown"
+        and event.get("key") in {"Backspace", "Delete"}
+    )
+
+
+def _event_deleted_characters(event: Dict[str, Any]) -> int:
+    if _is_keyup_event(event):
+        return 0
+
+    explicit = event.get("chars_deleted", event.get("deletedCharacters"))
+    value = _safe_float(explicit, 0.0)
+    if value > 0:
+        return max(0, int(round(value)))
+    if _is_delete_keydown_event(event):
+        return 1
+    return 0
+
+
+def _compute_revision_metrics(events: List[Dict[str, Any]], stats: Any) -> Dict[str, Any]:
+    revisions: Dict[str, Dict[str, Any]] = {}
+
+    for index, event in enumerate(events):
+        if not isinstance(event, dict):
+            continue
+
+        deleted = _event_deleted_characters(event)
+        method = str(event.get("deletion_method") or "unknown").lower()
+        has_revision_signal = (
+            not _is_keyup_event(event)
+            and (
+                deleted > 0
+                or _is_delete_keydown_event(event)
+                or event.get("key") in {"__CUT_EVENT__", "__TEXT_REVISION__"}
+                or method != "unknown"
+            )
+        )
+        if not has_revision_signal:
+            continue
+
+        revision_id = str(
+            event.get("revision_id")
+            or f"{event.get('timestamp', 0)}-{event.get('type', '')}-{event.get('key', '')}-{index}"
+        )
+        selection_len = _safe_int(event.get("selection_length_before"))
+        bulk = bool(event.get("isBulkDeletion") or event.get("bulk_deletion"))
+
+        existing = revisions.setdefault(
+            revision_id,
+            {
+                "deleted": 0,
+                "method": method,
+                "selection": 0,
+                "bulk": False,
+                "cut": False,
+            },
+        )
+        existing["deleted"] = max(int(existing["deleted"]), deleted)
+        existing["selection"] = max(int(existing["selection"]), selection_len)
+        existing["bulk"] = bool(existing["bulk"]) or bulk or deleted >= 2 or method in {
+            "word",
+            "line",
+            "selection",
+            "replacement",
+            "cut",
+            "all",
+        }
+        existing["cut"] = bool(existing["cut"]) or method == "cut" or event.get("type") == "cut"
+        if existing["method"] == "unknown" and method != "unknown":
+            existing["method"] = method
+
+    values = list(revisions.values())
+
+    fallback_actions = _safe_int(getattr(stats, "deletions", 0)) if stats is not None else 0
+    delete_actions = len(values) if values else fallback_actions
+    deleted_characters = sum(int(item["deleted"]) for item in values)
+
+    if deleted_characters <= 0 and fallback_actions > 0:
+        deleted_characters = fallback_actions
+
+    return {
+        "delete_actions": delete_actions,
+        "deleted_characters": deleted_characters,
+        "bulk_deletion_events": sum(1 for item in values if item["bulk"]),
+        "largest_deletion_chars": max([int(item["deleted"]) for item in values] or [0]),
+        "selection_deletion_events": sum(
+            1
+            for item in values
+            if int(item["selection"]) > 0
+            or item["method"] in {"selection", "replacement", "all"}
+        ),
+        "word_deletion_events": sum(1 for item in values if item["method"] == "word"),
+        "cut_events": sum(1 for item in values if item["cut"]),
+    }
+
+
 def _build_signal_list(
     *,
     wpm: float,
@@ -103,6 +211,8 @@ def _build_signal_list(
     flight_std: float,
     flight_entropy: float,
     deletion_ratio: float,
+    deleted_character_ratio: float,
+    revision_intensity: float,
     pause_ratio: float,
     dwell_count: int,
     flight_count: int,
@@ -122,7 +232,7 @@ def _build_signal_list(
     if flight_count >= 50 and flight_entropy < VERY_LOW_IKI_ENTROPY:
         risk_signals.append("Typing rhythm has very low entropy.")
 
-    if deletion_ratio < 0.01 and flight_count >= 50:
+    if revision_intensity < 0.01 and deletion_ratio < 0.01 and flight_count >= 50:
         risk_signals.append("Very little revision behavior was observed.")
 
     if pause_ratio < 0.01 and flight_count >= 50:
@@ -137,7 +247,7 @@ def _build_signal_list(
     if flight_count >= 30 and flight_std >= 25:
         human_signals.append("Inter-key timing contains natural human variation.")
 
-    if deletion_ratio >= 0.02:
+    if deletion_ratio >= 0.02 or revision_intensity >= 0.02 or deleted_character_ratio >= 0.02:
         human_signals.append("Revision behavior was observed through deletions.")
 
     if pause_ratio >= 0.03:
@@ -168,12 +278,17 @@ def compute_behavioral_summary(
     paste_count = extracted["paste_count"]
 
     total_keys = len(keydown_events)
-    deletions = _safe_float(getattr(stats, "deletions", 0))
+    revision_metrics = _compute_revision_metrics(events, stats)
+    deletions = _safe_float(revision_metrics.get("delete_actions", 0))
+    deleted_characters = _safe_float(revision_metrics.get("deleted_characters", 0))
     pauses = _safe_float(getattr(stats, "pauses", 0))
     wpm = _safe_float(getattr(stats, "wpm", 0))
     session_seconds = _safe_float(getattr(stats, "sessionSeconds", 0))
+    text_length = len(text_content or "")
 
     deletion_ratio = deletions / max(total_keys, 1)
+    deleted_character_ratio = deleted_characters / max(text_length, 1)
+    revision_intensity = deleted_characters / max(text_length + deleted_characters, 1)
     pause_ratio = pauses / max(total_keys, 1)
     paste_ratio = paste_count / max(total_keys, 1)
 
@@ -195,6 +310,8 @@ def compute_behavioral_summary(
         flight_std=flight_std,
         flight_entropy=flight_entropy,
         deletion_ratio=deletion_ratio,
+        deleted_character_ratio=deleted_character_ratio,
+        revision_intensity=revision_intensity,
         pause_ratio=pause_ratio,
         dwell_count=len(dwell_values),
         flight_count=len(flight_values),
@@ -214,7 +331,7 @@ def compute_behavioral_summary(
     if len(flight_values) >= 50 and flight_entropy < 1.0:
         risk_score += min((1.0 - flight_entropy) / 1.0, 1.0) * 16
 
-    if deletion_ratio < 0.01 and total_keys >= 50:
+    if revision_intensity < 0.01 and deletion_ratio < 0.01 and total_keys >= 50:
         risk_score += 10
 
     if pause_ratio < 0.01 and total_keys >= 50:
@@ -240,6 +357,15 @@ def compute_behavioral_summary(
         "paste_count": paste_count,
         "paste_ratio": round(paste_ratio, 4),
         "deletion_ratio": round(deletion_ratio, 4),
+        "deletion_action_ratio": round(deletion_ratio, 4),
+        "deleted_characters": int(deleted_characters),
+        "deleted_character_ratio": round(deleted_character_ratio, 4),
+        "revision_intensity": round(revision_intensity, 4),
+        "bulk_deletion_events": int(revision_metrics.get("bulk_deletion_events", 0)),
+        "largest_deletion_chars": int(revision_metrics.get("largest_deletion_chars", 0)),
+        "selection_deletion_events": int(revision_metrics.get("selection_deletion_events", 0)),
+        "word_deletion_events": int(revision_metrics.get("word_deletion_events", 0)),
+        "cut_events": int(revision_metrics.get("cut_events", 0)),
         "pause_ratio": round(pause_ratio, 4),
         "dwell_count": len(dwell_values),
         "dwell_mean": round(dwell_mean, 2),
@@ -280,3 +406,4 @@ def build_feature_explanations(features: Dict[str, Any]) -> Dict[str, str]:
         "pause_ratio": "Share of thinking pauses. Very low pause behavior can be suspicious in long writing.",
         "net_wpm": "Estimated net writing speed from final text length and session duration.",
     }
+

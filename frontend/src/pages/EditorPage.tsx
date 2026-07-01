@@ -54,6 +54,12 @@ interface AnalysisResult {
   stats: {
     keystrokes: number;
     deletions: number;
+    deletedCharacters?: number;
+    bulkDeletionEvents?: number;
+    largestDeletionChars?: number;
+    selectionDeletionEvents?: number;
+    wordDeletionEvents?: number;
+    cutEvents?: number;
     pauses: number;
     wpm: number;
     avgIki: number;
@@ -246,7 +252,7 @@ function SaveIndicator({ state }: { state: "saved" | "saving" | "unsaved" }) {
   return (
     <div className="flex items-center gap-[6px]">
       <span
-        className="inline-block h-[7px] w-[7px] rounded-full"
+        className="inline-block h-[7px] w-[7px] rounded-md"
         style={{
           background: cfg.dot,
           animation:
@@ -289,7 +295,7 @@ function CourseSelectorModal({
 
       {/* Modal */}
       <div
-        className="relative z-10 w-full max-w-[520px] rounded-xl border bg-white"
+        className="relative z-10 w-full max-w-[520px] rounded-md border bg-white"
         style={{
           borderColor: colors.surface[200],
           boxShadow: `0 32px 80px -16px rgba(15,23,42,0.22), 0 0 0 1px ${colors.surface[200]}`,
@@ -327,7 +333,7 @@ function CourseSelectorModal({
           <button
             type="button"
             onClick={() => onSelect(null)}
-            className="group w-full rounded-lg border px-4 py-3 text-left transition-all duration-150"
+            className="group w-full rounded-md border px-4 py-3 text-left transition-all duration-150"
             style={{
               borderColor:
                 selectedCourseId === null ? colors.brand : colors.surface[200],
@@ -354,7 +360,7 @@ function CourseSelectorModal({
               </div>
               {selectedCourseId === null && (
                 <div
-                  className="flex h-5 w-5 items-center justify-center rounded-full"
+                  className="flex h-5 w-5 items-center justify-center rounded-md"
                   style={{ background: colors.brand }}
                 >
                   <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
@@ -377,7 +383,7 @@ function CourseSelectorModal({
               key={course.id}
               type="button"
               onClick={() => onSelect(course.id)}
-              className="w-full rounded-lg border px-4 py-3 text-left transition-all duration-150"
+              className="w-full rounded-md border px-4 py-3 text-left transition-all duration-150"
               style={{
                 borderColor:
                   selectedCourseId === course.id
@@ -406,7 +412,7 @@ function CourseSelectorModal({
                 </div>
                 {selectedCourseId === course.id && (
                   <div
-                    className="flex h-5 w-5 items-center justify-center rounded-full"
+                    className="flex h-5 w-5 items-center justify-center rounded-md"
                     style={{ background: colors.brand }}
                   >
                     <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
@@ -433,7 +439,7 @@ function CourseSelectorModal({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border px-4 py-[9px] text-[13px] font-semibold transition-all duration-150 hover:brightness-95"
+            className="rounded-md border px-4 py-[9px] text-[13px] font-semibold transition-all duration-150 hover:brightness-95"
             style={{
               borderColor: colors.surface[200],
               color: colors.text.primary,
@@ -446,7 +452,7 @@ function CourseSelectorModal({
             type="button"
             onClick={onConfirm}
             disabled={isSubmitting}
-            className="flex items-center gap-2 rounded-lg px-5 py-[9px] text-[13px] font-semibold text-white transition-all duration-150 hover:brightness-110 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-md px-5 py-[9px] text-[13px] font-semibold text-white transition-all duration-150 hover:brightness-110 disabled:opacity-50"
             style={{ background: colors.brand }}
           >
             {isSubmitting ? (
@@ -504,7 +510,7 @@ function DraftRecoveryModal({
         style={{ background: "rgba(15, 23, 42, 0.58)" }}
       />
       <div
-        className="relative z-10 w-full max-w-[560px] overflow-hidden rounded-2xl border bg-white"
+        className="relative z-10 w-full max-w-[560px] overflow-hidden rounded-md border bg-white"
         style={{
           borderColor: colors.surface[200],
           boxShadow: "0 34px 90px rgba(15,23,42,0.28)",
@@ -512,7 +518,7 @@ function DraftRecoveryModal({
       >
         <div className="px-6 pb-5 pt-6">
           <div
-            className="mb-5 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em]"
+            className="mb-5 inline-flex items-center gap-2 rounded-md border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em]"
             style={{
               borderColor: colors.amber,
               background: colors.amberTint,
@@ -520,7 +526,7 @@ function DraftRecoveryModal({
             }}
           >
             <span
-              className="h-2 w-2 rounded-full"
+              className="h-2 w-2 rounded-md"
               style={{ background: colors.amber }}
             />
             Unsaved writing session found
@@ -543,7 +549,7 @@ function DraftRecoveryModal({
           </p>
 
           <div
-            className="mt-5 grid gap-3 rounded-xl border p-4 sm:grid-cols-3"
+            className="mt-5 grid gap-3 rounded-md border p-4 sm:grid-cols-3"
             style={{
               borderColor: colors.surface[200],
               background: colors.surface[50],
@@ -583,7 +589,7 @@ function DraftRecoveryModal({
           <button
             type="button"
             onClick={onDiscard}
-            className="rounded-lg border px-4 py-[10px] text-[13px] font-semibold transition hover:brightness-95"
+            className="rounded-md border px-4 py-[10px] text-[13px] font-semibold transition hover:brightness-95"
             style={{
               borderColor: colors.surface[200],
               background: colors.surface[50],
@@ -595,7 +601,7 @@ function DraftRecoveryModal({
           <button
             type="button"
             onClick={onContinue}
-            className="rounded-lg px-5 py-[10px] text-[13px] font-bold text-white transition hover:brightness-110"
+            className="rounded-md px-5 py-[10px] text-[13px] font-bold text-white transition hover:brightness-110"
             style={{ background: colors.brand }}
           >
             Continue session
@@ -639,7 +645,7 @@ function AnalysisResultModal({
       />
 
       <div
-        className="relative z-10 flex max-h-[92vh] w-full max-w-[980px] flex-col overflow-hidden rounded-2xl border bg-white"
+        className="relative z-10 flex max-h-[92vh] w-full max-w-[980px] flex-col overflow-hidden rounded-md border bg-white"
         style={{
           borderColor: colors.surface[200],
           boxShadow: "0 34px 110px rgba(15,23,42,0.32)",
@@ -682,7 +688,7 @@ function AnalysisResultModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border px-3 py-2 text-[12px] font-semibold transition hover:brightness-95"
+              className="rounded-md border px-3 py-2 text-[12px] font-semibold transition hover:brightness-95"
               style={{
                 borderColor: colors.surface[200],
                 background: colors.surface[100],
@@ -697,7 +703,7 @@ function AnalysisResultModal({
         <div className="overflow-y-auto px-6 py-6">
           <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
             <section
-              className="rounded-2xl border p-6"
+              className="rounded-md border p-6"
               style={{ borderColor: style.accent, background: style.bg }}
             >
               <div className="flex items-start justify-between gap-4">
@@ -775,7 +781,7 @@ function AnalysisResultModal({
                 ].map(([label, value]) => (
                   <div
                     key={String(label)}
-                    className="rounded-xl border px-3 py-3"
+                    className="min-w-0 overflow-hidden rounded-md border px-3 py-3"
                     style={{
                       borderColor: style.accent,
                       background: "rgba(255,255,255,0.45)",
@@ -788,7 +794,7 @@ function AnalysisResultModal({
                       {label}
                     </p>
                     <p
-                      className="mt-1 text-[14px] font-extrabold"
+                      className="mt-1 break-words text-[14px] font-extrabold leading-5"
                       style={{ color: style.text }}
                     >
                       {String(value)}
@@ -799,7 +805,7 @@ function AnalysisResultModal({
 
               {result.kill_switch_triggered && result.kill_switch_reason && (
                 <div
-                  className="mt-4 rounded-xl border px-4 py-3 text-[12px] leading-6"
+                  className="mt-4 rounded-md border px-4 py-3 text-[12px] leading-6"
                   style={{
                     borderColor: style.accent,
                     color: style.text,
@@ -812,7 +818,7 @@ function AnalysisResultModal({
             </section>
 
             <section
-              className="rounded-2xl border bg-white p-5"
+              className="rounded-md border bg-white p-5"
               style={{ borderColor: colors.surface[200] }}
             >
               <SidebarLabel>Core behavioral metrics</SidebarLabel>
@@ -821,13 +827,18 @@ function AnalysisResultModal({
                   ["Words per minute", result.stats.wpm],
                   ["Avg. IKI", `${result.stats.avgIki} ms`],
                   ["Keystrokes", result.stats.keystrokes],
-                  ["Deletions", result.stats.deletions],
+                  ["Delete actions", result.stats.deletions],
+                  [
+                    "Chars removed",
+                    result.stats.deletedCharacters ?? result.stats.deletions,
+                  ],
+                  ["Bulk deletes", result.stats.bulkDeletionEvents ?? 0],
                   ["Pauses", result.stats.pauses],
                   ["Duration", formatDuration(result.stats.sessionSeconds)],
                 ].map(([label, value]) => (
                   <div
                     key={String(label)}
-                    className="rounded-xl border px-4 py-3"
+                    className="rounded-md border px-4 py-3"
                     style={{
                       borderColor: colors.surface[200],
                       background: colors.surface[50],
@@ -853,7 +864,7 @@ function AnalysisResultModal({
                 <div className="mt-5">
                   <SidebarLabel>Document fingerprint</SidebarLabel>
                   <p
-                    className="rounded-xl border px-4 py-3 font-mono text-[10px] leading-6"
+                    className="break-all rounded-md border px-4 py-3 font-mono text-[10px] leading-6"
                     style={{
                       borderColor: colors.surface[200],
                       background: colors.surface[100],
@@ -869,7 +880,7 @@ function AnalysisResultModal({
 
           <div className="mt-5 grid gap-5 lg:grid-cols-2">
             <section
-              className="rounded-2xl border p-5"
+              className="rounded-md border p-5"
               style={{
                 borderColor: colors.surface[200],
                 background: colors.surface[50],
@@ -885,7 +896,7 @@ function AnalysisResultModal({
                 ).map((signal) => (
                   <div
                     key={signal}
-                    className="rounded-lg border px-3 py-2 text-[12px] leading-5"
+                    className="break-words rounded-md border px-3 py-2 text-[12px] leading-5"
                     style={{
                       borderColor: colors.surface[200],
                       background: colors.surface[100],
@@ -899,7 +910,7 @@ function AnalysisResultModal({
             </section>
 
             <section
-              className="rounded-2xl border p-5"
+              className="rounded-md border p-5"
               style={{
                 borderColor: colors.surface[200],
                 background: colors.surface[50],
@@ -915,7 +926,7 @@ function AnalysisResultModal({
                 ).map((signal) => (
                   <div
                     key={signal}
-                    className="rounded-lg border px-3 py-2 text-[12px] leading-5"
+                    className="break-words rounded-md border px-3 py-2 text-[12px] leading-5"
                     style={{
                       borderColor: colors.surface[200],
                       background: colors.surface[100],
@@ -940,7 +951,7 @@ function AnalysisResultModal({
           <button
             type="button"
             onClick={onNewSession}
-            className="rounded-lg border px-4 py-[10px] text-[13px] font-semibold transition hover:brightness-95"
+            className="rounded-md border px-4 py-[10px] text-[13px] font-semibold transition hover:brightness-95"
             style={{
               borderColor: colors.surface[200],
               background: colors.surface[100],
@@ -961,7 +972,7 @@ function AnalysisResultModal({
                   ),
                 )
               }
-              className="rounded-lg border px-4 py-[10px] text-[13px] font-bold transition hover:brightness-95"
+              className="rounded-md border px-4 py-[10px] text-[13px] font-bold transition hover:brightness-95"
               style={{
                 borderColor: colors.brand,
                 background: colors.brandSoft,
@@ -980,7 +991,7 @@ function AnalysisResultModal({
                   ROUTES.VERIFY.replace(":certId", result.certificate_id!),
                 )
               }
-              className="rounded-lg px-5 py-[10px] text-[13px] font-bold text-white transition hover:brightness-110"
+              className="rounded-md px-5 py-[10px] text-[13px] font-bold text-white transition hover:brightness-110"
               style={{ background: colors.brand }}
             >
               Verify certificate
@@ -997,6 +1008,7 @@ function AnalysisResultModal({
 export default function EditorPage() {
   const { showToast } = useToast();
   const { user } = useAuthStore();
+  const navigate = useNavigate();
 
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
@@ -1016,6 +1028,7 @@ export default function EditorPage() {
   // Track whether user is actively typing (for CaptureBar pulse)
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const {
     keystrokeLogRef,
@@ -1023,11 +1036,14 @@ export default function EditorPage() {
     handleKeyDown: baseHandleKeyDown,
     handleKeyUp,
     handlePaste: baseHandlePaste,
+    handleCut,
+    handleBeforeInput,
+    recordTextChange,
     getStats,
     resetCapture,
     hydrateCapture,
     getCaptureSnapshot,
-  } = useKeystrokeCapture({ text });
+  } = useKeystrokeCapture({ text, textareaRef });
 
   const userDraftId = String(user?.id ?? user?.email ?? "anonymous");
   const {
@@ -1087,6 +1103,7 @@ export default function EditorPage() {
         return;
       }
 
+      recordTextChange(nextText, { inputType: "insertText" });
       setText(nextText);
 
       window.requestAnimationFrame(() => {
@@ -1384,7 +1401,7 @@ export default function EditorPage() {
       setAnalysisResult({
         classification: data.classification,
         confidence: data.confidence_score,
-        stats: finalStats,
+        stats: data.stats ?? finalStats,
         kill_switch_triggered: data.kill_switch_triggered,
         kill_switch_reason: data.kill_switch_reason,
         certificate_id: data.certificate_id,
@@ -1414,6 +1431,19 @@ export default function EditorPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const closeResultAndReturnToDashboard = () => {
+    setShowResultModal(false);
+    setAnalysisResult(null);
+    setShowCourseModal(false);
+    setTitle("");
+    setText("");
+    setSelectedCourseId(null);
+    setSaveState("saved");
+    resetCapture();
+    void clearDraft();
+    navigate(ROUTES.DASHBOARD, { replace: true });
   };
 
   const newSession = () => {
@@ -1486,11 +1516,11 @@ export default function EditorPage() {
             title={`${liveStats.keystrokes} of ${MINIMUM_KEYSTROKES} keystrokes captured`}
           >
             <div
-              className="h-[6px] w-[48px] overflow-hidden rounded-full"
+              className="h-[6px] w-[48px] overflow-hidden rounded-md"
               style={{ background: colors.surface[200] }}
             >
               <div
-                className="h-full rounded-full transition-all duration-500"
+                className="h-full rounded-md transition-all duration-500"
                 style={{
                   width: `${keystrokePct}%`,
                   background: canAnalyze ? colors.green : colors.brand,
@@ -1535,7 +1565,7 @@ export default function EditorPage() {
           >
             {/* Dot pulse when ready */}
             {canAnalyze && (
-              <span className="h-[6px] w-[6px] animate-pulse rounded-full bg-white opacity-80" />
+              <span className="h-[6px] w-[6px] animate-pulse rounded-md bg-white opacity-80" />
             )}
             Analyze session
           </button>
@@ -1576,7 +1606,7 @@ export default function EditorPage() {
                   {[0, 1, 2].map((i) => (
                     <span
                       key={i}
-                      className="inline-block h-[5px] w-[5px] rounded-full"
+                      className="inline-block h-[5px] w-[5px] rounded-md"
                       style={{
                         background: colors.brand,
                         animation: `bounce 0.8s ease-in-out ${i * 0.12}s infinite`,
@@ -1606,21 +1636,30 @@ export default function EditorPage() {
           {/* Textarea */}
           <div className="flex-1 overflow-y-auto bg-white px-6 pt-6 pb-24 sm:px-10 md:px-16 lg:px-24">
             <textarea
+              ref={textareaRef}
               value={text}
+              onBeforeInput={handleBeforeInput}
               onChange={(e) => {
                 const nextValue = e.target.value;
 
                 if (nextValue.length > MAX_EDITOR_TEXT_LENGTH) {
+                  const limitedValue = nextValue.slice(
+                    0,
+                    MAX_EDITOR_TEXT_LENGTH,
+                  );
+
                   showToast({
                     type: "warning",
                     title: "Document limit reached",
                     message: `TypeTrace supports up to ${MAX_EDITOR_TEXT_LENGTH.toLocaleString()} characters per session.`,
                   });
 
-                  setText(nextValue.slice(0, MAX_EDITOR_TEXT_LENGTH));
+                  recordTextChange(limitedValue);
+                  setText(limitedValue);
                   return;
                 }
 
+                recordTextChange(nextValue);
                 setText(nextValue);
                 setSaveState("unsaved");
                 setAnalysisResult(null);
@@ -1628,6 +1667,7 @@ export default function EditorPage() {
               onKeyDown={handleKeyDown}
               onKeyUp={handleKeyUp}
               onPaste={handlePaste}
+              onCut={handleCut}
               placeholder="Start writing here. TypeTrace quietly captures your behavioral evidence in the background - timing, pauses, deletions, and rhythm that only a human writer produces."
               className="h-full min-h-[480px] w-full resize-none border-none bg-transparent text-[16px] leading-[1.85] outline-none placeholder:text-[15px]"
               style={{
@@ -1700,11 +1740,11 @@ export default function EditorPage() {
                   </span>
                 </div>
                 <div
-                  className="h-[4px] w-full overflow-hidden rounded-full"
+                  className="h-[4px] w-full overflow-hidden rounded-md"
                   style={{ background: colors.surface[200] }}
                 >
                   <div
-                    className="h-full rounded-full transition-all duration-500"
+                    className="h-full rounded-md transition-all duration-500"
                     style={{
                       width: `${keystrokePct}%`,
                       background: canAnalyze ? colors.green : colors.brand,
@@ -1744,7 +1784,15 @@ export default function EditorPage() {
                 value={liveStats.keystrokes}
                 highlight
               />
-              <StatRow label="Deletions" value={liveStats.deletions} />
+              <StatRow label="Delete actions" value={liveStats.deletions} />
+              <StatRow
+                label="Chars removed"
+                value={(liveStats.deletedCharacters ?? 0).toLocaleString()}
+              />
+              <StatRow
+                label="Bulk deletes"
+                value={liveStats.bulkDeletionEvents ?? 0}
+              />
               <StatRow label="Paste events" value={pasteEventCount} />
               <StatRow label="Pauses (>1s)" value={liveStats.pauses} />
               <StatRow
@@ -1959,7 +2007,7 @@ export default function EditorPage() {
             }}
           >
             <span
-              className="h-[5px] w-[5px] rounded-full"
+              className="h-[5px] w-[5px] rounded-md"
               style={{
                 background: canAnalyze ? colors.green : colors.surface[300],
               }}
@@ -1999,7 +2047,7 @@ export default function EditorPage() {
       {showResultModal && analysisResult && (
         <AnalysisResultModal
           result={analysisResult}
-          onClose={() => setShowResultModal(false)}
+          onClose={closeResultAndReturnToDashboard}
           onNewSession={newSession}
         />
       )}

@@ -1,4 +1,3 @@
-# backend/app/api/routes/sessions.py
 
 import hashlib
 import json
@@ -29,7 +28,19 @@ MINIMUM_KEYSTROKES = 30
 class SessionStats(BaseModel):
     wpm: float = Field(ge=0)
     keystrokes: int = Field(ge=0)
-    deletions: int = Field(ge=0)
+
+    # Backward-compatible action count: one revision/delete action, not characters.
+    deletions: int = Field(default=0, ge=0)
+
+    # Industry-grade revision metrics. These are derived from raw event metadata,
+    # not trusted blindly from the browser summary.
+    deletedCharacters: int = Field(default=0, ge=0)
+    bulkDeletionEvents: int = Field(default=0, ge=0)
+    largestDeletionChars: int = Field(default=0, ge=0)
+    selectionDeletionEvents: int = Field(default=0, ge=0)
+    wordDeletionEvents: int = Field(default=0, ge=0)
+    cutEvents: int = Field(default=0, ge=0)
+
     pauses: int = Field(ge=0)
     avgIki: float = Field(ge=0)
     sessionSeconds: float = Field(ge=0)
@@ -49,6 +60,7 @@ class AnalysisResponse(BaseModel):
     kill_switch_triggered: bool
     kill_switch_reason: Optional[str]
     advanced_stats: Dict[str, Any]
+    stats: SessionStats
     session_id: int
     certificate_id: str
     document_hash: str
@@ -73,6 +85,121 @@ def _safe_event_number(value: Any) -> Optional[float]:
         return number
     except (TypeError, ValueError):
         return None
+
+
+def _safe_event_int(value: Any, default: int = 0) -> int:
+    number = _safe_event_number(value)
+    if number is None:
+        return default
+    return max(0, int(round(number)))
+
+
+def _is_keyup_event(event: Dict[str, Any]) -> bool:
+    return str(event.get("type") or "").lower() == "keyup"
+
+
+def _is_delete_keydown_event(event: Dict[str, Any]) -> bool:
+    return (
+        str(event.get("type") or "").lower() == "keydown"
+        and event.get("key") in {"Backspace", "Delete"}
+    )
+
+
+def _event_deleted_characters(event: Dict[str, Any]) -> int:
+    # Keyup is only the key release signal. It must not count as a second
+    # deletion action or another deleted character.
+    if _is_keyup_event(event):
+        return 0
+
+    explicit = _safe_event_number(
+        event.get("chars_deleted", event.get("deletedCharacters"))
+    )
+    if explicit is not None and explicit > 0:
+        return max(0, int(round(explicit)))
+
+    # Legacy fallback for older events without chars_deleted. Apply only to the
+    # keydown half of the action, never to keyup.
+    if _is_delete_keydown_event(event):
+        return 1
+
+    return 0
+
+
+def _is_deletion_evidence(event: Dict[str, Any]) -> bool:
+    if _is_keyup_event(event):
+        return False
+
+    return (
+        _event_deleted_characters(event) > 0
+        or _is_delete_keydown_event(event)
+        or event.get("key") in {"__CUT_EVENT__", "__TEXT_REVISION__"}
+        or bool(event.get("deletion_method"))
+    )
+
+
+def _compute_revision_metrics(events: List[Dict[str, Any]]) -> Dict[str, int]:
+    """
+    Compute privacy-safe revision metrics without trusting client summary stats.
+
+    Events sharing the same revision_id are one user action represented by
+    multiple browser signals (keydown + input confirmation), so they are merged.
+    """
+    revisions: Dict[str, Dict[str, Any]] = {}
+
+    for index, event in enumerate(events):
+        if not isinstance(event, dict) or not _is_deletion_evidence(event):
+            continue
+
+        deleted_chars = _event_deleted_characters(event)
+        revision_id = str(
+            event.get("revision_id")
+            or f"{event.get('timestamp', 0)}-{event.get('type', '')}-{event.get('key', '')}-{index}"
+        )
+        method = str(event.get("deletion_method") or "unknown").lower()
+        selection_len = _safe_event_int(event.get("selection_length_before"))
+        bulk_flag = bool(event.get("isBulkDeletion") or event.get("bulk_deletion"))
+
+        existing = revisions.setdefault(
+            revision_id,
+            {
+                "deleted": 0,
+                "method": method,
+                "selection": 0,
+                "bulk": False,
+                "cut": False,
+            },
+        )
+
+        existing["deleted"] = max(int(existing["deleted"]), deleted_chars)
+        existing["selection"] = max(int(existing["selection"]), selection_len)
+        existing["bulk"] = bool(existing["bulk"]) or bulk_flag or deleted_chars >= 2 or method in {
+            "word",
+            "line",
+            "selection",
+            "replacement",
+            "cut",
+            "all",
+        }
+        existing["cut"] = bool(existing["cut"]) or method == "cut" or event.get("type") == "cut"
+        if existing["method"] == "unknown" and method != "unknown":
+            existing["method"] = method
+
+    values = list(revisions.values())
+
+    return {
+        "delete_actions": len(values),
+        "deleted_characters": sum(max(0, int(item["deleted"])) for item in values),
+        "bulk_deletion_events": sum(1 for item in values if item["bulk"]),
+        "largest_deletion_chars": max([int(item["deleted"]) for item in values] or [0]),
+        "selection_deletion_events": sum(
+            1
+            for item in values
+            if int(item["selection"]) > 0
+            or item["method"] in {"selection", "replacement", "all"}
+        ),
+        "word_deletion_events": sum(1 for item in values if item["method"] == "word"),
+        "cut_events": sum(1 for item in values if item["cut"]),
+    }
 
 
 def _compute_server_stats(
@@ -101,11 +228,7 @@ def _compute_server_stats(
         if value is not None and value > 0:
             flight_times.append(value)
 
-    deletions = sum(
-        1
-        for event in keydown_events
-        if event.get("key") in {"Backspace", "Delete"}
-    )
+    revision_metrics = _compute_revision_metrics(keystroke_array)
     pauses = sum(1 for value in flight_times if value > 1000)
     avg_iki = (
         round(sum(flight_times) / len(flight_times)) if flight_times else 0
@@ -130,7 +253,13 @@ def _compute_server_stats(
     return SessionStats(
         wpm=wpm,
         keystrokes=len(keydown_events),
-        deletions=deletions,
+        deletions=revision_metrics["delete_actions"],
+        deletedCharacters=revision_metrics["deleted_characters"],
+        bulkDeletionEvents=revision_metrics["bulk_deletion_events"],
+        largestDeletionChars=revision_metrics["largest_deletion_chars"],
+        selectionDeletionEvents=revision_metrics["selection_deletion_events"],
+        wordDeletionEvents=revision_metrics["word_deletion_events"],
+        cutEvents=revision_metrics["cut_events"],
         pauses=pauses,
         avgIki=avg_iki,
         sessionSeconds=duration_seconds,
@@ -503,9 +632,11 @@ async def analyze_session(
         kill_switch_triggered=bool(paste_override["kill_switch_triggered"]),
         kill_switch_reason=paste_override["kill_switch_reason"],
         advanced_stats=paste_override["advanced_stats"],
+        stats=server_stats,
         session_id=int(session.id),
         certificate_id=certificate_id,
         document_hash=document_hash,
         risk_level=risk_level,
         risk_score=risk_score,
     )
+

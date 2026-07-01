@@ -1,4 +1,3 @@
-# backend/app/api/routes/replay.py
 
 import json
 from datetime import datetime, timezone
@@ -48,6 +47,30 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _is_keyup_event(event: Dict[str, Any]) -> bool:
+    return str(event.get("type") or "").lower() == "keyup"
+
+
+def _is_delete_keydown_event(event: Dict[str, Any]) -> bool:
+    return (
+        str(event.get("type") or "").lower() == "keydown"
+        and event.get("key") in {"Backspace", "Delete"}
+    )
+
+
+def _event_deleted_characters(event: Dict[str, Any]) -> int:
+    if _is_keyup_event(event):
+        return 0
+
+    explicit = event.get("chars_deleted", event.get("deletedCharacters"))
+    value = _safe_float(explicit)
+    if value > 0:
+        return max(0, int(round(value)))
+    if _is_delete_keydown_event(event):
+        return 1
+    return 0
 
 
 def _classification_bucket(value: Optional[str]) -> str:
@@ -131,7 +154,17 @@ def _normalize_events(raw_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         event_type = str(event.get("type") or "keydown")
         key = str(event.get("key") or "")
         is_paste = key == "__PASTE_EVENT__" or event_type == "paste"
-        is_deletion = key in {"Backspace", "Delete"}
+        deleted_characters = _event_deleted_characters(event)
+        deletion_method = str(event.get("deletion_method") or "")
+        is_deletion = (
+            not _is_keyup_event(event)
+            and (
+                _is_delete_keydown_event(event)
+                or key in {"__CUT_EVENT__", "__TEXT_REVISION__"}
+                or deleted_characters > 0
+                or bool(deletion_method)
+            )
+        )
         flight_time = event.get("flight_time")
         dwell_time = event.get("dwell_time")
 
@@ -151,6 +184,17 @@ def _normalize_events(raw_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "documentLength": _safe_int(event.get("documentLength")),
             "cursorPosition": _safe_int(event.get("cursorPosition")),
             "pastedLength": _safe_int(event.get("pastedLength")),
+            "inputType": event.get("inputType"),
+            "revision_id": event.get("revision_id"),
+            "deletedCharacters": deleted_characters,
+            "chars_deleted": deleted_characters,
+            "selection_length_before": _safe_int(event.get("selection_length_before")),
+            "deletion_method": deletion_method or None,
+            "is_bulk_deletion": bool(event.get("isBulkDeletion") or event.get("bulk_deletion") or deleted_characters >= 2),
+            "documentLengthBefore": _safe_int(event.get("documentLengthBefore")),
+            "documentLengthAfter": _safe_int(event.get("documentLengthAfter")),
+            "deltaLength": _safe_int(event.get("deltaLength")),
+            "insertedCharacters": _safe_int(event.get("insertedCharacters")),
             "is_paste": is_paste,
             "is_deletion": is_deletion,
             "is_enter": key == "Enter",
@@ -211,7 +255,12 @@ def _compute_replay_metrics(
     mean_flight = mean(flight_times) if flight_times else 0
     longest_pause = max(flight_times) if flight_times else 0
 
+    deleted_characters = sum(_safe_int(event.get("deletedCharacters")) for event in deletion_events)
+    bulk_deletions = [event for event in deletion_events if event.get("is_bulk_deletion")]
+    largest_deletion = max([_safe_int(event.get("deletedCharacters")) for event in deletion_events] or [0])
+
     deletion_ratio = len(deletion_events) / total_keys
+    deleted_character_ratio = deleted_characters / max(len(row.get("text_content") or ""), 1)
     paste_ratio = len(paste_events) / total_keys
     active_time_pct = (
         round((len(active_intervals) / len(flight_times)) * 100)
@@ -225,6 +274,10 @@ def _compute_replay_metrics(
         "avg_iki": round(_safe_float(row.get("avg_iki")) or mean_flight, 1),
         "dwell_time": round(mean_dwell, 1),
         "deletion_ratio": round(deletion_ratio, 4),
+        "deleted_characters": deleted_characters,
+        "deleted_character_ratio": round(deleted_character_ratio, 4),
+        "bulk_deletion_events": len(bulk_deletions),
+        "largest_deletion_chars": largest_deletion,
         "paste_count": len(paste_events),
         "paste_ratio": round(paste_ratio, 4),
         "longest_pause_ms": round(longest_pause, 1),
@@ -237,6 +290,9 @@ def _compute_replay_metrics(
         "total_events": len(events),
         "keydown_events": len(keydown_events),
         "deletion_count": len(deletion_events),
+        "deleted_characters": deleted_characters,
+        "bulk_deletion_events": len(bulk_deletions),
+        "largest_deletion_chars": largest_deletion,
         "mean_flight_ms": round(mean_flight, 1),
         "mean_dwell_ms": round(mean_dwell, 1),
     }
@@ -443,3 +499,4 @@ async def get_session_replay_compatible(
         response=response,
         current_user=current_user,
     )
+

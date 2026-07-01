@@ -1,6 +1,19 @@
-// frontend/src/types/editor.ts
+export type KeystrokeEventType =
+  | "keydown"
+  | "keyup"
+  | "paste"
+  | "cut"
+  | "input";
 
-export type KeystrokeEventType = "keydown" | "keyup" | "paste";
+export type DeletionMethod =
+  | "single"
+  | "word"
+  | "line"
+  | "selection"
+  | "replacement"
+  | "cut"
+  | "all"
+  | "unknown";
 
 export interface KeystrokeEvent {
   key: string;
@@ -15,12 +28,52 @@ export interface KeystrokeEvent {
   documentLength: number;
   cursorPosition: number;
   pastedLength?: number;
+
+  /**
+   * Privacy-safe revision telemetry. These fields store counts and context only;
+   * they never store deleted text content.
+   */
+  inputType?: string;
+  revision_id?: string;
+  documentLengthBefore?: number;
+  documentLengthAfter?: number;
+  selectionStartBefore?: number;
+  selectionEndBefore?: number;
+  selection_length_before?: number;
+  deltaLength?: number;
+  insertedCharacters?: number;
+  deletedCharacters?: number;
+  chars_deleted?: number;
+  deletion_method?: DeletionMethod;
+  isBulkDeletion?: boolean;
+  bulk_deletion?: boolean;
 }
 
 export interface SessionStats {
   wpm: number;
   keystrokes: number;
+
+  /** Number of delete/revision actions, preserved for backward compatibility. */
   deletions: number;
+
+  /** Actual volume of removed text. This is the industry-grade revision metric. */
+  deletedCharacters: number;
+
+  /** Count of revision actions that removed more than one character. */
+  bulkDeletionEvents: number;
+
+  /** Largest single removal in characters. */
+  largestDeletionChars: number;
+
+  /** Selected-text deletion/replacement actions. */
+  selectionDeletionEvents: number;
+
+  /** Ctrl/Option/word-level delete actions. */
+  wordDeletionEvents: number;
+
+  /** Cut actions that removed selected text. */
+  cutEvents: number;
+
   pauses: number;
   avgIki: number;
   sessionSeconds: number;
@@ -46,6 +99,15 @@ export interface AdvancedStats {
   paste_count?: number;
   paste_ratio?: number;
   deletion_ratio?: number;
+  deletion_action_ratio?: number;
+  deleted_characters?: number;
+  deleted_character_ratio?: number;
+  revision_intensity?: number;
+  bulk_deletion_events?: number;
+  largest_deletion_chars?: number;
+  selection_deletion_events?: number;
+  word_deletion_events?: number;
+  cut_events?: number;
   longest_pause_ms?: number;
 
   risk_score?: number;
@@ -63,6 +125,8 @@ export interface AdvancedStats {
   model_accuracy?: number | string | null;
   model_cv_accuracy?: number | string | null;
   minimum_keys_required?: number;
+
+  [key: string]: unknown;
 }
 
 export interface AnalysisResult {

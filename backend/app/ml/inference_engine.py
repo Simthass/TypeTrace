@@ -1,4 +1,3 @@
-# backend/app/ml/inference_engine.py
 
 import json
 import logging
@@ -452,6 +451,15 @@ class TypeTraceInferenceEngine:
                 "paste_count": behavioral_summary.get("paste_count", 0),
                 "paste_ratio": _clamp(behavioral_summary.get("paste_ratio", 0), 0, 1),
                 "deletion_ratio": _clamp(behavioral_summary.get("deletion_ratio", 0), 0, 1),
+                "deletion_action_ratio": _clamp(behavioral_summary.get("deletion_action_ratio", 0), 0, 1),
+                "deleted_characters": max(0, int(behavioral_summary.get("deleted_characters", 0) or 0)),
+                "deleted_character_ratio": _clamp(behavioral_summary.get("deleted_character_ratio", 0), 0, 10),
+                "revision_intensity": _clamp(behavioral_summary.get("revision_intensity", 0), 0, 1),
+                "bulk_deletion_events": max(0, int(behavioral_summary.get("bulk_deletion_events", 0) or 0)),
+                "largest_deletion_chars": max(0, int(behavioral_summary.get("largest_deletion_chars", 0) or 0)),
+                "selection_deletion_events": max(0, int(behavioral_summary.get("selection_deletion_events", 0) or 0)),
+                "word_deletion_events": max(0, int(behavioral_summary.get("word_deletion_events", 0) or 0)),
+                "cut_events": max(0, int(behavioral_summary.get("cut_events", 0) or 0)),
                 "longest_pause_ms": max(0, behavioral_summary.get("longest_pause_ms", 0) or 0),
                 "risk_score": risk_score,
                 "risk_level": risk_level,
@@ -495,3 +503,4 @@ class TypeTraceInferenceEngine:
 
 
 inference_engine = TypeTraceInferenceEngine()
+

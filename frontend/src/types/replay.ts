@@ -1,5 +1,3 @@
-// frontend/src/types/replay.ts
-
 export type ReplayClassificationBucket =
   | "HUMAN"
   | "SUSPICIOUS"
@@ -41,6 +39,10 @@ export interface ReplayMetrics {
   avg_iki: number;
   dwell_time: number;
   deletion_ratio: number;
+  deleted_characters: number;
+  deleted_character_ratio: number;
+  bulk_deletion_events: number;
+  largest_deletion_chars: number;
   paste_count: number;
   paste_ratio: number;
   longest_pause_ms: number;
@@ -73,6 +75,17 @@ export interface ReplayEvent {
   documentLength: number;
   cursorPosition: number;
   pastedLength: number;
+  inputType?: string | null;
+  revision_id?: string | null;
+  deletedCharacters: number;
+  chars_deleted: number;
+  selection_length_before: number;
+  deletion_method?: string | null;
+  is_bulk_deletion: boolean;
+  documentLengthBefore: number;
+  documentLengthAfter: number;
+  deltaLength: number;
+  insertedCharacters: number;
   is_paste: boolean;
   is_deletion: boolean;
   is_enter: boolean;

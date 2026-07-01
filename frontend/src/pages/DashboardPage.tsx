@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+  ResponsiveContainer,
+  CartesianGrid,
+  XAxis,
+  Tooltip,
+} from "recharts";
 
 import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
@@ -7,9 +20,7 @@ import { useToast } from "../components/ui/ToastProvider";
 import { brand, colors } from "../styles/colors";
 import { useAuthStore } from "../store/authStore";
 import { API_ROUTES } from "../constants/apiRoutes";
-import { ErrorState, EmptyState } from "../components/ui/AsyncState";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { ErrorState } from "../components/ui/AsyncState";
 
 interface StudentSummary {
   total_sessions: number;
@@ -69,12 +80,85 @@ interface DashboardResponse {
   courses: CourseBreakdown[];
 }
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
+interface NormalizedTrendPoint {
+  day: string;
+  label: string;
+  session_count: number;
+  avg_wpm: number;
+  avg_confidence: number;
+  human_sessions: number;
+  suspicious_sessions: number;
+  synthetic_sessions: number;
+}
+
+function Icon({ type, size = 16 }: { type: string; size?: number }) {
+  const paths: Record<string, React.ReactNode> = {
+    list: (
+      <>
+        <path d="M8 6h13" />
+        <path d="M8 12h13" />
+        <path d="M8 18h13" />
+        <path d="M3 6h.01" />
+        <path d="M3 12h.01" />
+        <path d="M3 18h.01" />
+      </>
+    ),
+    shield: (
+      <>
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <path d="m9 12 2 2 4-4" />
+      </>
+    ),
+    award: (
+      <>
+        <circle cx="12" cy="8" r="5" />
+        <path d="M8.5 12.5 7 22l5-3 5 3-1.5-9.5" />
+      </>
+    ),
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </>
+    ),
+    plus: (
+      <>
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </>
+    ),
+    arrowRight: <path d="M5 12h14m-6-6 6 6-6 6" />,
+    replay: (
+      <>
+        <path d="M2 12a10 10 0 1 0 3-7.07" />
+        <path d="M2 4v6h6" />
+      </>
+    ),
+    check: <path d="m5 12 4 4L19 6" />,
+  };
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {paths[type] ?? null}
+    </svg>
+  );
+}
 
 function formatSeconds(value: number): string {
   const safe = Math.max(0, Math.round(value ?? 0));
   const hours = Math.floor(safe / 3600);
   const minutes = Math.floor((safe % 3600) / 60);
+
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
 }
@@ -84,36 +168,126 @@ function pct(value: number, total: number): number {
   return Math.round((value / total) * 100);
 }
 
+function clamp(value: number, min = 0, max = 100): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function formatDayLabel(day: string): string {
+  const parsed = new Date(day);
+  if (Number.isNaN(parsed.getTime())) return day.slice(5);
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function replayRoute(sessionId: string | number): string {
+  return ROUTES.REPLAY.replace(":sessionId", String(sessionId));
+}
+
+function greetingLabel(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function getTrendDelta(
+  points: NormalizedTrendPoint[],
+  key: keyof Pick<
+    NormalizedTrendPoint,
+    "session_count" | "avg_confidence" | "avg_wpm"
+  >,
+): number {
+  if (points.length < 2) return 0;
+
+  const midpoint = Math.max(1, Math.floor(points.length / 2));
+  const earlier = points.slice(0, midpoint);
+  const later = points.slice(midpoint);
+
+  const average = (items: NormalizedTrendPoint[]) =>
+    items.reduce((sum, item) => sum + Number(item[key] || 0), 0) /
+    Math.max(items.length, 1);
+
+  const previous = average(earlier);
+  const current = average(later);
+
+  if (!previous && current) return 100;
+  if (!previous) return 0;
+
+  return Math.round(((current - previous) / previous) * 1000) / 10;
+}
+
+function normalizeTrend(points: TrendPoint[] = []): NormalizedTrendPoint[] {
+  const byDay = new Map(points.map((point) => [point.day, point]));
+
+  return Array.from({ length: 14 }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (13 - index));
+    const day = date.toISOString().slice(0, 10);
+    const match = byDay.get(day);
+
+    return {
+      day,
+      label: formatDayLabel(day),
+      session_count: match?.session_count ?? 0,
+      avg_wpm: match?.avg_wpm ?? 0,
+      avg_confidence: match?.avg_confidence ?? 0,
+      human_sessions: match?.human_count ?? 0,
+      suspicious_sessions: match?.suspicious_count ?? 0,
+      synthetic_sessions: match?.synthetic_count ?? 0,
+    };
+  });
+}
+
 function classificationStyle(bucket: string) {
-  const b = (bucket ?? "").toUpperCase();
-  if (b === "HUMAN")
+  const normalized = String(bucket || "").toUpperCase();
+
+  if (normalized === "HUMAN") {
     return {
       bg: brand.humanBg,
       text: brand.humanText,
-      dot: colors.green,
+      color: colors.green,
       label: "Human",
     };
-  if (b === "SUSPICIOUS")
+  }
+
+  if (normalized === "SUSPICIOUS") {
     return {
       bg: brand.suspiciousBg,
       text: brand.suspiciousText,
-      dot: colors.amber,
+      color: colors.amber,
       label: "Suspicious",
     };
+  }
+
   return {
     bg: brand.aiBg,
     text: brand.aiText,
-    dot: colors.red,
+    color: colors.red,
     label: "High Risk",
   };
 }
 
 function reviewStyle(status: string) {
-  const s = (status ?? "").toUpperCase();
-  if (s === "APPROVED")
-    return { bg: brand.humanBg, text: brand.humanText, label: "Approved" };
-  if (s === "FLAGGED")
-    return { bg: brand.aiBg, text: brand.aiText, label: "Flagged" };
+  const normalized = String(status || "").toUpperCase();
+
+  if (normalized === "APPROVED") {
+    return {
+      bg: brand.humanBg,
+      text: brand.humanText,
+      label: "Approved",
+    };
+  }
+
+  if (normalized === "FLAGGED") {
+    return {
+      bg: brand.aiBg,
+      text: brand.aiText,
+      label: "Flagged",
+    };
+  }
+
   return {
     bg: colors.surface[200],
     text: colors.text.secondary,
@@ -121,691 +295,840 @@ function reviewStyle(status: string) {
   };
 }
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
+function StatusBadge({
+  label,
+  background,
+  color,
+}: {
+  label: string;
+  background: string;
+  color: string;
+}) {
+  return (
+    <span
+      className="inline-flex rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+      style={{ backgroundColor: background, color }}
+    >
+      {label}
+    </span>
+  );
+}
 
-function Skeleton({ className = "" }: { className?: string }) {
+function TrendBadge({ value }: { value: number }) {
+  const positive = value >= 0;
+
+  return (
+    <span
+      className="rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums"
+      style={{
+        backgroundColor: positive ? colors.mintTint : colors.roseTint,
+        color: positive ? brand.humanText : brand.aiText,
+      }}
+    >
+      {positive ? "↑" : "↓"} {Math.abs(value).toFixed(1)}%
+    </span>
+  );
+}
+
+function Card({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`rounded-md border bg-white shadow-none ${className}`}
+      style={{
+        borderColor: colors.surface[200],
+        boxShadow: `0 1px 3px ${colors.shadow}`,
+      }}
+    >
+      {children}
+    </section>
+  );
+}
+
+function SkeletonBlock({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`animate-pulse rounded-lg ${className}`}
-      style={{ background: colors.surface[200] }}
+      className={`animate-pulse rounded-md ${className}`}
+      style={{ backgroundColor: colors.surface[200] }}
     />
   );
 }
 
-function DashboardSkeleton() {
+function ChartTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ name?: string; value?: number; color?: string }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-64" />
-        </div>
-        <Skeleton className="h-10 w-36" />
-      </div>
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="rounded-xl border bg-white p-5 space-y-3"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-8 w-8 rounded-lg" />
-              <Skeleton className="h-4 w-4 rounded" />
-            </div>
-            <Skeleton className="h-9 w-20" />
-            <Skeleton className="h-3 w-32" />
+    <div
+      className="rounded-md px-3 py-2 text-[12px] shadow-lg"
+      style={{
+        backgroundColor: colors.text.primary,
+        color: colors.text.light,
+      }}
+    >
+      <p className="mb-1 font-semibold">{label}</p>
+      <div className="space-y-1">
+        {payload.map((item) => (
+          <div key={item.name} className="flex items-center gap-2">
+            <span
+              className="h-2 w-2 rounded-md"
+              style={{ backgroundColor: item.color || colors.brand }}
+            />
+            <span>{item.name}</span>
+            <span className="ml-2 font-semibold tabular-nums">
+              {item.value ?? 0}
+            </span>
           </div>
         ))}
-      </div>
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_340px]">
-        <Skeleton className="h-64 rounded-xl" />
-        <Skeleton className="h-64 rounded-xl" />
       </div>
     </div>
   );
 }
-
-// ─── Metric card ──────────────────────────────────────────────────────────────
 
 function MetricCard({
   label,
   value,
-  sub,
-  iconPath,
-  iconBg,
-  iconColor,
-  to,
+  context,
+  trend,
+  icon,
+  loading,
 }: {
   label: string;
-  value: string | number;
-  sub: string;
-  iconPath: React.ReactNode;
-  iconBg: string;
-  iconColor: string;
-  to?: string;
+  value: string;
+  context: string;
+  trend: number;
+  icon: string;
+  loading?: boolean;
 }) {
   return (
-    <div
-      className="relative flex flex-col rounded-xl border bg-white p-5 transition-shadow hover:shadow-md"
-      style={{ borderColor: colors.surface[200] }}
-    >
-      <div className="mb-4 flex items-start justify-between">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-xl"
-          style={{ background: iconBg }}
+    <Card className="p-5">
+      <div className="flex items-start justify-between gap-4">
+        <p
+          className="text-[11px] font-bold uppercase tracking-[0.14em]"
+          style={{ color: colors.text.muted }}
         >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={iconColor}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            {iconPath}
-          </svg>
+          {label}
+        </p>
+        <div
+          className="flex h-7 w-7 items-center justify-center rounded-md"
+          style={{ backgroundColor: colors.brandSoft, color: colors.brand }}
+        >
+          <Icon type={icon} />
         </div>
-        {to && (
-          <Link
-            to={to}
-            className="flex h-7 w-7 items-center justify-center rounded-lg transition hover:bg-slate-50"
-            style={{ color: colors.text.muted }}
-            aria-label={`Go to ${label}`}
+      </div>
+
+      <div className="mt-5">
+        {loading ? (
+          <SkeletonBlock className="h-9 w-24" />
+        ) : (
+          <p
+            className="text-[32px] font-bold tracking-[-0.05em] tabular-nums"
+            style={{ color: colors.text.primary }}
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M7 17L17 7" />
-              <path d="M7 7h10v10" />
-            </svg>
-          </Link>
+            {value}
+          </p>
         )}
       </div>
-      <p
-        className="text-[2.1rem] font-bold leading-none tracking-tight"
-        style={{ color: colors.text.primary }}
-      >
-        {value}
-      </p>
-      <p
-        className="mt-1.5 text-[13px] font-semibold"
-        style={{ color: colors.text.primary }}
-      >
-        {label}
-      </p>
-      <p className="mt-0.5 text-[12px]" style={{ color: colors.text.muted }}>
-        {sub}
-      </p>
-    </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        {loading ? (
+          <SkeletonBlock className="h-5 w-16" />
+        ) : (
+          <TrendBadge value={trend} />
+        )}
+        <span
+          className="truncate text-[12px]"
+          style={{ color: colors.text.muted }}
+        >
+          {context}
+        </span>
+      </div>
+    </Card>
   );
 }
 
-// ─── Activity trend chart ─────────────────────────────────────────────────────
-
-function ActivityChart({ trend }: { trend: TrendPoint[] }) {
-  const maxSessions = Math.max(...trend.map((p) => p.session_count), 1);
-  const totalInPeriod = trend.reduce((sum, p) => sum + p.session_count, 0);
-  const activeDays = trend.filter((p) => p.session_count > 0).length;
-
+function DashboardLoadingShell() {
   return (
-    <div
-      className="rounded-xl border bg-white"
-      style={{ borderColor: colors.surface[200] }}
-    >
+    <>
       <div
-        className="flex items-center justify-between border-b px-5 py-4"
-        style={{ borderColor: colors.surface[200] }}
-      >
+        className="fixed left-0 right-0 top-0 z-50 h-0.5 animate-pulse"
+        style={{ backgroundColor: colors.brand }}
+      />
+
+      <div className="space-y-5">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div className="space-y-2">
+            <SkeletonBlock className="h-8 w-64" />
+            <SkeletonBlock className="h-4 w-80 max-w-full" />
+          </div>
+          <div className="flex gap-2">
+            <SkeletonBlock className="h-9 w-28" />
+            <SkeletonBlock className="h-9 w-32" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((item) => (
+            <MetricCard
+              key={item}
+              label="Loading"
+              value=""
+              context="Loading"
+              trend={0}
+              icon="list"
+              loading
+            />
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_340px]">
+          <div className="space-y-5">
+            <Card className="p-5">
+              <div className="mb-5 flex items-center justify-between">
+                <SkeletonBlock className="h-5 w-40" />
+                <SkeletonBlock className="h-7 w-28" />
+              </div>
+              <SkeletonBlock className="h-72 w-full" />
+            </Card>
+            <Card className="p-5">
+              <SkeletonBlock className="h-64 w-full" />
+            </Card>
+          </div>
+          <div className="space-y-5">
+            <Card className="p-5">
+              <SkeletonBlock className="h-72 w-full" />
+            </Card>
+            <Card className="p-5">
+              <SkeletonBlock className="h-40 w-full" />
+            </Card>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function EmptyDashboard() {
+  return (
+    <Card className="p-6">
+      <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
+          <h2
+            className="text-[16px] font-semibold"
+            style={{ color: colors.text.primary }}
+          >
+            Start your first evidence session
+          </h2>
           <p
+            className="mt-1 max-w-2xl text-[13px] leading-6"
+            style={{ color: colors.text.secondary }}
+          >
+            Create a writing session to begin collecting keystroke timing, paste
+            activity, revision behaviour, and certificate-ready authorship
+            evidence.
+          </p>
+        </div>
+
+        <Link
+          to={ROUTES.EDITOR_NEW}
+          className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-[13px] font-semibold text-white"
+          style={{ backgroundColor: colors.brand }}
+        >
+          <Icon type="plus" />
+          New Session
+        </Link>
+      </div>
+    </Card>
+  );
+}
+
+function AuthorshipHealthCard({
+  trend,
+  summary,
+}: {
+  trend: NormalizedTrendPoint[];
+  summary: StudentSummary;
+}) {
+  return (
+    <Card className="p-5">
+      <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+        <div>
+          <h2
             className="text-[14px] font-semibold"
             style={{ color: colors.text.primary }}
           >
-            14-day activity
-          </p>
+            Authorship Health
+          </h2>
           <p
-            className="mt-0.5 text-[12px]"
-            style={{ color: colors.text.muted }}
+            className="mt-1 text-[12px]"
+            style={{ color: colors.text.secondary }}
           >
-            {activeDays > 0
-              ? `${totalInPeriod} sessions across ${activeDays} active days`
-              : "No activity yet"}
+            Human, suspicious, and high-risk evidence distribution across recent
+            activity.
           </p>
         </div>
-        {totalInPeriod > 0 && (
-          <span
-            className="rounded-lg border px-2.5 py-1 text-[12px] font-bold tabular-nums"
-            style={{
-              borderColor: colors.surface[200],
-              background: colors.surface[100],
-              color: colors.text.secondary,
-            }}
-          >
-            {totalInPeriod} total
-          </span>
-        )}
+
+        <div
+          className="flex rounded-md border bg-white p-1"
+          style={{ borderColor: colors.surface[200] }}
+        >
+          {["7d", "14d", "30d"].map((period) => (
+            <button
+              key={period}
+              type="button"
+              className="h-7 rounded-md px-3 text-[11px] font-semibold transition-colors"
+              style={{
+                backgroundColor:
+                  period === "14d" ? colors.brandSoft : "transparent",
+                color: period === "14d" ? colors.brand : colors.text.secondary,
+              }}
+            >
+              {period}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="px-5 py-5">
-        {trend.length === 0 || totalInPeriod === 0 ? (
-          <div className="flex flex-col items-center py-10 text-center">
-            <div
-              className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl"
-              style={{ background: colors.brandSoft }}
+      <div className="h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart
+            data={trend}
+            margin={{ top: 10, right: 8, bottom: 0, left: 0 }}
+          >
+            <CartesianGrid
+              vertical={false}
+              stroke={colors.surface[200]}
+              strokeDasharray="0"
+            />
+            <XAxis
+              dataKey="label"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: colors.text.muted, fontSize: 11 }}
+              dy={8}
+            />
+            <Tooltip
+              content={<ChartTooltip />}
+              cursor={{ stroke: colors.surface[200] }}
+            />
+            <Area
+              type="monotone"
+              dataKey="human_sessions"
+              name="Human"
+              stackId="1"
+              stroke={colors.green}
+              fill={colors.green}
+              fillOpacity={0.12}
+              strokeWidth={2}
+              isAnimationActive
+              animationDuration={600}
+            />
+            <Area
+              type="monotone"
+              dataKey="suspicious_sessions"
+              name="Suspicious"
+              stackId="1"
+              stroke={colors.amber}
+              fill={colors.amber}
+              fillOpacity={0.12}
+              strokeWidth={2}
+              isAnimationActive
+              animationDuration={600}
+            />
+            <Area
+              type="monotone"
+              dataKey="synthetic_sessions"
+              name="High Risk"
+              stackId="1"
+              stroke={colors.red}
+              fill={colors.red}
+              fillOpacity={0.12}
+              strokeWidth={2}
+              isAnimationActive
+              animationDuration={600}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <LegendPill
+          color={colors.green}
+          label={`Human ${summary.human_sessions} sessions`}
+        />
+        <LegendPill
+          color={colors.amber}
+          label={`Suspicious ${summary.suspicious_sessions}`}
+        />
+        <LegendPill
+          color={colors.red}
+          label={`High Risk ${summary.synthetic_sessions}`}
+        />
+      </div>
+    </Card>
+  );
+}
+
+function LegendPill({ color, label }: { color: string; label: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-2 rounded-md border bg-white px-2.5 py-1 text-[12px] font-medium"
+      style={{ borderColor: colors.surface[200], color: colors.text.secondary }}
+    >
+      <span className="h-2 w-2 rounded-md" style={{ backgroundColor: color }} />
+      {label}
+    </span>
+  );
+}
+
+function RecentSessionsTable({ sessions }: { sessions: StudentSession[] }) {
+  return (
+    <Card className="overflow-hidden p-5">
+      <div className="mb-2 flex items-center justify-between gap-4">
+        <h2
+          className="text-[14px] font-semibold"
+          style={{ color: colors.text.primary }}
+        >
+          Recent Sessions
+        </h2>
+        <Link
+          to={ROUTES.SESSIONS}
+          className="text-[12px] font-semibold"
+          style={{ color: colors.brand }}
+        >
+          View all →
+        </Link>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse">
+          <thead>
+            <tr>
+              {[
+                "Document",
+                "Classification",
+                "Confidence",
+                "WPM",
+                "Review",
+                "Date",
+                "Action",
+              ].map((header) => (
+                <th
+                  key={header}
+                  className="border-b py-3 text-left text-[10px] font-bold uppercase tracking-[0.14em]"
+                  style={{
+                    borderColor: colors.surface[200],
+                    color: colors.text.muted,
+                  }}
+                >
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {sessions.slice(0, 5).map((session) => {
+              const classification = classificationStyle(
+                session.classification_bucket,
+              );
+              const review = reviewStyle(session.review_status);
+
+              return (
+                <tr
+                  key={session.id}
+                  className="h-14 border-b transition-colors hover:bg-surface-100"
+                  style={{ borderColor: colors.surface[200] }}
+                >
+                  <td className="py-3 pr-4">
+                    <p
+                      className="max-w-[240px] truncate text-[13px] font-semibold"
+                      style={{ color: colors.text.primary }}
+                    >
+                      {session.title}
+                    </p>
+                    <p
+                      className="mt-0.5 max-w-[240px] truncate text-[11px]"
+                      style={{ color: colors.text.muted }}
+                    >
+                      {session.course_name || "Personal workspace"}
+                    </p>
+                  </td>
+
+                  <td className="py-3 pr-4">
+                    <StatusBadge
+                      label={classification.label}
+                      background={classification.bg}
+                      color={classification.text}
+                    />
+                  </td>
+
+                  <td
+                    className="py-3 pr-4 font-mono text-[13px] tabular-nums"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {Math.round(session.confidence)}%
+                  </td>
+
+                  <td
+                    className="py-3 pr-4 text-[13px] font-semibold tabular-nums"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {session.wpm}
+                  </td>
+
+                  <td className="py-3 pr-4">
+                    <StatusBadge
+                      label={review.label}
+                      background={review.bg}
+                      color={review.text}
+                    />
+                  </td>
+
+                  <td
+                    className="py-3 pr-4 text-[12px] tabular-nums"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    {session.created_at}
+                  </td>
+
+                  <td className="py-3">
+                    <Link
+                      to={replayRoute(session.id)}
+                      className="inline-flex h-7 items-center gap-1.5 rounded-md border bg-white px-2 text-[11px] font-semibold transition-colors hover:bg-surface-100"
+                      style={{
+                        borderColor: colors.surface[200],
+                        color: colors.text.secondary,
+                      }}
+                    >
+                      <Icon type="replay" size={13} />
+                      Replay
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+
+            {!sessions.length && (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="py-10 text-center text-[13px]"
+                  style={{ color: colors.text.muted }}
+                >
+                  No sessions recorded yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function ClassificationBreakdownCard({ summary }: { summary: StudentSummary }) {
+  const chartData = [
+    { name: "Human", value: summary.human_sessions, color: colors.green },
+    {
+      name: "Suspicious",
+      value: summary.suspicious_sessions,
+      color: colors.amber,
+    },
+    { name: "High Risk", value: summary.synthetic_sessions, color: colors.red },
+  ];
+
+  const safeData = summary.total_sessions
+    ? chartData
+    : chartData.map((item, index) => ({ ...item, value: index === 0 ? 1 : 0 }));
+
+  return (
+    <Card className="p-5">
+      <h2
+        className="text-[14px] font-semibold"
+        style={{ color: colors.text.primary }}
+      >
+        Classification Breakdown
+      </h2>
+
+      <div className="relative mt-4 h-52">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={safeData}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={52}
+              outerRadius={80}
+              paddingAngle={summary.total_sessions ? 3 : 0}
+              stroke="none"
+              isAnimationActive
+              animationDuration={600}
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke={colors.brand}
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 3v18h18" />
-                <path d="M7 15l4-4 3 3 5-7" />
-              </svg>
-            </div>
-            <p
-              className="text-[14px] font-semibold"
+              {safeData.map((entry) => (
+                <Cell
+                  key={entry.name}
+                  fill={
+                    summary.total_sessions ? entry.color : colors.surface[200]
+                  }
+                />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <p
+            className="text-[28px] font-bold tabular-nums"
+            style={{ color: colors.text.primary }}
+          >
+            {summary.total_sessions}
+          </p>
+          <p className="text-[11px]" style={{ color: colors.text.muted }}>
+            Total sessions
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-2 space-y-3">
+        {chartData.map((item) => (
+          <div key={item.name} className="flex items-center gap-2">
+            <span
+              className="h-2 w-2 rounded-md"
+              style={{ backgroundColor: item.color }}
+            />
+            <span
+              className="text-[13px] font-medium"
               style={{ color: colors.text.secondary }}
             >
-              No activity yet
-            </p>
-            <Link
-              to={ROUTES.EDITOR_NEW}
-              className="mt-2 text-[13px] font-semibold"
-              style={{ color: colors.brand }}
+              {item.name}
+            </span>
+            <span
+              className="ml-auto text-[13px] font-bold tabular-nums"
+              style={{ color: colors.text.primary }}
             >
-              Start your first session →
-            </Link>
+              {item.value}
+            </span>
           </div>
-        ) : (
-          <>
-            <div className="flex items-end gap-1 h-20">
-              {trend.map((point) => {
-                const heightPct =
-                  point.session_count > 0
-                    ? Math.max(14, (point.session_count / maxSessions) * 100)
-                    : 0;
-                return (
-                  <div
-                    key={point.day}
-                    className="group relative flex-1"
-                    title={`${point.day.slice(5)}: ${point.session_count} session${point.session_count !== 1 ? "s" : ""}`}
-                  >
-                    <div
-                      className="pointer-events-none absolute -top-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg px-2 py-1 text-[10px] font-semibold text-white opacity-0 shadow transition-opacity group-hover:opacity-100"
-                      style={{ background: colors.text.primary }}
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function WritingVelocityCard({
+  trend,
+  avgWpm,
+  delta,
+}: {
+  trend: NormalizedTrendPoint[];
+  avgWpm: number;
+  delta: number;
+}) {
+  return (
+    <Card className="p-5">
+      <p className="text-[13px]" style={{ color: colors.text.muted }}>
+        Avg WPM this period
+      </p>
+
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <p
+          className="text-[28px] font-bold tracking-[-0.04em] tabular-nums"
+          style={{ color: colors.text.primary }}
+        >
+          {avgWpm.toFixed(1)}
+        </p>
+        <TrendBadge value={delta} />
+      </div>
+
+      <div className="mt-4 h-20">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={trend}
+            margin={{ top: 8, right: 0, bottom: 0, left: 0 }}
+          >
+            <Line
+              type="monotone"
+              dataKey="avg_wpm"
+              stroke={colors.brand}
+              strokeWidth={2}
+              dot={false}
+              isAnimationActive
+              animationDuration={600}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </Card>
+  );
+}
+
+function PendingActionsCard({ sessions }: { sessions: StudentSession[] }) {
+  const pendingSessions = sessions
+    .filter((session) => {
+      const status = String(session.review_status || "").toUpperCase();
+      return status === "PENDING" || status === "FLAGGED";
+    })
+    .slice(0, 3);
+
+  return (
+    <Card className="p-5">
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <h2
+          className="text-[14px] font-semibold"
+          style={{ color: colors.text.primary }}
+        >
+          Pending Actions
+        </h2>
+        <span
+          className="rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums"
+          style={{ backgroundColor: colors.brandSoft, color: colors.brand }}
+        >
+          {pendingSessions.length}
+        </span>
+      </div>
+
+      {pendingSessions.length ? (
+        <div className="mt-3">
+          {pendingSessions.map((session) => {
+            const review = reviewStyle(session.review_status);
+
+            return (
+              <div
+                key={session.id}
+                className="border-b py-3"
+                style={{ borderColor: colors.surface[200] }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p
+                      className="truncate text-[13px] font-semibold"
+                      style={{ color: colors.text.primary }}
                     >
-                      {point.session_count}
-                    </div>
-                    <div className="flex h-full items-end">
-                      <div
-                        className="w-full rounded-t-sm transition-all duration-300"
-                        style={{
-                          height:
-                            point.session_count > 0 ? `${heightPct}%` : "3px",
-                          background:
-                            point.session_count > 0
-                              ? colors.brand
-                              : colors.surface[200],
-                          minHeight: "3px",
-                        }}
+                      {session.title}
+                    </p>
+                    <div className="mt-1">
+                      <StatusBadge
+                        label={review.label}
+                        background={review.bg}
+                        color={review.text}
                       />
                     </div>
                   </div>
-                );
-              })}
-            </div>
-            <div className="mt-2 flex gap-1">
-              {trend.map((point) => (
-                <div key={point.day} className="flex-1 text-center">
-                  <span
-                    className="text-[9px] tabular-nums"
-                    style={{ color: colors.text.muted }}
+
+                  <Link
+                    to={replayRoute(session.id)}
+                    className="shrink-0 text-[12px] font-semibold"
+                    style={{ color: colors.brand }}
                   >
-                    {point.day.slice(8)}
-                  </span>
+                    View →
+                  </Link>
                 </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Authorship health bar ────────────────────────────────────────────────────
-
-function AuthorshipBar({ summary }: { summary: StudentSummary }) {
-  const total = summary.total_sessions;
-  const humanPct = pct(summary.human_sessions, total);
-  const suspiciousPct = pct(summary.suspicious_sessions, total);
-  const riskPct = pct(summary.synthetic_sessions, total);
-  const pendingReview =
-    (summary.pending_count ?? 0) + (summary.flagged_count ?? 0);
-
-  return (
-    <div
-      className="rounded-xl border bg-white p-5"
-      style={{ borderColor: colors.surface[200] }}
-    >
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p
-            className="text-[11px] font-bold uppercase tracking-[0.16em]"
-            style={{ color: colors.brand }}
-          >
-            Authorship health
-          </p>
-          <p
-            className="mt-1 text-[1.6rem] font-bold tracking-tight leading-none"
-            style={{ color: colors.text.primary }}
-          >
-            {total === 0 ? "-" : `${humanPct}%`}
-            <span
-              className="ml-2 text-[14px] font-normal"
-              style={{ color: colors.text.secondary }}
-            >
-              {total === 0
-                ? "No sessions recorded yet"
-                : "of sessions classified as human writing"}
-            </span>
-          </p>
-        </div>
-        {pendingReview > 0 && (
-          <div
-            className="flex items-center gap-2 rounded-lg border px-3 py-1.5"
-            style={{
-              borderColor: brand.suspiciousAccent,
-              background: brand.suspiciousBg,
-            }}
-          >
-            <span
-              className="h-2 w-2 animate-pulse rounded-full"
-              style={{ background: colors.amber }}
-            />
-            <span
-              className="text-[12px] font-semibold"
-              style={{ color: brand.suspiciousText }}
-            >
-              {pendingReview} pending review
-            </span>
-          </div>
-        )}
-      </div>
-
-      {total > 0 && (
-        <div className="mt-4">
-          <div
-            className="flex h-2.5 w-full overflow-hidden rounded-full"
-            style={{ background: colors.surface[200] }}
-          >
-            {summary.human_sessions > 0 && (
-              <div
-                className="h-full transition-all duration-700"
-                style={{
-                  width: `${humanPct}%`,
-                  background: colors.green,
-                  borderRadius:
-                    summary.suspicious_sessions === 0 &&
-                    summary.synthetic_sessions === 0
-                      ? "999px"
-                      : "999px 0 0 999px",
-                }}
-              />
-            )}
-            {summary.suspicious_sessions > 0 && (
-              <div
-                className="h-full transition-all duration-700"
-                style={{
-                  width: `${suspiciousPct}%`,
-                  background: colors.amber,
-                  borderRadius:
-                    summary.synthetic_sessions === 0 ? "0 999px 999px 0" : "0",
-                  marginLeft: summary.human_sessions > 0 ? 2 : 0,
-                }}
-              />
-            )}
-            {summary.synthetic_sessions > 0 && (
-              <div
-                className="h-full transition-all duration-700"
-                style={{
-                  width: `${riskPct}%`,
-                  background: colors.red,
-                  borderRadius: "0 999px 999px 0",
-                  marginLeft: 2,
-                }}
-              />
-            )}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5">
-            {[
-              {
-                label: "Human",
-                count: summary.human_sessions,
-                color: colors.green,
-                p: humanPct,
-              },
-              {
-                label: "Suspicious",
-                count: summary.suspicious_sessions,
-                color: colors.amber,
-                p: suspiciousPct,
-              },
-              {
-                label: "High risk",
-                count: summary.synthetic_sessions,
-                color: colors.red,
-                p: riskPct,
-              },
-            ].map(({ label, count, color, p }) => (
-              <div key={label} className="flex items-center gap-1.5">
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: color }}
-                />
-                <span
-                  className="text-[12px] tabular-nums"
-                  style={{ color: colors.text.secondary }}
-                >
-                  <span
-                    className="font-semibold"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {count}
-                  </span>{" "}
-                  {label} ({p}%)
-                </span>
               </div>
-            ))}
-            <div className="ml-auto">
-              <span
-                className="text-[12px]"
-                style={{ color: colors.text.muted }}
-              >
-                {summary.certificate_count} certificate
-                {summary.certificate_count !== 1 ? "s" : ""} issued
-              </span>
-            </div>
-          </div>
+            );
+          })}
         </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Getting started checklist ────────────────────────────────────────────────
-
-function GettingStarted({
-  totalSessions,
-  certificates,
-  courses,
-}: {
-  totalSessions: number;
-  certificates: number;
-  courses: number;
-}) {
-  const steps = [
-    {
-      label: "Write your first session",
-      description: "Open the editor and start typing",
-      done: totalSessions > 0,
-      to: ROUTES.EDITOR_NEW,
-    },
-    {
-      label: "Generate a certificate",
-      description: "Prove authorship with a verifiable cert",
-      done: certificates > 0,
-      to: ROUTES.CERTIFICATES,
-    },
-    {
-      label: "Join a course",
-      description: "Link sessions to your academic modules",
-      done: courses > 0,
-      to: ROUTES.JOIN_COURSE,
-    },
-  ];
-  const doneCount = steps.filter((s) => s.done).length;
-  const allDone = doneCount === steps.length;
-
-  return (
-    <div
-      className="rounded-xl border bg-white"
-      style={{ borderColor: colors.surface[200] }}
-    >
-      <div
-        className="flex items-center justify-between border-b px-5 py-4"
-        style={{ borderColor: colors.surface[200] }}
-      >
-        <div>
-          <p
-            className="text-[14px] font-semibold"
-            style={{ color: colors.text.primary }}
-          >
-            Getting started
-          </p>
-          <p
-            className="mt-0.5 text-[12px]"
-            style={{ color: colors.text.muted }}
-          >
-            Set up your authorship workflow
-          </p>
-        </div>
-        <span
-          className="rounded-lg border px-2.5 py-1 text-[12px] font-bold tabular-nums"
-          style={{
-            borderColor: allDone ? brand.humanAccent : colors.surface[200],
-            background: allDone ? brand.humanBg : colors.surface[100],
-            color: allDone ? brand.humanText : colors.text.secondary,
-          }}
-        >
-          {doneCount}/{steps.length}
-        </span>
-      </div>
-      <div className="divide-y" style={{ borderColor: colors.surface[200] }}>
-        {steps.map((step) => (
-          <Link
-            key={step.label}
-            to={step.to}
-            className="flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-slate-50/60"
-          >
-            <div
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors"
-              style={{
-                borderColor: step.done
-                  ? brand.humanAccent
-                  : colors.surface[300],
-                background: step.done ? brand.humanAccent : "transparent",
-              }}
-            >
-              {step.done && (
-                <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
-                  <path
-                    d="M1 4L3.5 6.5L9 1"
-                    stroke="white"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p
-                className="text-[13px] font-medium"
-                style={{
-                  color: step.done ? colors.text.muted : colors.text.primary,
-                  textDecoration: step.done ? "line-through" : "none",
-                }}
-              >
-                {step.label}
-              </p>
-              {!step.done && (
-                <p
-                  className="text-[11px] mt-px"
-                  style={{ color: colors.text.muted }}
-                >
-                  {step.description}
-                </p>
-              )}
-            </div>
-            {!step.done && (
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke={colors.text.muted}
-                strokeWidth="2"
-                strokeLinecap="round"
-                aria-hidden
-              >
-                <path d="M9 18l6-6-6-6" />
-              </svg>
-            )}
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Session row ──────────────────────────────────────────────────────────────
-
-function SessionRow({
-  session,
-  index,
-}: {
-  session: StudentSession;
-  index: number;
-}) {
-  const cls = classificationStyle(
-    session.classification_bucket || session.classification,
-  );
-  const rev = reviewStyle(session.review_status);
-
-  return (
-    <Link
-      to={ROUTES.REPLAY.replace(":sessionId", String(session.id))}
-      className="grid grid-cols-[1fr_120px_80px_80px_100px_80px] items-center gap-4 px-5 py-3.5 text-[13px] transition-colors hover:bg-slate-50/60"
-      style={{
-        borderTop: index === 0 ? "none" : `1px solid ${colors.surface[200]}`,
-      }}
-    >
-      <div className="min-w-0">
+      ) : (
         <p
-          className="truncate font-semibold"
-          style={{ color: colors.text.primary }}
-        >
-          {session.title || "Untitled Document"}
-        </p>
-        <p
-          className="mt-0.5 truncate text-[11px]"
+          className="py-6 text-center text-[13px]"
           style={{ color: colors.text.muted }}
         >
-          {session.course_code ?? "Personal"} · {session.created_at}
+          All caught up. No pending reviews.
         </p>
-      </div>
-      <div>
-        <span
-          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold"
-          style={{ background: cls.bg, color: cls.text }}
-        >
-          <span
-            className="h-1.5 w-1.5 rounded-full"
-            style={{ background: cls.dot }}
-          />
-          {cls.label}
-        </span>
-      </div>
-      <p
-        className="tabular-nums font-semibold"
-        style={{ color: colors.text.primary }}
-      >
-        {session.confidence}%
-      </p>
-      <p className="tabular-nums" style={{ color: colors.text.secondary }}>
-        {session.wpm}
-      </p>
-      <div>
-        <span
-          className="inline-flex rounded-lg px-2.5 py-1 text-[11px] font-semibold"
-          style={{ background: rev.bg, color: rev.text }}
-        >
-          {rev.label}
-        </span>
-      </div>
-      <div className="flex justify-end">
-        {session.certificate_id ? (
-          <span
-            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold"
-            style={{ background: colors.brandSoft, color: colors.brand }}
-          >
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            >
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-            Cert
-          </span>
-        ) : (
-          <span className="text-[11px]" style={{ color: colors.text.muted }}>
-            -
-          </span>
-        )}
-      </div>
-    </Link>
+      )}
+    </Card>
   );
 }
 
-// ─── Course breakdown panel ───────────────────────────────────────────────────
+function GettingStartedCard({
+  totalSessions,
+  certificateCount,
+  courseCount,
+}: {
+  totalSessions: number;
+  certificateCount: number;
+  courseCount: number;
+}) {
+  const items = [
+    { label: "Create your first writing session", done: totalSessions > 0 },
+    { label: "Generate an evidence certificate", done: certificateCount > 0 },
+    { label: "Join or link a course workspace", done: courseCount > 0 },
+  ];
 
-function CoursePanel({ courses }: { courses: CourseBreakdown[] }) {
+  const complete = items.filter((item) => item.done).length;
+  const progress = Math.round((complete / items.length) * 100);
+
+  if (totalSessions >= 3) return null;
+
   return (
-    <div
-      className="rounded-xl border bg-white"
-      style={{ borderColor: colors.surface[200] }}
-    >
-      <div
-        className="flex items-center justify-between border-b px-5 py-4"
-        style={{ borderColor: colors.surface[200] }}
+    <Card className="p-5">
+      <h2
+        className="text-[14px] font-semibold"
+        style={{ color: colors.text.primary }}
       >
-        <div>
-          <p
-            className="text-[14px] font-semibold"
-            style={{ color: colors.text.primary }}
-          >
-            Course breakdown
-          </p>
-          <p
-            className="mt-0.5 text-[12px]"
-            style={{ color: colors.text.muted }}
-          >
-            Evidence grouped by module
-          </p>
-        </div>
+        Getting Started
+      </h2>
+
+      <div className="mt-4 space-y-1">
+        {items.map((item) => (
+          <div key={item.label} className="flex h-10 items-center gap-3">
+            <span
+              className="flex h-5 w-5 items-center justify-center rounded-md border"
+              style={{
+                backgroundColor: item.done ? colors.green : colors.surface[50],
+                borderColor: item.done ? colors.green : colors.surface[300],
+                color: colors.text.light,
+              }}
+            >
+              {item.done && <Icon type="check" size={13} />}
+            </span>
+            <span
+              className={`text-[13px] ${item.done ? "line-through" : ""}`}
+              style={{
+                color: item.done ? colors.text.muted : colors.text.primary,
+              }}
+            >
+              {item.label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div
+        className="mt-4 h-1 rounded-md"
+        style={{ backgroundColor: colors.surface[200] }}
+      >
+        <div
+          className="h-1 rounded-md transition-all duration-500"
+          style={{ width: `${progress}%`, backgroundColor: colors.brand }}
+        />
+      </div>
+    </Card>
+  );
+}
+
+function CourseBreakdownSection({ courses }: { courses: CourseBreakdown[] }) {
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between gap-4">
+        <h2
+          className="text-[14px] font-semibold"
+          style={{ color: colors.text.primary }}
+        >
+          Course Breakdown
+        </h2>
         <Link
           to={ROUTES.JOIN_COURSE}
           className="text-[12px] font-semibold"
@@ -815,97 +1138,85 @@ function CoursePanel({ courses }: { courses: CourseBreakdown[] }) {
         </Link>
       </div>
 
-      {courses.length === 0 ? (
-        <div className="flex flex-col items-center py-10 px-5 text-center">
-          <div
-            className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl"
-            style={{ background: colors.brandSoft }}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={colors.brand}
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-              <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z" />
-            </svg>
-          </div>
-          <p
-            className="text-[13px] font-medium"
-            style={{ color: colors.text.secondary }}
-          >
-            No courses linked
-          </p>
-          <p className="mt-1 text-[12px]" style={{ color: colors.text.muted }}>
-            Join a course to submit evidence to your teacher.
-          </p>
-        </div>
-      ) : (
-        <div className="divide-y" style={{ borderColor: colors.surface[200] }}>
+      {courses.length ? (
+        <div className="flex gap-4 overflow-x-auto pb-1">
           {courses.map((course) => {
-            const humanPct = pct(course.human_count, course.session_count);
+            const humanRatio = pct(course.human_count, course.session_count);
+
             return (
-              <div key={course.course_code} className="px-5 py-4">
-                <div className="flex items-center justify-between gap-3">
+              <Card
+                key={`${course.course_name}-${course.course_code}`}
+                className="min-w-[220px] p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p
+                    <h3
                       className="truncate text-[13px] font-semibold"
                       style={{ color: colors.text.primary }}
                     >
                       {course.course_name}
-                    </p>
+                    </h3>
                     <p
-                      className="mt-0.5 font-mono text-[11px]"
+                      className="mt-1 truncate font-mono text-[11px]"
                       style={{ color: colors.text.muted }}
                     >
-                      {course.course_code}
+                      {course.course_code || "PERSONAL"}
                     </p>
                   </div>
+
                   <span
-                    className="shrink-0 rounded-lg border px-2.5 py-1 text-[12px] font-bold tabular-nums"
+                    className="rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums"
                     style={{
-                      borderColor: colors.surface[200],
-                      background: colors.surface[100],
-                      color: colors.text.secondary,
+                      backgroundColor: colors.mintTint,
+                      color: brand.humanText,
                     }}
                   >
-                    {course.session_count}
+                    {humanRatio}%
                   </span>
                 </div>
-                <div className="mt-3 flex items-center gap-2.5">
+
+                <div
+                  className="mt-4 h-1.5 rounded-md"
+                  style={{ backgroundColor: colors.surface[200] }}
+                >
                   <div
-                    className="flex-1 h-1.5 overflow-hidden rounded-full"
-                    style={{ background: colors.surface[200] }}
-                  >
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${humanPct}%`,
-                        background: colors.green,
-                      }}
-                    />
-                  </div>
-                  <span
-                    className="shrink-0 text-[11px] font-semibold tabular-nums"
-                    style={{ color: colors.text.muted }}
-                  >
-                    {humanPct}% human
-                  </span>
+                    className="h-1.5 rounded-md"
+                    style={{
+                      width: `${clamp(humanRatio)}%`,
+                      backgroundColor: colors.green,
+                    }}
+                  />
                 </div>
-              </div>
+
+                <div className="mt-4 flex items-center justify-between gap-3">
+                  <p
+                    className="text-[12px] tabular-nums"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    {course.session_count} sessions
+                  </p>
+                  <p
+                    className="text-[12px] font-semibold tabular-nums"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {course.avg_wpm} WPM
+                  </p>
+                </div>
+              </Card>
             );
           })}
         </div>
+      ) : (
+        <Card className="p-5">
+          <p className="text-[13px]" style={{ color: colors.text.muted }}>
+            No course-linked sessions yet. Personal sessions will appear here
+            after analysis.
+          </p>
+        </Card>
       )}
-    </div>
+    </section>
   );
 }
-
-// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { showToast } = useToast();
@@ -946,12 +1257,35 @@ export default function DashboardPage() {
   }, [showToast]);
 
   const summary = data?.summary;
-  const humanRate = useMemo(
-    () => (!summary ? 0 : pct(summary.human_sessions, summary.total_sessions)),
+
+  const trend = useMemo(() => normalizeTrend(data?.trend ?? []), [data?.trend]);
+
+  const sessionDelta = useMemo(
+    () => getTrendDelta(trend, "session_count"),
+    [trend],
+  );
+
+  const confidenceDelta = useMemo(
+    () => getTrendDelta(trend, "avg_confidence"),
+    [trend],
+  );
+
+  const wpmDelta = useMemo(() => getTrendDelta(trend, "avg_wpm"), [trend]);
+
+  const certificateRatio = useMemo(
+    () =>
+      summary
+        ? pct(summary.certificate_count, Math.max(summary.total_sessions, 1))
+        : 0,
     [summary],
   );
 
-  if (isLoading) return <DashboardSkeleton />;
+  const totalHumanRate = useMemo(
+    () => (summary ? pct(summary.human_sessions, summary.total_sessions) : 0),
+    [summary],
+  );
+
+  if (isLoading) return <DashboardLoadingShell />;
 
   if (apiError) {
     return (
@@ -962,8 +1296,8 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="rounded-lg px-4 py-2.5 text-[13px] font-bold text-white"
-            style={{ background: colors.brand }}
+            className="rounded-md px-4 py-2.5 text-[13px] font-bold text-white"
+            style={{ backgroundColor: colors.brand }}
           >
             Retry
           </button>
@@ -981,8 +1315,8 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="rounded-lg px-4 py-2.5 text-[13px] font-bold text-white"
-            style={{ background: colors.brand }}
+            className="rounded-md px-4 py-2.5 text-[13px] font-bold text-white"
+            style={{ backgroundColor: colors.brand }}
           >
             Reload
           </button>
@@ -991,262 +1325,105 @@ export default function DashboardPage() {
     );
   }
 
+  const firstName = user?.first_name || "Student";
   const hasNoActivity = summary.total_sessions === 0;
 
   return (
-    <div className="space-y-6">
-      {/* ── Page header ─────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div className="space-y-5">
+      <section className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <h1
-            className="text-[1.9rem] font-bold tracking-tight"
+            className="text-[28px] font-bold tracking-[-0.04em]"
             style={{ color: colors.text.primary }}
           >
-            {user?.first_name ? `Welcome, ${user.first_name}.` : "Dashboard"}
+            {greetingLabel()}, {firstName}.
           </h1>
           <p
-            className="mt-1 text-[14px]"
+            className="mt-1 text-[13px]"
             style={{ color: colors.text.secondary }}
           >
-            Track authorship evidence, certificates, and writing analytics.
+            Here's what's happening with your authorship evidence today.
           </p>
         </div>
-        <Link
-          to={ROUTES.EDITOR_NEW}
-          className="flex shrink-0 items-center gap-2 self-start rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white transition hover:brightness-110 active:scale-[0.98]"
-          style={{
-            background: colors.brand,
-            boxShadow: `0 8px 24px -12px ${colors.brand}`,
-          }}
-        >
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            aria-hidden
-          >
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-          New session
-        </Link>
-      </div>
 
-      {/* Rest of the dashboard content remains unchanged... */}
-      {/* ── Metric cards ────────────────────── */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to={ROUTES.EDITOR_NEW}
+            className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-[13px] font-semibold text-white"
+            style={{ backgroundColor: colors.brand }}
+          >
+            <Icon type="plus" />
+            New Session
+          </Link>
+          <Link
+            to={ROUTES.SESSIONS}
+            className="inline-flex h-9 items-center gap-2 rounded-md border bg-white px-3 text-[13px] font-semibold transition-colors hover:bg-surface-100"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.primary,
+            }}
+          >
+            View All Sessions
+          </Link>
+        </div>
+      </section>
+
+      {hasNoActivity && <EmptyDashboard />}
+
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Total Sessions"
-          value={summary.total_sessions}
-          sub="Captured writing trails"
-          iconBg={colors.brandSoft}
-          iconColor={colors.brand}
-          iconPath={
-            <>
-              <path d="M8 6h13" />
-              <path d="M8 12h13" />
-              <path d="M8 18h13" />
-              <path d="M3 6h.01" />
-              <path d="M3 12h.01" />
-              <path d="M3 18h.01" />
-            </>
-          }
-          to={ROUTES.SESSIONS}
+          value={String(summary.total_sessions)}
+          context="vs last 30 days"
+          trend={sessionDelta}
+          icon="list"
         />
         <MetricCard
           label="Avg Confidence"
-          value={`${summary.avg_confidence}%`}
-          sub="ML classification score"
-          iconBg={humanRate >= 70 ? colors.mintTint : colors.amberTint}
-          iconColor={humanRate >= 70 ? colors.green : colors.amber}
-          iconPath={
-            <>
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              <path d="m9 12 2 2 4-4" />
-            </>
-          }
-          to={ROUTES.ANALYTICS}
+          value={`${Math.round(summary.avg_confidence)}%`}
+          context={`${totalHumanRate}% human evidence`}
+          trend={confidenceDelta}
+          icon="shield"
         />
         <MetricCard
-          label="Certificates"
-          value={summary.certificate_count}
-          sub="Authorship records issued"
-          iconBg={colors.brandSoft}
-          iconColor={colors.brand}
-          iconPath={
-            <>
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </>
-          }
-          to={ROUTES.CERTIFICATES}
+          label="Certificates Issued"
+          value={String(summary.certificate_count)}
+          context={`${certificateRatio}% of sessions`}
+          trend={certificateRatio}
+          icon="award"
         />
         <MetricCard
-          label="Writing Time"
+          label="Total Writing Time"
           value={formatSeconds(summary.total_seconds)}
-          sub="Total captured duration"
-          iconBg={colors.surface[150]}
-          iconColor={colors.text.secondary}
-          iconPath={
-            <>
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </>
-          }
+          context="captured evidence"
+          trend={sessionDelta}
+          icon="clock"
         />
-      </div>
+      </section>
 
-      {/* ── Authorship health bar ─────────────────────────────────────── */}
-      <AuthorshipBar summary={summary} />
-
-      {/* ── First-run prompt ─────────────────────────────────────────── */}
-      {hasNoActivity && (
-        <div
-          className="flex flex-col items-center gap-3 rounded-xl border px-6 py-8 text-center sm:flex-row sm:text-left"
-          style={{
-            borderColor: `${colors.brand}30`,
-            background: colors.brandSoft,
-          }}
-        >
-          <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
-            style={{ background: colors.brand }}
-          >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <p
-              className="text-[15px] font-bold"
-              style={{ color: colors.brand }}
-            >
-              Start building your authorship trail
-            </p>
-            <p
-              className="mt-1 text-[13px]"
-              style={{ color: colors.text.secondary }}
-            >
-              Write your first session to generate behavioral evidence -
-              keystroke timing, pauses, and revision patterns AI cannot
-              replicate.
-            </p>
-          </div>
-          <Link
-            to={ROUTES.EDITOR_NEW}
-            className="shrink-0 rounded-xl px-5 py-2.5 text-[13px] font-semibold text-white transition hover:brightness-110"
-            style={{ background: colors.brand }}
-          >
-            Open editor
-          </Link>
-        </div>
-      )}
-
-      {/* ── Main content: chart + getting started ────────────────────── */}
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_320px]">
-        <ActivityChart trend={data.trend} />
-        <GettingStarted
-          totalSessions={summary.total_sessions}
-          certificates={summary.certificate_count}
-          courses={data.courses.length}
-        />
-      </div>
-
-      {/* ── Course breakdown ──────────────────────────────────────────── */}
-      <CoursePanel courses={data.courses} />
-
-      {/* ── Recent sessions table ────────────────── */}
-      <div>
-        <div className="mb-3 flex items-center justify-between gap-4">
-          <div>
-            <h2
-              className="text-[16px] font-bold"
-              style={{ color: colors.text.primary }}
-            >
-              Recent sessions
-            </h2>
-            <p
-              className="mt-0.5 text-[12px]"
-              style={{ color: colors.text.muted }}
-            >
-              Latest captured writing evidence
-            </p>
-          </div>
-          <Link
-            to={ROUTES.SESSIONS}
-            className="rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition hover:bg-slate-50"
-            style={{
-              borderColor: colors.surface[200],
-              color: colors.text.secondary,
-            }}
-          >
-            View all
-          </Link>
+      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_340px]">
+        <div className="space-y-5">
+          <AuthorshipHealthCard trend={trend} summary={summary} />
+          <RecentSessionsTable sessions={data.recent_sessions} />
         </div>
 
-        <div
-          className="overflow-hidden rounded-xl border bg-white"
-          style={{ borderColor: colors.surface[200] }}
-        >
-          {data.recent_sessions.length === 0 ? (
-            <EmptyState
-              title="No sessions yet"
-              message="Start writing to generate your first authorship evidence trail."
-              action={
-                <Link
-                  to={ROUTES.EDITOR_NEW}
-                  className="rounded-lg px-4 py-2 text-[13px] font-semibold text-white"
-                  style={{ background: colors.brand }}
-                >
-                  Start writing
-                </Link>
-              }
-            />
-          ) : (
-            <>
-              <div
-                className="grid grid-cols-[1fr_120px_80px_80px_100px_80px] gap-4 border-b px-5 py-3"
-                style={{
-                  borderColor: colors.surface[200],
-                  background: colors.surface[100],
-                }}
-              >
-                {[
-                  "Document",
-                  "Classification",
-                  "Confidence",
-                  "WPM",
-                  "Review",
-                  "Cert",
-                ].map((h) => (
-                  <p
-                    key={h}
-                    className="text-[10px] font-bold uppercase tracking-[0.14em]"
-                    style={{ color: colors.text.muted }}
-                  >
-                    {h}
-                  </p>
-                ))}
-              </div>
-              {data.recent_sessions.map((session, i) => (
-                <SessionRow key={session.id} session={session} index={i} />
-              ))}
-            </>
-          )}
+        <div className="space-y-5">
+          <ClassificationBreakdownCard summary={summary} />
+          <WritingVelocityCard
+            trend={trend}
+            avgWpm={summary.avg_wpm}
+            delta={wpmDelta}
+          />
+          <PendingActionsCard sessions={data.recent_sessions} />
+          <GettingStartedCard
+            totalSessions={summary.total_sessions}
+            certificateCount={summary.certificate_count}
+            courseCount={data.courses.length}
+          />
         </div>
-      </div>
+      </section>
+
+      <CourseBreakdownSection courses={data.courses} />
     </div>
   );
 }

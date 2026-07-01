@@ -1,15 +1,11 @@
 import { useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 
-import { ButtonLink } from "../ui/Button";
-import { Badge } from "../ui/Badge";
 import { ROUTES } from "../../constants/routes";
 import { brand, colors } from "../../styles/colors";
 import { useAuthStore } from "../../store/authStore";
 
-// ─── Icon set ─────────────────────────────────────────────────────────────────
-
-function Icon({ type }: { type: string }) {
+function Icon({ type, size = 16 }: { type: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
     dashboard: (
       <>
@@ -22,7 +18,7 @@ function Icon({ type }: { type: string }) {
     editor: (
       <>
         <path d="M12 20h9" />
-        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
       </>
     ),
     sessions: (
@@ -37,8 +33,9 @@ function Icon({ type }: { type: string }) {
     ),
     certificates: (
       <>
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <path d="m9 12 2 2 4-4" />
+        <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+        <path d="M14 2v6h6" />
+        <path d="m9 15 2 2 4-5" />
       </>
     ),
     analytics: (
@@ -85,12 +82,18 @@ function Icon({ type }: { type: string }) {
         <path d="M13.73 21a2 2 0 0 1-3.46 0" />
       </>
     ),
+    user: (
+      <>
+        <path d="M20 21a8 8 0 0 0-16 0" />
+        <circle cx="12" cy="7" r="4" />
+      </>
+    ),
   };
 
   return (
     <svg
-      width="16"
-      height="16"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -104,13 +107,11 @@ function Icon({ type }: { type: string }) {
   );
 }
 
-// ─── Nav structure ────────────────────────────────────────────────────────────
-
 const navSections = [
   {
     label: "Workspace",
     items: [
-      { label: "Overview", path: ROUTES.DASHBOARD, icon: "dashboard" },
+      { label: "Dashboard", path: ROUTES.DASHBOARD, icon: "dashboard" },
       { label: "New Session", path: ROUTES.EDITOR_NEW, icon: "editor" },
     ],
   },
@@ -135,8 +136,6 @@ const navSections = [
   },
 ];
 
-// ─── Sidebar content ──────────────────────────────────────────────────────────
-
 function SidebarContent({
   collapsed,
   onClose,
@@ -147,10 +146,10 @@ function SidebarContent({
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
 
-  const fullName =
-    `${user?.first_name || "Student"} ${user?.last_name || ""}`.trim();
-  const initials =
-    `${(user?.first_name || "S")[0]}${(user?.last_name || "")[0] || ""}`.toUpperCase();
+  const firstName = user?.first_name || "Student";
+  const lastName = user?.last_name || "";
+  const fullName = `${firstName} ${lastName}`.trim();
+  const initials = `${firstName[0] || "S"}${lastName[0] || ""}`.toUpperCase();
 
   const handleLogout = () => {
     logout();
@@ -160,23 +159,33 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Logo */}
-      <div className="flex h-14 items-center px-2">
+      <div className="flex h-[52px] items-center px-4">
         <Link
           to={ROUTES.DASHBOARD}
           onClick={onClose}
-          className="flex min-w-0 items-center"
+          className="flex min-w-0 items-center gap-2"
         >
           {!collapsed ? (
-            <img
-              src="/Logo.png"
-              alt="TypeTrace"
-              className="h-8 w-auto object-contain"
-            />
+            <>
+              <img
+                src="/Logo.png"
+                alt="TypeTrace"
+                className="h-7 w-auto object-contain"
+              />
+              <span
+                className="rounded-md border px-1.5 py-0.5 text-[10px] font-semibold"
+                style={{
+                  borderColor: colors.surface[200],
+                  color: colors.text.muted,
+                }}
+              >
+                v1.0
+              </span>
+            </>
           ) : (
             <div
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-[12px] font-extrabold tracking-tight"
-              style={{ background: colors.brand, color: colors.text.light }}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-[11px] font-extrabold tracking-tight"
+              style={{ backgroundColor: colors.brandSoft, color: colors.brand }}
             >
               TT
             </div>
@@ -184,80 +193,73 @@ function SidebarContent({
         </Link>
       </div>
 
-      {/* Divider */}
-      <div
-        className="mb-4 mt-1 h-px"
-        style={{ background: colors.surface[200] }}
-      />
-
-      {/* Nav */}
-      <nav className="flex-1 space-y-5 overflow-y-auto">
-        {navSections.map((section) => (
-          <div key={section.label}>
-            {!collapsed && (
-              <p
-                className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.16em]"
-                style={{ color: colors.text.muted }}
-              >
-                {section.label}
-              </p>
-            )}
-            <div className="space-y-0.5">
-              {section.items.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  title={collapsed ? item.label : undefined}
-                  onClick={onClose}
-                  className="relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors duration-100"
-                  style={({ isActive }) => ({
-                    background: isActive ? brand.bgNavActive : "transparent",
-                    color: isActive ? colors.brand : colors.text.secondary,
-                  })}
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <div className="space-y-6">
+          {navSections.map((section) => (
+            <div key={section.label}>
+              {!collapsed && (
+                <p
+                  className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.14em]"
+                  style={{ color: colors.text.muted }}
                 >
-                  {({ isActive }) => (
-                    <>
-                      {isActive && (
-                        <span
-                          className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full"
-                          style={{ background: colors.brand }}
-                        />
-                      )}
-                      <span className="shrink-0">
-                        <Icon type={item.icon} />
-                      </span>
-                      {!collapsed && (
-                        <span className="truncate">{item.label}</span>
-                      )}
-                    </>
-                  )}
-                </NavLink>
-              ))}
+                  {section.label}
+                </p>
+              )}
+
+              <div className="space-y-1">
+                {section.items.map((item) => (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    title={collapsed ? item.label : undefined}
+                    onClick={onClose}
+                    className="relative flex h-9 items-center gap-2.5 rounded-md px-2 text-[13px] font-medium transition-colors duration-200 hover:bg-surface-100"
+                    style={({ isActive }) => ({
+                      backgroundColor: isActive
+                        ? brand.bgNavActive
+                        : "transparent",
+                      color: isActive ? colors.brand : colors.text.secondary,
+                      borderLeft: isActive
+                        ? `3px solid ${colors.brand}`
+                        : `3px solid transparent`,
+                      paddingLeft: collapsed ? 7 : 9,
+                      fontWeight: isActive ? 700 : 500,
+                    })}
+                  >
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                      <Icon type={item.icon} size={16} />
+                    </span>
+                    {!collapsed && (
+                      <span className="truncate">{item.label}</span>
+                    )}
+                  </NavLink>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </nav>
 
-      {/* Bottom profile card */}
       <div
-        className="mt-4 border-t pt-4"
+        className="border-t p-3"
         style={{ borderColor: colors.surface[200] }}
       >
         {!collapsed ? (
           <div
-            className="rounded-xl border p-3"
-            style={{
-              borderColor: colors.surface[200],
-              background: colors.surface[100],
-            }}
+            className="rounded-md border bg-white p-3"
+            style={{ borderColor: colors.surface[200] }}
           >
             <div className="flex items-center gap-3">
               <div
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-bold"
-                style={{ background: colors.brandSoft, color: colors.brand }}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[12px] font-bold"
+                style={{
+                  backgroundColor: colors.brandSoft,
+                  color: colors.brand,
+                }}
               >
                 {initials}
               </div>
+
               <div className="min-w-0 flex-1">
                 <p
                   className="truncate text-[13px] font-semibold"
@@ -269,21 +271,28 @@ function SidebarContent({
                   className="truncate text-[11px]"
                   style={{ color: colors.text.muted }}
                 >
-                  {user?.email}
+                  {user?.email || "student@typetrace.local"}
                 </p>
               </div>
-              <Badge tone="verified">
-                <span className="text-[9px]">Student</span>
-              </Badge>
+
+              <span
+                className="rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                style={{
+                  backgroundColor: colors.brandSoft,
+                  color: colors.brand,
+                }}
+              >
+                {user?.role || "STUDENT"}
+              </span>
             </div>
+
             <button
               type="button"
               onClick={handleLogout}
-              className="mt-3 w-full rounded-lg border px-3 py-2 text-[12px] font-semibold transition hover:opacity-80"
+              className="mt-3 h-8 w-full rounded-md border bg-white text-[12px] font-semibold transition-colors hover:bg-surface-100"
               style={{
                 borderColor: colors.surface[200],
                 color: colors.text.secondary,
-                background: colors.surface[50],
               }}
             >
               Sign out
@@ -292,15 +301,15 @@ function SidebarContent({
         ) : (
           <div className="flex flex-col items-center gap-2">
             <div
-              className="flex h-9 w-9 items-center justify-center rounded-full text-[12px] font-bold"
-              style={{ background: colors.brandSoft, color: colors.brand }}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-[12px] font-bold"
+              style={{ backgroundColor: colors.brandSoft, color: colors.brand }}
             >
               {initials}
             </div>
             <button
               type="button"
               onClick={handleLogout}
-              className="text-[10px] font-semibold"
+              className="rounded-md px-1 py-0.5 text-[10px] font-semibold"
               style={{ color: colors.text.muted }}
             >
               Out
@@ -312,36 +321,34 @@ function SidebarContent({
   );
 }
 
-// ─── Layout ───────────────────────────────────────────────────────────────────
-
 export default function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user } = useAuthStore();
 
-  const sidebarW = collapsed ? 72 : 256;
+  const firstName = user?.first_name || "Student";
+  const lastName = user?.last_name || "";
+  const initials = `${firstName[0] || "S"}${lastName[0] || ""}`.toUpperCase();
 
   return (
     <div
-      className="flex min-h-screen"
-      style={{ background: colors.surface[150] }}
+      className="min-h-screen"
+      style={{ backgroundColor: colors.surface[100] }}
     >
-      {/* ── Desktop sidebar ───────────────────────────────────────────── */}
       <aside
-        className="fixed inset-y-0 left-0 z-40 hidden flex-col border-r bg-white px-3 py-4 transition-all duration-200 lg:flex"
-        style={{
-          width: sidebarW,
-          borderColor: colors.surface[200],
-        }}
+        className={`fixed inset-y-0 left-0 z-40 hidden border-r bg-white transition-all duration-200 md:flex md:flex-col ${
+          collapsed ? "w-[64px]" : "w-[240px]"
+        }`}
+        style={{ borderColor: colors.surface[200] }}
       >
-        {/* Collapse toggle */}
         <button
           type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          className="absolute -right-3 top-[60px] flex h-6 w-6 items-center justify-center rounded-full border bg-white shadow-sm transition hover:shadow"
+          onClick={() => setCollapsed((value) => !value)}
+          className="absolute -right-3 top-16 z-50 flex h-5 w-5 items-center justify-center rounded-md border bg-white transition-colors duration-200 hover:bg-surface-100"
           style={{
             borderColor: colors.surface[200],
             color: colors.text.secondary,
+            boxShadow: `0 1px 3px ${colors.shadow}`,
           }}
           aria-label="Toggle sidebar"
         >
@@ -351,12 +358,12 @@ export default function DashboardLayout() {
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="2.5"
+            strokeWidth="2.4"
             strokeLinecap="round"
             strokeLinejoin="round"
             style={{
               transform: collapsed ? "rotate(180deg)" : "rotate(0deg)",
-              transition: "transform 0.2s",
+              transition: "transform 200ms",
             }}
           >
             <path d="m15 18-6-6 6-6" />
@@ -366,111 +373,133 @@ export default function DashboardLayout() {
         <SidebarContent collapsed={collapsed} />
       </aside>
 
-      {/* ── Mobile sidebar ────────────────────────────────────────────── */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 md:hidden">
           <button
             type="button"
             className="absolute inset-0"
-            style={{ background: "rgba(15,23,42,0.4)" }}
+            style={{ backgroundColor: colors.shadowStrong }}
             onClick={() => setMobileOpen(false)}
             aria-label="Close menu"
           />
+
           <aside
-            className="absolute inset-y-0 left-0 w-[280px] border-r bg-white px-3 py-4"
-            style={{ borderColor: colors.surface[200] }}
+            className="absolute bottom-0 left-0 right-0 max-h-[84dvh] rounded-md border bg-white p-3"
+            style={{
+              borderColor: colors.surface[200],
+              boxShadow: `0 1px 3px ${colors.shadow}`,
+            }}
           >
-            <button
-              type="button"
-              onClick={() => setMobileOpen(false)}
-              className="absolute right-3 top-4 flex h-8 w-8 items-center justify-center rounded-lg border"
-              style={{
-                borderColor: colors.surface[200],
-                color: colors.text.secondary,
-              }}
-            >
-              <Icon type="close" />
-            </button>
-            <SidebarContent
-              collapsed={false}
-              onClose={() => setMobileOpen(false)}
-            />
+            <div className="mb-2 flex items-center justify-between px-1">
+              <span
+                className="text-[10px] font-bold uppercase tracking-[0.14em]"
+                style={{ color: colors.text.muted }}
+              >
+                Navigation
+              </span>
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-md border bg-white"
+                style={{
+                  borderColor: colors.surface[200],
+                  color: colors.text.secondary,
+                }}
+                aria-label="Close navigation"
+              >
+                <Icon type="close" />
+              </button>
+            </div>
+            <div className="max-h-[76dvh] overflow-y-auto">
+              <SidebarContent
+                collapsed={false}
+                onClose={() => setMobileOpen(false)}
+              />
+            </div>
           </aside>
         </div>
       )}
 
-      {/* ── Main content ──────────────────────────────────────────────── */}
       <div
-        className="flex min-h-screen flex-1 flex-col transition-all duration-200"
-        style={{ marginLeft: 0 }}
+        className={`min-h-screen transition-all duration-200 ${
+          collapsed ? "md:ml-[64px]" : "md:ml-[240px]"
+        }`}
       >
-        <div className="flex-1" style={{ marginLeft: `${sidebarW}px` }}>
-          {/* Top header bar */}
-          <header
-            className="sticky top-0 z-30 border-b bg-white/95 backdrop-blur-sm"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <div className="flex h-14 items-center justify-between gap-4 px-6">
-              {/* Mobile menu button */}
+        <header
+          className="sticky top-0 z-30 h-[52px] border-b bg-white/95 backdrop-blur-sm"
+          style={{ borderColor: colors.surface[200] }}
+        >
+          <div className="flex h-[52px] items-center justify-between gap-4 px-4 md:px-6">
+            <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg border lg:hidden"
+                className="flex h-8 w-8 items-center justify-center rounded-md border bg-white md:hidden"
                 style={{
                   borderColor: colors.surface[200],
                   color: colors.text.primary,
                 }}
+                aria-label="Open navigation"
               >
                 <Icon type="menu" />
               </button>
 
-              {/* Page title area - matches PolicyPilot's "Dashboard" header style */}
-              <div className="hidden lg:block">
+              <div>
                 <p
-                  className="text-[11px] font-bold uppercase tracking-[0.16em]"
+                  className="text-[11px] font-bold uppercase tracking-[0.14em]"
                   style={{ color: colors.text.muted }}
                 >
-                  Student console
+                  Student Console
                 </p>
               </div>
+            </div>
 
-              {/* Right side: notification + CTA + avatar */}
-              <div className="ml-auto flex items-center gap-2">
-                {/* Bell */}
-                <button
-                  type="button"
-                  className="relative flex h-9 w-9 items-center justify-center rounded-lg border transition hover:bg-slate-50"
-                  style={{
-                    borderColor: colors.surface[200],
-                    color: colors.text.secondary,
-                  }}
-                  aria-label="Notifications"
-                >
-                  <Icon type="bell" />
-                </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="relative flex h-9 w-9 items-center justify-center rounded-md border bg-white transition-colors hover:bg-surface-100"
+                style={{
+                  borderColor: colors.surface[200],
+                  color: colors.text.secondary,
+                }}
+                aria-label="Notifications"
+              >
+                <Icon type="bell" />
+                <span
+                  className="absolute right-2 top-2 h-1.5 w-1.5 rounded-md"
+                  style={{ backgroundColor: colors.amber }}
+                />
+              </button>
 
-                {/* New session CTA */}
-                <ButtonLink to={ROUTES.EDITOR_NEW} size="md">
-                  <Icon type="plus" />
-                  New Session
-                </ButtonLink>
+              <Link
+                to={ROUTES.EDITOR_NEW}
+                className="hidden h-9 items-center gap-2 rounded-md px-3 text-[13px] font-semibold text-white transition md:inline-flex"
+                style={{ backgroundColor: colors.brand }}
+              >
+                <Icon type="plus" />
+                New Session
+              </Link>
 
-                {/* Avatar */}
-                <div
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-[12px] font-bold"
-                  style={{ background: colors.brandSoft, color: colors.brand }}
-                >
-                  {`${(user?.first_name || "S")[0]}${(user?.last_name || "")[0] || ""}`.toUpperCase()}
-                </div>
+              <div
+                className="flex h-9 w-9 items-center justify-center rounded-md text-[12px] font-bold"
+                style={{
+                  backgroundColor: colors.brandSoft,
+                  color: colors.brand,
+                }}
+                title={`${firstName} ${lastName}`.trim()}
+              >
+                {initials}
               </div>
             </div>
-          </header>
+          </div>
+        </header>
 
-          {/* Page content */}
-          <main className="p-6">
-            <Outlet />
-          </main>
-        </div>
+        <main
+          className="min-h-[calc(100vh-52px)] p-6"
+          style={{ backgroundColor: colors.surface[100] }}
+        >
+          <Outlet />
+        </main>
       </div>
     </div>
   );
