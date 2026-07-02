@@ -1,5 +1,3 @@
-// frontend/src/App.tsx
-
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import AuthRedirectGuard from "./components/guards/AuthRedirectGuard";
@@ -21,6 +19,7 @@ import { ROUTES } from "./constants/routes";
 import AboutPage from "./pages/AboutPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import CertificatesPage from "./pages/CertificatesPage";
+import CertificateVerificationResultPage from "./pages/CertificateVerificationResultPage";
 import DashboardPage from "./pages/DashboardPage";
 import EditorPage from "./pages/EditorPage";
 import FeaturesPage from "./pages/FeaturesPage";
@@ -35,7 +34,6 @@ import ReplayPage from "./pages/ReplayPage";
 import SessionsPage from "./pages/SessionsPage";
 import SettingsPage from "./pages/SettingsPage";
 import SettingsRedirectPage from "./pages/SettingsRedirectPage";
-import CertificateVerificationResultPage from "./pages/CertificateVerificationResultPage";
 import VerifyLookupPage from "./pages/VerifyLookupPage";
 import VerifyOtpPage from "./pages/VerifyOtpPage";
 
@@ -95,18 +93,21 @@ export default function App() {
               <Route
                 element={<RoleGuard allowedRoles={["STUDENT", "TEACHER"]} />}
               >
-                <Route
-                  path={ROUTES.SETTINGS}
-                  element={<SettingsRedirectPage />}
-                />
-                <Route
-                  path={ROUTES.STUDENT_SETTINGS}
-                  element={<SettingsPage />}
-                />
-                <Route
-                  path={ROUTES.TEACHER_SETTINGS}
-                  element={<SettingsPage />}
-                />
+                <Route element={<RootLayout />}>
+                  <Route
+                    path={ROUTES.SETTINGS}
+                    element={<SettingsRedirectPage />}
+                  />
+                  <Route
+                    path={ROUTES.STUDENT_SETTINGS}
+                    element={<SettingsPage />}
+                  />
+                  <Route
+                    path={ROUTES.TEACHER_SETTINGS}
+                    element={<SettingsPage />}
+                  />
+                </Route>
+
                 <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
               </Route>
 

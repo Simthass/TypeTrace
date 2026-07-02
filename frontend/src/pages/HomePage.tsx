@@ -7,8 +7,6 @@ import {
   motion,
   useInView,
   useReducedMotion,
-  useScroll,
-  useTransform,
 } from "framer-motion";
 
 import { ROUTES } from "../constants/routes";
@@ -563,123 +561,113 @@ function TeacherReviewCard() {
   );
 }
 
-function HeroDashboardPreview() {
-  const ref = useRef<HTMLDivElement>(null);
+function MiniDashboardFrame({
+  className = "",
+  muted = false,
+  delay = 0,
+}: {
+  className?: string;
+  muted?: boolean;
+  delay?: number;
+}) {
   const reduced = useReducedMotion();
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start end", "center center"],
-  });
-  const rotateX = useTransform(
-    scrollYProgress,
-    [0, 1],
-    reduced ? [0, 0] : [14, 0],
-  );
-  const y = useTransform(scrollYProgress, [0, 1], reduced ? [0, 0] : [56, 0]);
-  const scale = useTransform(
-    scrollYProgress,
-    [0, 1],
-    reduced ? [1, 1] : [0.95, 1],
-  );
-  const opacity = useTransform(scrollYProgress, [0, 0.38], [0.25, 1]);
 
   return (
-    <div
-      ref={ref}
-      className="relative z-20 mx-auto w-full max-w-[1280px] px-4 sm:px-6"
-      style={{ perspective: "1400px" }}
+    <motion.div
+      initial={reduced ? false : { opacity: 0, y: 24, scale: 0.98 }}
+      animate={reduced ? undefined : { opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.72, delay, ease: [0.16, 1, 0.3, 1] }}
+      className={`overflow-hidden rounded-md border bg-white ${className}`}
+      style={{
+        borderColor: muted
+          ? withAlpha(colors.surface[200], "90")
+          : colors.surface[200],
+        boxShadow: muted
+          ? `0 18px 56px ${withAlpha(colors.shadow, "60")}`
+          : `0 28px 90px ${withAlpha(colors.shadowStrong, "45")}`,
+      }}
+      aria-hidden={muted}
     >
-      <div
-        className="pointer-events-none absolute left-1/2 top-[30%] h-[300px] w-[82%] -translate-x-1/2 rounded-full"
+      <img
+        src={DASHBOARD_PREVIEW_SRC}
+        alt={muted ? "" : "TypeTrace dashboard preview"}
+        className="block w-full select-none object-cover object-top"
+        draggable={false}
         style={{
-          background: withAlpha(colors.brand, "14"),
-          filter: "blur(80px)",
-          opacity: 0.7,
+          maxHeight: muted ? 540 : 660,
+          opacity: muted ? 0.72 : 1,
+          filter: muted ? "saturate(0.82) contrast(0.96)" : undefined,
         }}
       />
       <div
-        className="pointer-events-none absolute bottom-[-12px] left-1/2 h-[60px] w-[72%] -translate-x-1/2 rounded-full"
+        className="pointer-events-none absolute inset-x-0 top-0 h-16"
         style={{
-          background: withAlpha(colors.text.primary, "18"),
-          filter: "blur(32px)",
+          background: `linear-gradient(180deg, ${withAlpha(colors.surface[50], "70")} 0%, transparent 100%)`,
         }}
       />
-      <motion.div
-        initial={
-          reduced
-            ? { opacity: 1 }
-            : { opacity: 0, y: 72, rotateX: 14, scale: 0.95 }
-        }
-        animate={
-          reduced
-            ? { opacity: 1 }
-            : { opacity: 1, y: 0, rotateX: 14, scale: 0.95 }
-        }
-        transition={{ duration: 1.1, delay: 0.42, ease: [0.16, 1, 0.3, 1] }}
-        style={
-          reduced
-            ? undefined
-            : {
-                rotateX,
-                y,
-                scale,
-                opacity,
-                transformPerspective: 1400,
-                transformOrigin: "center top",
-              }
-        }
-        className="relative w-full overflow-hidden rounded-xl border bg-white will-change-transform"
-        aria-label="TypeTrace dashboard preview"
-      >
-        <div
-          className="flex h-10 items-center gap-3 border-b px-4"
-          style={{
-            background: colors.surface[100],
-            borderColor: colors.surface[200],
-          }}
+      <div
+        className="pointer-events-none absolute inset-0 rounded-md"
+        style={{
+          boxShadow: `inset 0 1px 0 ${withAlpha(colors.text.light, "E6")}, inset 0 -1px 0 ${withAlpha(colors.surface[200], "A0")}`,
+        }}
+      />
+    </motion.div>
+  );
+}
+
+function HeroDashboardPreview() {
+  const reduced = useReducedMotion();
+
+  return (
+    <div className="relative z-20 mx-auto w-full max-w-[1380px] px-4 pb-8 pt-2 sm:px-6">
+      <div
+        className="pointer-events-none absolute left-1/2 top-[18%] h-[360px] w-[76%] -translate-x-1/2 rounded-full"
+        style={{
+          background: `radial-gradient(ellipse at center, ${withAlpha(colors.brand, "18")} 0%, transparent 68%)`,
+          filter: "blur(88px)",
+          opacity: 0.82,
+        }}
+      />
+
+      <div className="relative mx-auto h-[430px] max-w-[1180px] sm:h-[560px] lg:h-[690px]">
+        {" "}
+        {/*
+          Three real dashboard image frames, stacked vertically like the
+          reference: the front image stays closest to the hero copy, the second
+          sits slightly higher behind it, and the third sits higher again.
+        */}
+        <MiniDashboardFrame
+          muted
+          delay={0.18}
+          className="absolute inset-x-0 top-0 z-0 mx-auto w-[86%] max-w-[1040px]"
+        />
+        <MiniDashboardFrame
+          muted
+          delay={0.28}
+          className="absolute inset-x-0 top-8 z-10 mx-auto w-[93%] max-w-[1110px]"
+        />
+        <motion.div
+          initial={reduced ? false : { opacity: 0, y: 42, scale: 0.98 }}
+          animate={reduced ? undefined : { opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.86, delay: 0.38, ease: [0.16, 1, 0.3, 1] }}
+          className="absolute inset-x-0 top-16 z-20 mx-auto w-full max-w-[1180px]"
         >
-          <div className="flex gap-1.5">
-            {[colors.red, colors.amber, colors.green].map((c) => (
-              <div
-                key={c}
-                className="h-3 w-3 rounded-full"
-                style={{ background: c }}
-              />
-            ))}
-          </div>
-          <div
-            className="mx-auto flex h-6 max-w-[300px] flex-1 items-center justify-center gap-1.5 rounded-md border font-mono text-[11px]"
-            style={{
-              background: colors.surface[50],
-              borderColor: colors.surface[200],
-              color: colors.text.secondary,
-            }}
-          >
-            <Icon name="lock" size={10} />
-            app.typetrace.com
-          </div>
-          <div className="w-12" />
-        </div>
-        <img
-          src={DASHBOARD_PREVIEW_SRC}
-          alt="TypeTrace writing session dashboard"
-          className="block w-full select-none object-cover object-top"
-          draggable={false}
-          style={{ maxHeight: 580 }}
-        />
+          <MiniDashboardFrame />
+        </motion.div>
         <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-20"
+          className="pointer-events-none absolute inset-x-[-6%] bottom-[-70px] z-40 h-[340px]"
           style={{
-            background: `linear-gradient(180deg, ${withAlpha(colors.surface[50], "30")} 0%, transparent 100%)`,
+            background: `linear-gradient(180deg, transparent 0%, ${withAlpha(colors.surface[50], "D8")} 38%, ${colors.surface[50]} 100%)`,
           }}
         />
         <div
-          className="pointer-events-none absolute inset-0 rounded-xl"
+          className="pointer-events-none absolute bottom-12 left-1/2 z-30 h-20 w-[74%] -translate-x-1/2 rounded-full"
           style={{
-            boxShadow: `inset 0 1px 0 ${withAlpha(colors.text.light, "CC")}, inset 0 -1px 0 ${withAlpha(colors.surface[200], "A0")}`,
+            background: withAlpha(colors.text.primary, "16"),
+            filter: "blur(38px)",
           }}
         />
-      </motion.div>
+      </div>
     </div>
   );
 }

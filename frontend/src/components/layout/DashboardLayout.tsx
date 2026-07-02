@@ -1,5 +1,3 @@
-// frontend/src/components/layout/DashboardLayout.tsx
-
 import { useMemo, useState, type ReactNode } from "react";
 import {
   Link,
@@ -75,6 +73,13 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
       <>
         <circle cx="12" cy="12" r="3" />
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </>
+    ),
+    external: (
+      <>
+        <path d="M15 3h6v6" />
+        <path d="M10 14 21 3" />
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
       </>
     ),
     menu: (
@@ -197,13 +202,23 @@ const navSections = [
     label: "Academic",
     items: [
       { label: "Join Course", path: ROUTES.JOIN_COURSE, icon: "course" },
-      { label: "Settings", path: ROUTES.STUDENT_SETTINGS, icon: "settings" },
+      {
+        label: "Settings",
+        path: ROUTES.STUDENT_SETTINGS,
+        icon: "settings",
+        external: true,
+      },
     ],
   },
 ];
 
 const resourceLinks = [
-  { label: "Help Center", icon: "helpCircle" },
+  {
+    label: "Help & Docs",
+    path: ROUTES.HELP_DOCS,
+    icon: "helpCircle",
+    external: true,
+  },
   { label: "Keyboard Shortcuts", icon: "key" },
 ];
 
@@ -250,12 +265,19 @@ function SidebarContent({
           className={`flex min-w-0 items-center ${collapsed ? "justify-center" : "gap-2"}`}
         >
           {collapsed ? (
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-md text-[11px] font-extrabold tracking-tight"
-              style={{ backgroundColor: colors.brandSoft, color: colors.brand }}
+            <span
+              className="flex h-8 w-8 items-center justify-center rounded-md border"
+              style={{
+                backgroundColor: colors.surface[50],
+                borderColor: colors.surface[200],
+              }}
             >
-              TT
-            </div>
+              <img
+                src="/QR-Logo.png"
+                alt="TypeTrace"
+                className="h-6 w-6 object-contain"
+              />
+            </span>
           ) : (
             <>
               <img
@@ -313,7 +335,19 @@ function SidebarContent({
                       <Icon type={item.icon} size={16} />
                     </span>
                     {!collapsed && (
-                      <span className="truncate">{item.label}</span>
+                      <>
+                        <span className="min-w-0 flex-1 truncate">
+                          {item.label}
+                        </span>
+                        {item.external && (
+                          <span
+                            className="ml-auto flex h-4 w-4 shrink-0 items-center justify-center opacity-70"
+                            aria-hidden="true"
+                          >
+                            <Icon type="external" size={13} />
+                          </span>
+                        )}
+                      </>
                     )}
                   </NavLink>
                 ))}
@@ -332,23 +366,62 @@ function SidebarContent({
               </p>
             )}
             <div className="space-y-1">
-              {resourceLinks.map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  title={collapsed ? item.label : undefined}
-                  className="flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium transition-colors duration-200 hover:bg-surface-100"
-                  style={{
-                    color: colors.text.secondary,
-                    justifyContent: collapsed ? "center" : "flex-start",
-                  }}
-                >
-                  <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                    <Icon type={item.icon} size={16} />
-                  </span>
-                  {!collapsed && <span className="truncate">{item.label}</span>}
-                </button>
-              ))}
+              {resourceLinks.map((item) => {
+                if (item.path) {
+                  return (
+                    <Link
+                      key={item.label}
+                      to={item.path}
+                      onClick={onClose}
+                      title={collapsed ? item.label : undefined}
+                      className="flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium transition-colors duration-200 hover:bg-surface-100"
+                      style={{
+                        color: colors.text.secondary,
+                        justifyContent: collapsed ? "center" : "flex-start",
+                      }}
+                    >
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                        <Icon type={item.icon} size={16} />
+                      </span>
+                      {!collapsed && (
+                        <>
+                          <span className="min-w-0 flex-1 truncate">
+                            {item.label}
+                          </span>
+                          {item.external && (
+                            <span
+                              className="ml-auto flex h-4 w-4 shrink-0 items-center justify-center opacity-70"
+                              aria-hidden="true"
+                            >
+                              <Icon type="external" size={13} />
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </Link>
+                  );
+                }
+
+                return (
+                  <button
+                    key={item.label}
+                    type="button"
+                    title={collapsed ? item.label : undefined}
+                    className="flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium transition-colors duration-200 hover:bg-surface-100"
+                    style={{
+                      color: colors.text.secondary,
+                      justifyContent: collapsed ? "center" : "flex-start",
+                    }}
+                  >
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                      <Icon type={item.icon} size={16} />
+                    </span>
+                    {!collapsed && (
+                      <span className="truncate">{item.label}</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
