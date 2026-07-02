@@ -1,8 +1,16 @@
-import { useState, type ReactNode } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+// frontend/src/components/layout/DashboardLayout.tsx
+
+import { useMemo, useState, type ReactNode } from "react";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 
 import { ROUTES } from "../../constants/routes";
-import { brand, colors } from "../../styles/colors";
+import { colors } from "../../styles/colors";
 import { useAuthStore } from "../../store/authStore";
 
 function Icon({ type, size = 16 }: { type: string; size?: number }) {
@@ -50,6 +58,19 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
         <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z" />
       </>
     ),
+    verify: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m21 21-4.3-4.3" />
+      </>
+    ),
+    help: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9.1 9a3 3 0 1 1 5.8 1c-.6 1-1.7 1.5-2.4 2.3-.4.4-.5.8-.5 1.7" />
+        <path d="M12 17h.01" />
+      </>
+    ),
     settings: (
       <>
         <circle cx="12" cy="12" r="3" />
@@ -82,6 +103,46 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
         <path d="M13.73 21a2 2 0 0 1-3.46 0" />
       </>
     ),
+    search: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m21 21-4.3-4.3" />
+      </>
+    ),
+    chevron: <path d="m9 18 6-6-6-6" />,
+    logout: (
+      <>
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+        <path d="m16 17 5-5-5-5" />
+        <path d="M21 12H9" />
+      </>
+    ),
+    shield: (
+      <>
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <path d="m9 12 2 2 4-4" />
+      </>
+    ),
+    activity: <path d="M3 12h4l2-7 4 14 2-7h6" />,
+    helpCircle: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9.5 9a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1.4.9-1.4 1.7v.5" />
+        <path d="M12 17h.01" />
+      </>
+    ),
+    key: (
+      <>
+        <circle cx="8" cy="8" r="5" />
+        <path d="m14 12 6.5 6.5" />
+        <path d="m17 15 2-2" />
+        <path d="m20 12 2-2" />
+      </>
+    ),
+    sparkle: (
+      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" />
+    ),
+    chevronDown: <path d="m6 9 6 6 6-6" />,
     user: (
       <>
         <path d="M20 21a8 8 0 0 0-16 0" />
@@ -109,9 +170,14 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
 
 const navSections = [
   {
-    label: "Workspace",
+    label: "Main",
     items: [
-      { label: "Dashboard", path: ROUTES.DASHBOARD, icon: "dashboard" },
+      {
+        label: "Dashboard",
+        path: ROUTES.DASHBOARD,
+        icon: "dashboard",
+        end: true,
+      },
       { label: "New Session", path: ROUTES.EDITOR_NEW, icon: "editor" },
     ],
   },
@@ -136,6 +202,23 @@ const navSections = [
   },
 ];
 
+const resourceLinks = [
+  { label: "Help Center", icon: "helpCircle" },
+  { label: "Keyboard Shortcuts", icon: "key" },
+];
+
+function getPageTitle(pathname: string) {
+  if (pathname === ROUTES.DASHBOARD) return "Dashboard";
+  if (pathname.startsWith(ROUTES.EDITOR)) return "Writing Session";
+  if (pathname.startsWith(ROUTES.SESSIONS)) return "Sessions";
+  if (pathname.startsWith(ROUTES.CERTIFICATES)) return "Certificates";
+  if (pathname.startsWith(ROUTES.ANALYTICS)) return "Analytics";
+  if (pathname.startsWith(ROUTES.JOIN_COURSE)) return "Join Course";
+  if (pathname.startsWith(ROUTES.STUDENT_SETTINGS)) return "Settings";
+  if (pathname.startsWith(ROUTES.VERIFY_LOOKUP)) return "Verify Certificate";
+  return "Student Console";
+}
+
 function SidebarContent({
   collapsed,
   onClose,
@@ -159,13 +242,21 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col">
+      {/* Logo */}
       <div className="flex h-[52px] items-center px-4">
         <Link
           to={ROUTES.DASHBOARD}
           onClick={onClose}
-          className="flex min-w-0 items-center gap-2"
+          className={`flex min-w-0 items-center ${collapsed ? "justify-center" : "gap-2"}`}
         >
-          {!collapsed ? (
+          {collapsed ? (
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-md text-[11px] font-extrabold tracking-tight"
+              style={{ backgroundColor: colors.brandSoft, color: colors.brand }}
+            >
+              TT
+            </div>
+          ) : (
             <>
               <img
                 src="/Logo.png"
@@ -182,18 +273,12 @@ function SidebarContent({
                 v1.0
               </span>
             </>
-          ) : (
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-md text-[11px] font-extrabold tracking-tight"
-              style={{ backgroundColor: colors.brandSoft, color: colors.brand }}
-            >
-              TT
-            </div>
           )}
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto px-3 py-5">
         <div className="space-y-6">
           {navSections.map((section) => (
             <div key={section.label}>
@@ -211,19 +296,17 @@ function SidebarContent({
                   <NavLink
                     key={item.path}
                     to={item.path}
+                    end={item.end}
                     title={collapsed ? item.label : undefined}
                     onClick={onClose}
-                    className="relative flex h-9 items-center gap-2.5 rounded-md px-2 text-[13px] font-medium transition-colors duration-200 hover:bg-surface-100"
+                    className="relative flex h-9 items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium transition-colors duration-200 hover:bg-surface-100"
                     style={({ isActive }) => ({
                       backgroundColor: isActive
-                        ? brand.bgNavActive
+                        ? colors.brandSoft
                         : "transparent",
                       color: isActive ? colors.brand : colors.text.secondary,
-                      borderLeft: isActive
-                        ? `3px solid ${colors.brand}`
-                        : `3px solid transparent`,
-                      paddingLeft: collapsed ? 7 : 9,
                       fontWeight: isActive ? 700 : 500,
+                      justifyContent: collapsed ? "center" : "flex-start",
                     })}
                   >
                     <span className="flex h-4 w-4 shrink-0 items-center justify-center">
@@ -237,17 +320,52 @@ function SidebarContent({
               </div>
             </div>
           ))}
+
+          {/* Resources */}
+          <div>
+            {!collapsed && (
+              <p
+                className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.14em]"
+                style={{ color: colors.text.muted }}
+              >
+                Resources
+              </p>
+            )}
+            <div className="space-y-1">
+              {resourceLinks.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  title={collapsed ? item.label : undefined}
+                  className="flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium transition-colors duration-200 hover:bg-surface-100"
+                  style={{
+                    color: colors.text.secondary,
+                    justifyContent: collapsed ? "center" : "flex-start",
+                  }}
+                >
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                    <Icon type={item.icon} size={16} />
+                  </span>
+                  {!collapsed && <span className="truncate">{item.label}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </nav>
 
+      {/* User footer */}
       <div
-        className="border-t p-3"
+        className="space-y-3 border-t p-3"
         style={{ borderColor: colors.surface[200] }}
       >
         {!collapsed ? (
           <div
-            className="rounded-md border bg-white p-3"
-            style={{ borderColor: colors.surface[200] }}
+            className="rounded-md border p-3"
+            style={{
+              backgroundColor: colors.surface[50],
+              borderColor: colors.surface[200],
+            }}
           >
             <div className="flex items-center gap-3">
               <div
@@ -289,12 +407,14 @@ function SidebarContent({
             <button
               type="button"
               onClick={handleLogout}
-              className="mt-3 h-8 w-full rounded-md border bg-white text-[12px] font-semibold transition-colors hover:bg-surface-100"
+              className="mt-3 flex h-8 w-full items-center justify-center gap-2 rounded-md border text-[12px] font-semibold transition-colors hover:bg-surface-100"
               style={{
+                backgroundColor: colors.surface[50],
                 borderColor: colors.surface[200],
                 color: colors.text.secondary,
               }}
             >
+              <Icon type="logout" size={13} />
               Sign out
             </button>
           </div>
@@ -324,55 +444,68 @@ function SidebarContent({
 export default function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user } = useAuthStore();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const navigate = useNavigate();
+  const { user, logout } = useAuthStore();
+  const location = useLocation();
 
+  const title = useMemo(
+    () => getPageTitle(location.pathname),
+    [location.pathname],
+  );
   const firstName = user?.first_name || "Student";
   const lastName = user?.last_name || "";
+  const fullName = `${firstName} ${lastName}`.trim();
   const initials = `${firstName[0] || "S"}${lastName[0] || ""}`.toUpperCase();
+
+  const handleLogout = () => {
+    setProfileOpen(false);
+    logout();
+    navigate(ROUTES.LOGIN);
+  };
 
   return (
     <div
       className="min-h-screen"
       style={{ backgroundColor: colors.surface[100] }}
     >
+      {/* Desktop sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 hidden border-r bg-white transition-all duration-200 md:flex md:flex-col ${
-          collapsed ? "w-[64px]" : "w-[240px]"
+        className={`fixed inset-y-0 left-0 z-40 hidden border-r transition-all duration-200 md:flex md:flex-col ${
+          collapsed ? "w-[64px]" : "w-[260px]"
         }`}
-        style={{ borderColor: colors.surface[200] }}
+        style={{
+          backgroundColor: colors.surface[50],
+          borderColor: colors.surface[200],
+        }}
       >
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}
-          className="absolute -right-3 top-16 z-50 flex h-5 w-5 items-center justify-center rounded-md border bg-white transition-colors duration-200 hover:bg-surface-100"
+          className="absolute -right-3 top-16 z-50 flex h-5 w-5 items-center justify-center rounded-md border transition-colors duration-200 hover:bg-surface-100"
           style={{
+            backgroundColor: colors.surface[50],
             borderColor: colors.surface[200],
             color: colors.text.secondary,
             boxShadow: `0 1px 3px ${colors.shadow}`,
           }}
           aria-label="Toggle sidebar"
         >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          <span
             style={{
+              display: "inline-flex",
               transform: collapsed ? "rotate(180deg)" : "rotate(0deg)",
               transition: "transform 200ms",
             }}
           >
-            <path d="m15 18-6-6 6-6" />
-          </svg>
+            <Icon type="collapse" size={12} />
+          </span>
         </button>
 
         <SidebarContent collapsed={collapsed} />
       </aside>
 
+      {/* Mobile sidebar */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <button
@@ -384,8 +517,9 @@ export default function DashboardLayout() {
           />
 
           <aside
-            className="absolute bottom-0 left-0 right-0 max-h-[84dvh] rounded-md border bg-white p-3"
+            className="absolute bottom-0 left-0 right-0 max-h-[84dvh] rounded-md border p-3"
             style={{
+              backgroundColor: colors.surface[50],
               borderColor: colors.surface[200],
               boxShadow: `0 1px 3px ${colors.shadow}`,
             }}
@@ -400,8 +534,9 @@ export default function DashboardLayout() {
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-md border bg-white"
+                className="flex h-8 w-8 items-center justify-center rounded-md border"
                 style={{
+                  backgroundColor: colors.surface[50],
                   borderColor: colors.surface[200],
                   color: colors.text.secondary,
                 }}
@@ -420,22 +555,28 @@ export default function DashboardLayout() {
         </div>
       )}
 
+      {/* Main content area */}
       <div
         className={`min-h-screen transition-all duration-200 ${
-          collapsed ? "md:ml-[64px]" : "md:ml-[240px]"
+          collapsed ? "md:ml-[64px]" : "md:ml-[260px]"
         }`}
       >
+        {/* Top header bar */}
         <header
-          className="sticky top-0 z-30 h-[52px] border-b bg-white/95 backdrop-blur-sm"
-          style={{ borderColor: colors.surface[200] }}
+          className="sticky top-0 z-30 h-[56px] border-b"
+          style={{
+            backgroundColor: colors.surface[50],
+            borderColor: colors.surface[200],
+          }}
         >
-          <div className="flex h-[52px] items-center justify-between gap-4 px-4 md:px-6">
-            <div className="flex items-center gap-3">
+          <div className="flex h-[56px] items-center justify-between gap-4 px-4 md:px-6">
+            <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
-                className="flex h-8 w-8 items-center justify-center rounded-md border bg-white md:hidden"
+                className="flex h-9 w-9 items-center justify-center rounded-md border md:hidden"
                 style={{
+                  backgroundColor: colors.surface[50],
                   borderColor: colors.surface[200],
                   color: colors.text.primary,
                 }}
@@ -444,21 +585,59 @@ export default function DashboardLayout() {
                 <Icon type="menu" />
               </button>
 
-              <div>
+              <div className="min-w-0">
                 <p
-                  className="text-[11px] font-bold uppercase tracking-[0.14em]"
+                  className="text-[10px] font-bold uppercase tracking-[0.14em]"
                   style={{ color: colors.text.muted }}
                 >
                   Student Console
                 </p>
+                <h1
+                  className="truncate text-[18px] font-bold tracking-[-0.03em]"
+                  style={{ color: colors.text.primary }}
+                >
+                  {title}
+                </h1>
               </div>
             </div>
 
+            {/* Search bar */}
+            <div className="hidden min-w-0 flex-1 justify-center md:flex">
+              <div
+                className="flex h-9 w-full max-w-[420px] items-center gap-2 rounded-md border px-3"
+                style={{
+                  backgroundColor: colors.surface[100],
+                  borderColor: colors.surface[200],
+                  color: colors.text.muted,
+                }}
+              >
+                <Icon type="search" size={15} />
+                <input
+                  type="search"
+                  placeholder="Search sessions, certificates, courses"
+                  className="h-full flex-1 bg-transparent text-[13px] outline-none placeholder:text-text-muted"
+                  style={{ color: colors.text.primary }}
+                />
+                <span
+                  className="rounded-md border px-1.5 py-0.5 text-[10px] font-semibold"
+                  style={{
+                    borderColor: colors.surface[200],
+                    color: colors.text.muted,
+                  }}
+                >
+                  ⌘K
+                </span>
+              </div>
+            </div>
+
+            {/* Right actions */}
             <div className="flex items-center gap-2">
+              {/* Notifications */}
               <button
                 type="button"
-                className="relative flex h-9 w-9 items-center justify-center rounded-md border bg-white transition-colors hover:bg-surface-100"
+                className="relative flex h-9 w-9 items-center justify-center rounded-md border transition-colors hover:bg-surface-100"
                 style={{
+                  backgroundColor: colors.surface[50],
                   borderColor: colors.surface[200],
                   color: colors.text.secondary,
                 }}
@@ -467,35 +646,111 @@ export default function DashboardLayout() {
                 <Icon type="bell" />
                 <span
                   className="absolute right-2 top-2 h-1.5 w-1.5 rounded-md"
-                  style={{ backgroundColor: colors.amber }}
+                  style={{ backgroundColor: colors.red }}
                 />
               </button>
 
+              {/* New Session CTA */}
               <Link
                 to={ROUTES.EDITOR_NEW}
-                className="hidden h-9 items-center gap-2 rounded-md px-3 text-[13px] font-semibold text-white transition md:inline-flex"
-                style={{ backgroundColor: colors.brand }}
+                className="hidden h-9 items-center gap-2 rounded-md px-3 text-[13px] font-semibold transition hover:opacity-90 md:inline-flex"
+                style={{
+                  backgroundColor: colors.brand,
+                  color: colors.text.light,
+                }}
               >
                 <Icon type="plus" />
                 New Session
               </Link>
 
-              <div
-                className="flex h-9 w-9 items-center justify-center rounded-md text-[12px] font-bold"
-                style={{
-                  backgroundColor: colors.brandSoft,
-                  color: colors.brand,
-                }}
-                title={`${firstName} ${lastName}`.trim()}
-              >
-                {initials}
+              {/* Profile dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setProfileOpen((value) => !value)}
+                  className="flex h-9 items-center gap-1.5 rounded-md border pl-1 pr-2 transition-colors hover:bg-surface-100"
+                  style={{
+                    backgroundColor: colors.surface[50],
+                    borderColor: colors.surface[200],
+                  }}
+                  aria-label="Account menu"
+                >
+                  <span
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-[12px] font-bold"
+                    style={{
+                      backgroundColor: colors.brandSoft,
+                      color: colors.brand,
+                    }}
+                  >
+                    {initials}
+                  </span>
+                  <span style={{ color: colors.text.muted }}>
+                    <Icon type="chevronDown" size={14} />
+                  </span>
+                </button>
+
+                {profileOpen && (
+                  <>
+                    <button
+                      type="button"
+                      className="fixed inset-0 z-30 cursor-default"
+                      onClick={() => setProfileOpen(false)}
+                      aria-label="Close menu"
+                    />
+                    <div
+                      className="absolute right-0 top-11 z-40 w-52 rounded-md border p-1"
+                      style={{
+                        backgroundColor: colors.surface[50],
+                        borderColor: colors.surface[200],
+                        boxShadow: `0 12px 32px ${colors.shadowStrong}`,
+                      }}
+                    >
+                      <div
+                        className="border-b px-3 py-2"
+                        style={{ borderColor: colors.surface[200] }}
+                      >
+                        <p
+                          className="truncate text-[13px] font-semibold"
+                          style={{ color: colors.text.primary }}
+                        >
+                          {fullName}
+                        </p>
+                        <p
+                          className="truncate text-[11px]"
+                          style={{ color: colors.text.muted }}
+                        >
+                          {user?.email || "student@typetrace.local"}
+                        </p>
+                      </div>
+                      <Link
+                        to={ROUTES.STUDENT_SETTINGS}
+                        onClick={() => setProfileOpen(false)}
+                        className="mt-1 flex h-9 items-center gap-2 rounded-md px-2 text-[13px] font-medium transition-colors hover:bg-surface-100"
+                        style={{ color: colors.text.secondary }}
+                      >
+                        <Icon type="settings" size={15} />
+                        Settings
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-[13px] font-medium transition-colors hover:bg-surface-100"
+                        style={{ color: colors.text.secondary }}
+                      >
+                        <Icon type="logout" size={15} />
+                        Sign out
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
         </header>
 
+        {/* Page content */}
         <main
-          className="min-h-[calc(100vh-52px)] p-6"
+          className="min-h-[calc(100vh-56px)] p-4 md:p-6"
           style={{ backgroundColor: colors.surface[100] }}
         >
           <Outlet />

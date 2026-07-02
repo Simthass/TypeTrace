@@ -1,24 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
-  AreaChart,
   Area,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-  ResponsiveContainer,
+  AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
-  XAxis,
+  Cell,
+  ComposedChart,
+  Line,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
   Tooltip,
+  XAxis,
+  YAxis,
 } from "recharts";
 
 import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/ToastProvider";
 import { brand, colors } from "../styles/colors";
-import { useAuthStore } from "../store/authStore";
 import { API_ROUTES } from "../constants/apiRoutes";
 import { ErrorState } from "../components/ui/AsyncState";
 
@@ -27,6 +29,9 @@ interface StudentSummary {
   avg_wpm: number;
   avg_confidence: number;
   total_seconds: number;
+  total_keystrokes?: number;
+  total_deletions?: number;
+  total_pauses?: number;
   certificate_count: number;
   human_sessions: number;
   suspicious_sessions: number;
@@ -47,6 +52,10 @@ interface StudentSession {
   wpm: number;
   duration_seconds: number;
   word_count: number;
+  total_keystrokes?: number;
+  deletions?: number;
+  pauses?: number;
+  avg_iki?: number;
   certificate_id?: string | null;
   course_name?: string | null;
   course_code?: string | null;
@@ -83,6 +92,7 @@ interface DashboardResponse {
 interface NormalizedTrendPoint {
   day: string;
   label: string;
+  weekday: string;
   session_count: number;
   avg_wpm: number;
   avg_confidence: number;
@@ -91,34 +101,186 @@ interface NormalizedTrendPoint {
   synthetic_sessions: number;
 }
 
+type PeriodDays = 7 | 14 | 30;
+type StatusTone = "human" | "warning" | "danger" | "neutral";
+type TooltipPayload = Array<{
+  name?: string;
+  value?: number | string;
+  color?: string;
+  payload?: Record<string, unknown>;
+}>;
+
+function withAlpha(hex: string, alpha: string) {
+  return `${hex}${alpha}`;
+}
+
+function pct(value: number, total: number): number {
+  if (!total) return 0;
+  return Math.round((value / total) * 100);
+}
+
+function clamp(value: number, min = 0, max = 100): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function formatNumber(value: number | undefined | null): string {
+  return new Intl.NumberFormat().format(Math.round(Number(value || 0)));
+}
+
+function formatDuration(seconds: number | undefined | null): string {
+  const total = Math.max(0, Math.round(Number(seconds || 0)));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${total}s`;
+}
+
+function formatDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value || "Unknown";
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatDayLabel(day: string): string {
+  const parsed = new Date(day);
+  if (Number.isNaN(parsed.getTime())) return day.slice(5);
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatWeekday(day: string): string {
+  const parsed = new Date(day);
+  if (Number.isNaN(parsed.getTime())) return day.slice(5);
+  return parsed.toLocaleDateString(undefined, { weekday: "short" });
+}
+
+function getTrendDelta(
+  points: NormalizedTrendPoint[],
+  key: keyof Pick<
+    NormalizedTrendPoint,
+    "session_count" | "avg_confidence" | "avg_wpm"
+  >,
+): number {
+  if (points.length < 2) return 0;
+
+  const midpoint = Math.max(1, Math.floor(points.length / 2));
+  const earlier = points.slice(0, midpoint);
+  const later = points.slice(midpoint);
+  const average = (items: NormalizedTrendPoint[]) =>
+    items.reduce((sum, item) => sum + Number(item[key] || 0), 0) /
+    Math.max(items.length, 1);
+
+  const previous = average(earlier);
+  const current = average(later);
+  if (!previous && current) return 100;
+  if (!previous) return 0;
+  return Math.round(((current - previous) / previous) * 1000) / 10;
+}
+
+function normalizeTrend(
+  points: TrendPoint[] = [],
+  days: PeriodDays = 14,
+): NormalizedTrendPoint[] {
+  const byDay = new Map(points.map((point) => [point.day, point]));
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (days - 1 - index));
+    const day = date.toISOString().slice(0, 10);
+    const match = byDay.get(day);
+
+    return {
+      day,
+      label: formatDayLabel(day),
+      weekday: formatWeekday(day),
+      session_count: match?.session_count ?? 0,
+      avg_wpm: match?.avg_wpm ?? 0,
+      avg_confidence: match?.avg_confidence ?? 0,
+      human_sessions: match?.human_count ?? 0,
+      suspicious_sessions: match?.suspicious_count ?? 0,
+      synthetic_sessions: match?.synthetic_count ?? 0,
+    };
+  });
+}
+
+function getToneStyles(tone: StatusTone) {
+  if (tone === "human") {
+    return {
+      background: brand.humanBg,
+      color: brand.humanText,
+      accent: brand.humanAccent,
+      border: withAlpha(colors.green, "33"),
+    };
+  }
+
+  if (tone === "warning") {
+    return {
+      background: brand.suspiciousBg,
+      color: brand.suspiciousText,
+      accent: brand.suspiciousAccent,
+      border: withAlpha(colors.amber, "33"),
+    };
+  }
+
+  if (tone === "danger") {
+    return {
+      background: brand.aiBg,
+      color: brand.aiText,
+      accent: brand.aiAccent,
+      border: withAlpha(colors.red, "33"),
+    };
+  }
+
+  return {
+    background: colors.surface[100],
+    color: colors.text.secondary,
+    accent: colors.text.muted,
+    border: colors.surface[200],
+  };
+}
+
+function classificationTone(bucket: string): StatusTone {
+  const normalized = String(bucket || "").toUpperCase();
+  if (normalized === "HUMAN") return "human";
+  if (normalized === "SUSPICIOUS") return "warning";
+  if (["SYNTHETIC", "AI", "AI-GENERATED"].includes(normalized)) return "danger";
+  return "neutral";
+}
+
+function reviewTone(status: string): StatusTone {
+  const normalized = String(status || "").toUpperCase();
+  if (normalized === "APPROVED") return "human";
+  if (normalized === "FLAGGED" || normalized === "REJECTED") return "danger";
+  if (normalized === "PENDING" || normalized === "REVIEW_REQUIRED")
+    return "warning";
+  return "neutral";
+}
+
 function Icon({ type, size = 16 }: { type: string; size?: number }) {
-  const paths: Record<string, React.ReactNode> = {
-    list: (
+  const paths: Record<string, ReactNode> = {
+    more: (
       <>
-        <path d="M8 6h13" />
-        <path d="M8 12h13" />
-        <path d="M8 18h13" />
-        <path d="M3 6h.01" />
-        <path d="M3 12h.01" />
-        <path d="M3 18h.01" />
+        <circle cx="12" cy="5" r="1" />
+        <circle cx="12" cy="12" r="1" />
+        <circle cx="12" cy="19" r="1" />
       </>
     ),
-    shield: (
+    calendar: (
       <>
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <path d="m9 12 2 2 4-4" />
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <path d="M16 2v4M8 2v4M3 10h18" />
       </>
     ),
-    award: (
+    arrowRight: (
       <>
-        <circle cx="12" cy="8" r="5" />
-        <path d="M8.5 12.5 7 22l5-3 5 3-1.5-9.5" />
-      </>
-    ),
-    clock: (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7v5l3 2" />
+        <path d="M5 12h14" />
+        <path d="m13 6 6 6-6 6" />
       </>
     ),
     plus: (
@@ -127,14 +289,55 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
         <path d="M5 12h14" />
       </>
     ),
-    arrowRight: <path d="M5 12h14m-6-6 6 6-6 6" />,
-    replay: (
+    certificate: (
       <>
-        <path d="M2 12a10 10 0 1 0 3-7.07" />
-        <path d="M2 4v6h6" />
+        <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+        <path d="M14 2v6h6" />
+        <path d="m9 15 2 2 4-5" />
       </>
     ),
-    check: <path d="m5 12 4 4L19 6" />,
+    keyboard: (
+      <>
+        <rect x="2" y="6" width="20" height="12" rx="2" />
+        <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h12" />
+      </>
+    ),
+    shield: (
+      <>
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <path d="m9 12 2 2 4-4" />
+      </>
+    ),
+    pulse: <path d="M3 12h4l2-7 4 14 2-7h6" />,
+    hash: (
+      <>
+        <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" />
+      </>
+    ),
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 3" />
+      </>
+    ),
+    search: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m21 21-4.3-4.3" />
+      </>
+    ),
+    chart: (
+      <>
+        <path d="M3 3v18h18" />
+        <path d="M7 15l4-4 3 3 5-7" />
+      </>
+    ),
+    document: (
+      <>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <path d="M14 2v6h6" />
+      </>
+    ),
   };
 
   return (
@@ -154,193 +357,18 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
   );
 }
 
-function formatSeconds(value: number): string {
-  const safe = Math.max(0, Math.round(value ?? 0));
-  const hours = Math.floor(safe / 3600);
-  const minutes = Math.floor((safe % 3600) / 60);
-
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
-}
-
-function pct(value: number, total: number): number {
-  if (!total) return 0;
-  return Math.round((value / total) * 100);
-}
-
-function clamp(value: number, min = 0, max = 100): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function formatDayLabel(day: string): string {
-  const parsed = new Date(day);
-  if (Number.isNaN(parsed.getTime())) return day.slice(5);
-  return parsed.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function replayRoute(sessionId: string | number): string {
-  return ROUTES.REPLAY.replace(":sessionId", String(sessionId));
-}
-
-function greetingLabel(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
-function getTrendDelta(
-  points: NormalizedTrendPoint[],
-  key: keyof Pick<
-    NormalizedTrendPoint,
-    "session_count" | "avg_confidence" | "avg_wpm"
-  >,
-): number {
-  if (points.length < 2) return 0;
-
-  const midpoint = Math.max(1, Math.floor(points.length / 2));
-  const earlier = points.slice(0, midpoint);
-  const later = points.slice(midpoint);
-
-  const average = (items: NormalizedTrendPoint[]) =>
-    items.reduce((sum, item) => sum + Number(item[key] || 0), 0) /
-    Math.max(items.length, 1);
-
-  const previous = average(earlier);
-  const current = average(later);
-
-  if (!previous && current) return 100;
-  if (!previous) return 0;
-
-  return Math.round(((current - previous) / previous) * 1000) / 10;
-}
-
-function normalizeTrend(points: TrendPoint[] = []): NormalizedTrendPoint[] {
-  const byDay = new Map(points.map((point) => [point.day, point]));
-
-  return Array.from({ length: 14 }, (_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (13 - index));
-    const day = date.toISOString().slice(0, 10);
-    const match = byDay.get(day);
-
-    return {
-      day,
-      label: formatDayLabel(day),
-      session_count: match?.session_count ?? 0,
-      avg_wpm: match?.avg_wpm ?? 0,
-      avg_confidence: match?.avg_confidence ?? 0,
-      human_sessions: match?.human_count ?? 0,
-      suspicious_sessions: match?.suspicious_count ?? 0,
-      synthetic_sessions: match?.synthetic_count ?? 0,
-    };
-  });
-}
-
-function classificationStyle(bucket: string) {
-  const normalized = String(bucket || "").toUpperCase();
-
-  if (normalized === "HUMAN") {
-    return {
-      bg: brand.humanBg,
-      text: brand.humanText,
-      color: colors.green,
-      label: "Human",
-    };
-  }
-
-  if (normalized === "SUSPICIOUS") {
-    return {
-      bg: brand.suspiciousBg,
-      text: brand.suspiciousText,
-      color: colors.amber,
-      label: "Suspicious",
-    };
-  }
-
-  return {
-    bg: brand.aiBg,
-    text: brand.aiText,
-    color: colors.red,
-    label: "High Risk",
-  };
-}
-
-function reviewStyle(status: string) {
-  const normalized = String(status || "").toUpperCase();
-
-  if (normalized === "APPROVED") {
-    return {
-      bg: brand.humanBg,
-      text: brand.humanText,
-      label: "Approved",
-    };
-  }
-
-  if (normalized === "FLAGGED") {
-    return {
-      bg: brand.aiBg,
-      text: brand.aiText,
-      label: "Flagged",
-    };
-  }
-
-  return {
-    bg: colors.surface[200],
-    text: colors.text.secondary,
-    label: "Pending",
-  };
-}
-
-function StatusBadge({
-  label,
-  background,
-  color,
-}: {
-  label: string;
-  background: string;
-  color: string;
-}) {
-  return (
-    <span
-      className="inline-flex rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
-      style={{ backgroundColor: background, color }}
-    >
-      {label}
-    </span>
-  );
-}
-
-function TrendBadge({ value }: { value: number }) {
-  const positive = value >= 0;
-
-  return (
-    <span
-      className="rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums"
-      style={{
-        backgroundColor: positive ? colors.mintTint : colors.roseTint,
-        color: positive ? brand.humanText : brand.aiText,
-      }}
-    >
-      {positive ? "↑" : "↓"} {Math.abs(value).toFixed(1)}%
-    </span>
-  );
-}
-
-function Card({
+function Panel({
   children,
   className = "",
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
   return (
     <section
-      className={`rounded-md border bg-white shadow-none ${className}`}
+      className={`rounded-md border ${className}`}
       style={{
+        background: colors.surface[50],
         borderColor: colors.surface[200],
         boxShadow: `0 1px 3px ${colors.shadow}`,
       }}
@@ -350,12 +378,137 @@ function Card({
   );
 }
 
-function SkeletonBlock({ className = "" }: { className?: string }) {
+function PanelHeader({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: ReactNode;
+}) {
   return (
-    <div
-      className={`animate-pulse rounded-md ${className}`}
-      style={{ backgroundColor: colors.surface[200] }}
-    />
+    <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h2
+          className="truncate text-[15px] font-bold tracking-[-0.03em]"
+          style={{ color: colors.text.primary }}
+        >
+          {title}
+        </h2>
+        {subtitle && (
+          <p className="mt-1 text-[11px]" style={{ color: colors.text.muted }}>
+            {subtitle}
+          </p>
+        )}
+      </div>
+      {action ?? (
+        <button
+          type="button"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border"
+          style={{
+            background: colors.surface[50],
+            borderColor: colors.surface[200],
+            color: colors.text.secondary,
+          }}
+          aria-label="More options"
+        >
+          <Icon type="more" size={15} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function StatusBadge({ label, tone }: { label: string; tone: StatusTone }) {
+  const toneStyle = getToneStyles(tone);
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em]"
+      style={{
+        background: toneStyle.background,
+        borderColor: toneStyle.border,
+        color: toneStyle.color,
+      }}
+    >
+      <span
+        className="h-1.5 w-1.5 rounded-md"
+        style={{ background: toneStyle.accent }}
+      />
+      {label}
+    </span>
+  );
+}
+
+function TrendPill({ value }: { value: number }) {
+  const positive = value >= 0;
+  const tone = positive ? getToneStyles("human") : getToneStyles("danger");
+
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+      style={{ background: tone.background, color: tone.color }}
+    >
+      {positive ? "↑" : "↓"} {Math.abs(value).toFixed(0)}%
+    </span>
+  );
+}
+
+function MetricCard({
+  title,
+  value,
+  meta,
+  trend,
+  icon,
+}: {
+  title: string;
+  value: string;
+  meta: string;
+  trend?: number;
+  icon: string;
+}) {
+  return (
+    <Panel className="min-h-[112px] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border"
+          style={{
+            background: colors.surface[100],
+            borderColor: colors.surface[200],
+            color: colors.brand,
+          }}
+        >
+          <Icon type={icon} size={16} />
+        </div>
+        <button
+          type="button"
+          className="flex h-7 w-7 items-center justify-center rounded-md"
+          style={{ color: colors.text.muted }}
+          aria-label="Metric options"
+        >
+          <Icon type="more" size={14} />
+        </button>
+      </div>
+
+      <p
+        className="mt-4 text-[12px] font-semibold"
+        style={{ color: colors.text.secondary }}
+      >
+        {title}
+      </p>
+      <div className="mt-1 flex items-end justify-between gap-2">
+        <p
+          className="text-[30px] font-bold leading-none tracking-[-0.05em] tabular-nums"
+          style={{ color: colors.text.primary }}
+        >
+          {value}
+        </p>
+        {typeof trend === "number" && <TrendPill value={trend} />}
+      </div>
+      <p className="mt-2 text-[11px]" style={{ color: colors.text.muted }}>
+        {meta}
+      </p>
+    </Panel>
   );
 }
 
@@ -365,29 +518,42 @@ function ChartTooltip({
   label,
 }: {
   active?: boolean;
-  payload?: Array<{ name?: string; value?: number; color?: string }>;
+  payload?: TooltipPayload;
   label?: string;
 }) {
   if (!active || !payload?.length) return null;
 
   return (
     <div
-      className="rounded-md px-3 py-2 text-[12px] shadow-lg"
+      className="rounded-md border px-3 py-2 text-[12px] shadow-lg"
       style={{
-        backgroundColor: colors.text.primary,
-        color: colors.text.light,
+        background: colors.surface[50],
+        borderColor: colors.surface[200],
+        color: colors.text.primary,
+        boxShadow: `0 12px 32px ${colors.shadowStrong}`,
       }}
     >
-      <p className="mb-1 font-semibold">{label}</p>
+      <p
+        className="mb-1 text-[10px] font-bold uppercase tracking-[0.12em]"
+        style={{ color: colors.text.muted }}
+      >
+        {label}
+      </p>
       <div className="space-y-1">
         {payload.map((item) => (
-          <div key={item.name} className="flex items-center gap-2">
+          <div
+            key={`${item.name}-${item.value}`}
+            className="flex items-center gap-2"
+          >
             <span
               className="h-2 w-2 rounded-md"
-              style={{ backgroundColor: item.color || colors.brand }}
+              style={{ background: item.color || colors.brand }}
             />
-            <span>{item.name}</span>
-            <span className="ml-2 font-semibold tabular-nums">
+            <span style={{ color: colors.text.secondary }}>{item.name}</span>
+            <span
+              className="ml-3 font-bold tabular-nums"
+              style={{ color: colors.text.primary }}
+            >
               {item.value ?? 0}
             </span>
           </div>
@@ -397,220 +563,130 @@ function ChartTooltip({
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  context,
-  trend,
-  icon,
-  loading,
-}: {
-  label: string;
-  value: string;
-  context: string;
-  trend: number;
-  icon: string;
-  loading?: boolean;
-}) {
-  return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-4">
-        <p
-          className="text-[11px] font-bold uppercase tracking-[0.14em]"
-          style={{ color: colors.text.muted }}
-        >
-          {label}
-        </p>
-        <div
-          className="flex h-7 w-7 items-center justify-center rounded-md"
-          style={{ backgroundColor: colors.brandSoft, color: colors.brand }}
-        >
-          <Icon type={icon} />
-        </div>
-      </div>
-
-      <div className="mt-5">
-        {loading ? (
-          <SkeletonBlock className="h-9 w-24" />
-        ) : (
-          <p
-            className="text-[32px] font-bold tracking-[-0.05em] tabular-nums"
-            style={{ color: colors.text.primary }}
-          >
-            {value}
-          </p>
-        )}
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-3">
-        {loading ? (
-          <SkeletonBlock className="h-5 w-16" />
-        ) : (
-          <TrendBadge value={trend} />
-        )}
-        <span
-          className="truncate text-[12px]"
-          style={{ color: colors.text.muted }}
-        >
-          {context}
-        </span>
-      </div>
-    </Card>
-  );
-}
-
 function DashboardLoadingShell() {
   return (
-    <>
-      <div
-        className="fixed left-0 right-0 top-0 z-50 h-0.5 animate-pulse"
-        style={{ backgroundColor: colors.brand }}
-      />
-
-      <div className="space-y-5">
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-          <div className="space-y-2">
-            <SkeletonBlock className="h-8 w-64" />
-            <SkeletonBlock className="h-4 w-80 max-w-full" />
-          </div>
-          <div className="flex gap-2">
-            <SkeletonBlock className="h-9 w-28" />
-            <SkeletonBlock className="h-9 w-32" />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[0, 1, 2, 3].map((item) => (
-            <MetricCard
-              key={item}
-              label="Loading"
-              value=""
-              context="Loading"
-              trend={0}
-              icon="list"
-              loading
-            />
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_340px]">
-          <div className="space-y-5">
-            <Card className="p-5">
-              <div className="mb-5 flex items-center justify-between">
-                <SkeletonBlock className="h-5 w-40" />
-                <SkeletonBlock className="h-7 w-28" />
-              </div>
-              <SkeletonBlock className="h-72 w-full" />
-            </Card>
-            <Card className="p-5">
-              <SkeletonBlock className="h-64 w-full" />
-            </Card>
-          </div>
-          <div className="space-y-5">
-            <Card className="p-5">
-              <SkeletonBlock className="h-72 w-full" />
-            </Card>
-            <Card className="p-5">
-              <SkeletonBlock className="h-40 w-full" />
-            </Card>
-          </div>
-        </div>
+    <div className="animate-pulse space-y-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {[1, 2, 3, 4].map((item) => (
+          <div
+            key={item}
+            className="h-28 rounded-md"
+            style={{ background: colors.surface[150] }}
+          />
+        ))}
       </div>
-    </>
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.85fr_0.9fr]">
+        <div
+          className="h-[360px] rounded-md"
+          style={{ background: colors.surface[150] }}
+        />
+        <div
+          className="h-[360px] rounded-md"
+          style={{ background: colors.surface[150] }}
+        />
+      </div>
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+        {[1, 2, 3].map((item) => (
+          <div
+            key={item}
+            className="h-[300px] rounded-md"
+            style={{ background: colors.surface[150] }}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
-function EmptyDashboard() {
+function EmptyPanel({ message }: { message: string }) {
   return (
-    <Card className="p-6">
-      <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <h2
-            className="text-[16px] font-semibold"
-            style={{ color: colors.text.primary }}
-          >
-            Start your first evidence session
-          </h2>
-          <p
-            className="mt-1 max-w-2xl text-[13px] leading-6"
-            style={{ color: colors.text.secondary }}
-          >
-            Create a writing session to begin collecting keystroke timing, paste
-            activity, revision behaviour, and certificate-ready authorship
-            evidence.
-          </p>
-        </div>
-
-        <Link
-          to={ROUTES.EDITOR_NEW}
-          className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-[13px] font-semibold text-white"
-          style={{ backgroundColor: colors.brand }}
-        >
-          <Icon type="plus" />
-          New Session
-        </Link>
-      </div>
-    </Card>
+    <div
+      className="flex h-full min-h-[120px] items-center justify-center rounded-md border border-dashed px-4 text-center text-[12px]"
+      style={{ borderColor: colors.surface[200], color: colors.text.muted }}
+    >
+      {message}
+    </div>
   );
 }
 
-function AuthorshipHealthCard({
+function EvidenceTrendPanel({
   trend,
-  summary,
+  periodDays,
+  setPeriodDays,
 }: {
   trend: NormalizedTrendPoint[];
-  summary: StudentSummary;
+  periodDays: PeriodDays;
+  setPeriodDays: (days: PeriodDays) => void;
 }) {
+  const series = [
+    {
+      label: "Human sessions",
+      shortLabel: "Human",
+      dataKey: "human_sessions",
+      color: colors.green,
+      total: trend.reduce((sum, point) => sum + point.human_sessions, 0),
+    },
+    {
+      label: "Suspicious sessions",
+      shortLabel: "Suspicious",
+      dataKey: "suspicious_sessions",
+      color: colors.amber,
+      total: trend.reduce((sum, point) => sum + point.suspicious_sessions, 0),
+    },
+    {
+      label: "AI-like sessions",
+      shortLabel: "AI-like",
+      dataKey: "synthetic_sessions",
+      color: colors.red,
+      total: trend.reduce((sum, point) => sum + point.synthetic_sessions, 0),
+    },
+  ];
+
   return (
-    <Card className="p-5">
-      <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-center">
-        <div>
-          <h2
-            className="text-[14px] font-semibold"
-            style={{ color: colors.text.primary }}
+    <Panel className="p-4 md:p-5">
+      <PanelHeader
+        title="Evidence classification trend"
+        subtitle="Daily session count by model outcome. One y-axis, one unit: sessions."
+        action={
+          <div
+            className="flex items-center gap-1 rounded-md border p-1"
+            style={{
+              background: colors.surface[100],
+              borderColor: colors.surface[200],
+            }}
           >
-            Authorship Health
-          </h2>
-          <p
-            className="mt-1 text-[12px]"
-            style={{ color: colors.text.secondary }}
-          >
-            Human, suspicious, and high-risk evidence distribution across recent
-            activity.
-          </p>
-        </div>
+            {([7, 14, 30] as PeriodDays[]).map((days) => {
+              const active = periodDays === days;
+              return (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setPeriodDays(days)}
+                  className="h-7 rounded-md px-2.5 text-[11px] font-bold transition"
+                  style={{
+                    background: active ? colors.surface[50] : "transparent",
+                    color: active ? colors.text.primary : colors.text.secondary,
+                    boxShadow: active ? `0 1px 2px ${colors.shadow}` : "none",
+                  }}
+                >
+                  {days}D
+                </button>
+              );
+            })}
+          </div>
+        }
+      />
 
-        <div
-          className="flex rounded-md border bg-white p-1"
-          style={{ borderColor: colors.surface[200] }}
-        >
-          {["7d", "14d", "30d"].map((period) => (
-            <button
-              key={period}
-              type="button"
-              className="h-7 rounded-md px-3 text-[11px] font-semibold transition-colors"
-              style={{
-                backgroundColor:
-                  period === "14d" ? colors.brandSoft : "transparent",
-                color: period === "14d" ? colors.brand : colors.text.secondary,
-              }}
-            >
-              {period}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="h-72">
+      <div className="h-[300px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
+          <ComposedChart
             data={trend}
-            margin={{ top: 10, right: 8, bottom: 0, left: 0 }}
+            margin={{ top: 12, right: 12, bottom: 0, left: -18 }}
           >
             <CartesianGrid
               vertical={false}
               stroke={colors.surface[200]}
-              strokeDasharray="0"
+              strokeDasharray="4 5"
             />
             <XAxis
               dataKey="label"
@@ -619,618 +695,712 @@ function AuthorshipHealthCard({
               tick={{ fill: colors.text.muted, fontSize: 11 }}
               dy={8}
             />
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              allowDecimals={false}
+              tick={{ fill: colors.text.muted, fontSize: 11 }}
+              width={34}
+            />
             <Tooltip
               content={<ChartTooltip />}
-              cursor={{ stroke: colors.surface[200] }}
+              cursor={{ stroke: colors.surface[300], strokeDasharray: "3 3" }}
             />
-            <Area
-              type="monotone"
-              dataKey="human_sessions"
-              name="Human"
-              stackId="1"
-              stroke={colors.green}
-              fill={colors.green}
-              fillOpacity={0.12}
-              strokeWidth={2}
-              isAnimationActive
-              animationDuration={600}
-            />
-            <Area
-              type="monotone"
-              dataKey="suspicious_sessions"
-              name="Suspicious"
-              stackId="1"
-              stroke={colors.amber}
-              fill={colors.amber}
-              fillOpacity={0.12}
-              strokeWidth={2}
-              isAnimationActive
-              animationDuration={600}
-            />
-            <Area
-              type="monotone"
-              dataKey="synthetic_sessions"
-              name="High Risk"
-              stackId="1"
-              stroke={colors.red}
-              fill={colors.red}
-              fillOpacity={0.12}
-              strokeWidth={2}
-              isAnimationActive
-              animationDuration={600}
-            />
-          </AreaChart>
+            {series.map((item, index) => (
+              <Line
+                key={item.dataKey}
+                type="monotone"
+                dataKey={item.dataKey}
+                name={item.label}
+                stroke={item.color}
+                strokeWidth={2.2}
+                strokeDasharray={
+                  index === 1 ? "5 4" : index === 2 ? "2 5" : undefined
+                }
+                dot={{ r: 2.5, strokeWidth: 2 }}
+                activeDot={{ r: 4 }}
+              />
+            ))}
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <LegendPill
-          color={colors.green}
-          label={`Human ${summary.human_sessions} sessions`}
-        />
-        <LegendPill
-          color={colors.amber}
-          label={`Suspicious ${summary.suspicious_sessions}`}
-        />
-        <LegendPill
-          color={colors.red}
-          label={`High Risk ${summary.synthetic_sessions}`}
-        />
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {series.map((item) => (
+          <div
+            key={item.dataKey}
+            className="rounded-md border px-3 py-2"
+            style={{
+              background: colors.surface[100],
+              borderColor: colors.surface[200],
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className="h-2 w-2 rounded-md"
+                style={{ background: item.color }}
+              />
+              <span
+                className="text-[11px] font-bold"
+                style={{ color: colors.text.primary }}
+              >
+                {item.shortLabel}
+              </span>
+            </div>
+            <p
+              className="mt-1 text-[11px]"
+              style={{ color: colors.text.muted }}
+            >
+              {formatNumber(item.total)} sessions in selected range
+            </p>
+          </div>
+        ))}
       </div>
-    </Card>
+    </Panel>
   );
 }
 
-function LegendPill({ color, label }: { color: string; label: string }) {
-  return (
-    <span
-      className="inline-flex items-center gap-2 rounded-md border bg-white px-2.5 py-1 text-[12px] font-medium"
-      style={{ borderColor: colors.surface[200], color: colors.text.secondary }}
-    >
-      <span className="h-2 w-2 rounded-md" style={{ backgroundColor: color }} />
-      {label}
-    </span>
-  );
-}
-
-function RecentSessionsTable({ sessions }: { sessions: StudentSession[] }) {
-  return (
-    <Card className="overflow-hidden p-5">
-      <div className="mb-2 flex items-center justify-between gap-4">
-        <h2
-          className="text-[14px] font-semibold"
-          style={{ color: colors.text.primary }}
-        >
-          Recent Sessions
-        </h2>
-        <Link
-          to={ROUTES.SESSIONS}
-          className="text-[12px] font-semibold"
-          style={{ color: colors.brand }}
-        >
-          View all →
-        </Link>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] border-collapse">
-          <thead>
-            <tr>
-              {[
-                "Document",
-                "Classification",
-                "Confidence",
-                "WPM",
-                "Review",
-                "Date",
-                "Action",
-              ].map((header) => (
-                <th
-                  key={header}
-                  className="border-b py-3 text-left text-[10px] font-bold uppercase tracking-[0.14em]"
-                  style={{
-                    borderColor: colors.surface[200],
-                    color: colors.text.muted,
-                  }}
-                >
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {sessions.slice(0, 5).map((session) => {
-              const classification = classificationStyle(
-                session.classification_bucket,
-              );
-              const review = reviewStyle(session.review_status);
-
-              return (
-                <tr
-                  key={session.id}
-                  className="h-14 border-b transition-colors hover:bg-surface-100"
-                  style={{ borderColor: colors.surface[200] }}
-                >
-                  <td className="py-3 pr-4">
-                    <p
-                      className="max-w-[240px] truncate text-[13px] font-semibold"
-                      style={{ color: colors.text.primary }}
-                    >
-                      {session.title}
-                    </p>
-                    <p
-                      className="mt-0.5 max-w-[240px] truncate text-[11px]"
-                      style={{ color: colors.text.muted }}
-                    >
-                      {session.course_name || "Personal workspace"}
-                    </p>
-                  </td>
-
-                  <td className="py-3 pr-4">
-                    <StatusBadge
-                      label={classification.label}
-                      background={classification.bg}
-                      color={classification.text}
-                    />
-                  </td>
-
-                  <td
-                    className="py-3 pr-4 font-mono text-[13px] tabular-nums"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {Math.round(session.confidence)}%
-                  </td>
-
-                  <td
-                    className="py-3 pr-4 text-[13px] font-semibold tabular-nums"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {session.wpm}
-                  </td>
-
-                  <td className="py-3 pr-4">
-                    <StatusBadge
-                      label={review.label}
-                      background={review.bg}
-                      color={review.text}
-                    />
-                  </td>
-
-                  <td
-                    className="py-3 pr-4 text-[12px] tabular-nums"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {session.created_at}
-                  </td>
-
-                  <td className="py-3">
-                    <Link
-                      to={replayRoute(session.id)}
-                      className="inline-flex h-7 items-center gap-1.5 rounded-md border bg-white px-2 text-[11px] font-semibold transition-colors hover:bg-surface-100"
-                      style={{
-                        borderColor: colors.surface[200],
-                        color: colors.text.secondary,
-                      }}
-                    >
-                      <Icon type="replay" size={13} />
-                      Replay
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
-
-            {!sessions.length && (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="py-10 text-center text-[13px]"
-                  style={{ color: colors.text.muted }}
-                >
-                  No sessions recorded yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-  );
-}
-
-function ClassificationBreakdownCard({ summary }: { summary: StudentSummary }) {
-  const chartData = [
-    { name: "Human", value: summary.human_sessions, color: colors.green },
+function ClassificationPanel({ summary }: { summary: StudentSummary }) {
+  const total = Math.max(summary.total_sessions, 1);
+  const pieData = [
+    {
+      name: "Human",
+      value: summary.human_sessions,
+      color: colors.green,
+      tone: "human" as const,
+    },
     {
       name: "Suspicious",
       value: summary.suspicious_sessions,
       color: colors.amber,
+      tone: "warning" as const,
     },
-    { name: "High Risk", value: summary.synthetic_sessions, color: colors.red },
+    {
+      name: "AI-like",
+      value: summary.synthetic_sessions,
+      color: colors.red,
+      tone: "danger" as const,
+    },
   ];
 
-  const safeData = summary.total_sessions
-    ? chartData
-    : chartData.map((item, index) => ({ ...item, value: index === 0 ? 1 : 0 }));
-
   return (
-    <Card className="p-5">
-      <h2
-        className="text-[14px] font-semibold"
-        style={{ color: colors.text.primary }}
-      >
-        Classification Breakdown
-      </h2>
+    <Panel className="p-4 md:p-5">
+      <PanelHeader
+        title="Authorship mix"
+        subtitle="Behavioral classification split"
+      />
 
-      <div className="relative mt-4 h-52">
+      <div className="relative mx-auto h-[190px] w-[190px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={safeData}
+              data={pieData}
               dataKey="value"
               nameKey="name"
-              innerRadius={52}
-              outerRadius={80}
-              paddingAngle={summary.total_sessions ? 3 : 0}
-              stroke="none"
-              isAnimationActive
-              animationDuration={600}
+              innerRadius={60}
+              outerRadius={88}
+              paddingAngle={3}
+              stroke={colors.surface[50]}
+              strokeWidth={4}
             >
-              {safeData.map((entry) => (
-                <Cell
-                  key={entry.name}
-                  fill={
-                    summary.total_sessions ? entry.color : colors.surface[200]
-                  }
-                />
+              {pieData.map((entry) => (
+                <Cell key={entry.name} fill={entry.color} />
               ))}
             </Pie>
+            <Tooltip content={<ChartTooltip />} />
           </PieChart>
         </ResponsiveContainer>
-
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <p
-            className="text-[28px] font-bold tabular-nums"
+          <span
+            className="text-[30px] font-bold leading-none tracking-[-0.05em] tabular-nums"
             style={{ color: colors.text.primary }}
           >
-            {summary.total_sessions}
-          </p>
-          <p className="text-[11px]" style={{ color: colors.text.muted }}>
-            Total sessions
-          </p>
+            {formatNumber(summary.total_sessions)}
+          </span>
+          <span
+            className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em]"
+            style={{ color: colors.text.muted }}
+          >
+            Sessions
+          </span>
         </div>
       </div>
 
-      <div className="mt-2 space-y-3">
-        {chartData.map((item) => (
-          <div key={item.name} className="flex items-center gap-2">
-            <span
-              className="h-2 w-2 rounded-md"
-              style={{ backgroundColor: item.color }}
-            />
-            <span
-              className="text-[13px] font-medium"
-              style={{ color: colors.text.secondary }}
-            >
-              {item.name}
-            </span>
-            <span
-              className="ml-auto text-[13px] font-bold tabular-nums"
-              style={{ color: colors.text.primary }}
-            >
-              {item.value}
-            </span>
-          </div>
-        ))}
+      <div className="mt-3 space-y-3">
+        {pieData.map((item) => {
+          const share = pct(item.value, total);
+          const toneStyle = getToneStyles(item.tone);
+          return (
+            <div key={item.name}>
+              <div className="mb-1 flex items-center justify-between text-[12px]">
+                <span
+                  className="flex items-center gap-2 font-semibold"
+                  style={{ color: colors.text.secondary }}
+                >
+                  <span
+                    className="h-2 w-2 rounded-md"
+                    style={{ background: item.color }}
+                  />
+                  {item.name}
+                </span>
+                <span
+                  className="font-bold tabular-nums"
+                  style={{ color: colors.text.primary }}
+                >
+                  {formatNumber(item.value)} · {share}%
+                </span>
+              </div>
+              <div
+                className="h-1.5 rounded-md"
+                style={{ background: colors.surface[150] }}
+              >
+                <div
+                  className="h-1.5 rounded-md"
+                  style={{
+                    width: `${clamp(share)}%`,
+                    background: toneStyle.accent,
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
-    </Card>
+    </Panel>
   );
 }
 
-function WritingVelocityCard({
-  trend,
-  avgWpm,
-  delta,
-}: {
-  trend: NormalizedTrendPoint[];
-  avgWpm: number;
-  delta: number;
-}) {
+function ReviewStatusPanel({ summary }: { summary: StudentSummary }) {
+  const total = Math.max(summary.total_sessions, 1);
+  const rows = [
+    {
+      label: "Approved",
+      value: summary.approved_count,
+      tone: "human" as const,
+    },
+    {
+      label: "Pending",
+      value: summary.pending_count,
+      tone: "warning" as const,
+    },
+    { label: "Flagged", value: summary.flagged_count, tone: "danger" as const },
+  ];
+
   return (
-    <Card className="p-5">
-      <p className="text-[13px]" style={{ color: colors.text.muted }}>
-        Avg WPM this period
-      </p>
-
-      <div className="mt-2 flex items-center justify-between gap-3">
-        <p
-          className="text-[28px] font-bold tracking-[-0.04em] tabular-nums"
-          style={{ color: colors.text.primary }}
-        >
-          {avgWpm.toFixed(1)}
-        </p>
-        <TrendBadge value={delta} />
+    <Panel className="p-4 md:p-5">
+      <PanelHeader title="Review outcomes" subtitle="Teacher decision status" />
+      <div className="space-y-4">
+        {rows.map((row) => {
+          const tone = getToneStyles(row.tone);
+          const share = pct(row.value, total);
+          return (
+            <div key={row.label}>
+              <div className="flex items-center justify-between text-[12px]">
+                <span
+                  className="font-semibold"
+                  style={{ color: colors.text.secondary }}
+                >
+                  {row.label}
+                </span>
+                <span
+                  className="font-bold tabular-nums"
+                  style={{ color: colors.text.primary }}
+                >
+                  {formatNumber(row.value)} · {share}%
+                </span>
+              </div>
+              <div
+                className="mt-2 h-2 rounded-md"
+                style={{ background: colors.surface[150] }}
+              >
+                <div
+                  className="h-2 rounded-md"
+                  style={{ width: `${clamp(share)}%`, background: tone.accent }}
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
+      <div
+        className="mt-5 rounded-md border p-3 text-[12px] leading-5"
+        style={{
+          background: colors.surface[100],
+          borderColor: colors.surface[200],
+          color: colors.text.secondary,
+        }}
+      >
+        Review status is based on certificates and sessions submitted to
+        courses.
+      </div>
+    </Panel>
+  );
+}
 
-      <div className="mt-4 h-20">
+function WeeklyBreakdownPanel({ data }: { data: NormalizedTrendPoint[] }) {
+  return (
+    <Panel className="p-4 md:p-5">
+      <PanelHeader
+        title="Seven-day signal breakdown"
+        subtitle="Human, suspicious, and AI-like sessions"
+      />
+      <div className="h-[230px]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={trend}
-            margin={{ top: 8, right: 0, bottom: 0, left: 0 }}
+          <BarChart
+            data={data}
+            margin={{ top: 8, right: 8, bottom: 0, left: -20 }}
           >
-            <Line
-              type="monotone"
-              dataKey="avg_wpm"
-              stroke={colors.brand}
-              strokeWidth={2}
-              dot={false}
-              isAnimationActive
-              animationDuration={600}
+            <CartesianGrid
+              vertical={false}
+              stroke={colors.surface[200]}
+              strokeDasharray="4 5"
             />
-          </LineChart>
+            <XAxis
+              dataKey="weekday"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: colors.text.muted, fontSize: 10 }}
+              dy={8}
+            />
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              allowDecimals={false}
+              tick={{ fill: colors.text.muted, fontSize: 10 }}
+              width={28}
+            />
+            <Tooltip
+              content={<ChartTooltip />}
+              cursor={{ fill: colors.surface[100] }}
+            />
+            <Bar
+              dataKey="human_sessions"
+              name="Human"
+              stackId="a"
+              fill={colors.green}
+              radius={[3, 3, 0, 0]}
+              barSize={18}
+            />
+            <Bar
+              dataKey="suspicious_sessions"
+              name="Suspicious"
+              stackId="a"
+              fill={colors.amber}
+              radius={[3, 3, 0, 0]}
+              barSize={18}
+            />
+            <Bar
+              dataKey="synthetic_sessions"
+              name="AI-like"
+              stackId="a"
+              fill={colors.red}
+              radius={[3, 3, 0, 0]}
+              barSize={18}
+            />
+          </BarChart>
         </ResponsiveContainer>
       </div>
-    </Card>
+    </Panel>
   );
 }
 
-function PendingActionsCard({ sessions }: { sessions: StudentSession[] }) {
-  const pendingSessions = sessions
-    .filter((session) => {
-      const status = String(session.review_status || "").toUpperCase();
-      return status === "PENDING" || status === "FLAGGED";
-    })
-    .slice(0, 3);
-
+function CourseDistributionPanel({
+  courses,
+  totalSessions,
+}: {
+  courses: CourseBreakdown[];
+  totalSessions: number;
+}) {
   return (
-    <Card className="p-5">
-      <div className="mb-1 flex items-center justify-between gap-3">
-        <h2
-          className="text-[14px] font-semibold"
-          style={{ color: colors.text.primary }}
-        >
-          Pending Actions
-        </h2>
-        <span
-          className="rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums"
-          style={{ backgroundColor: colors.brandSoft, color: colors.brand }}
-        >
-          {pendingSessions.length}
-        </span>
-      </div>
-
-      {pendingSessions.length ? (
-        <div className="mt-3">
-          {pendingSessions.map((session) => {
-            const review = reviewStyle(session.review_status);
-
+    <Panel className="p-4 md:p-5">
+      <PanelHeader
+        title="Course distribution"
+        subtitle="Where evidence is being submitted"
+      />
+      {courses.length ? (
+        <div className="space-y-4">
+          {courses.slice(0, 6).map((course, index) => {
+            const share = pct(course.session_count, Math.max(totalSessions, 1));
+            const accents = [
+              colors.brand,
+              colors.green,
+              colors.amber,
+              colors.red,
+              colors.steel,
+              colors.text.primary,
+            ];
+            const accent = accents[index % accents.length];
             return (
-              <div
-                key={session.id}
-                className="border-b py-3"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <div className="flex items-start justify-between gap-3">
+              <div key={`${course.course_code}-${course.course_name}`}>
+                <div className="mb-1.5 flex items-center justify-between gap-3 text-[12px]">
                   <div className="min-w-0">
                     <p
-                      className="truncate text-[13px] font-semibold"
+                      className="truncate font-bold"
                       style={{ color: colors.text.primary }}
                     >
-                      {session.title}
+                      {course.course_name || "Personal"}
                     </p>
-                    <div className="mt-1">
-                      <StatusBadge
-                        label={review.label}
-                        background={review.bg}
-                        color={review.text}
-                      />
-                    </div>
+                    <p
+                      className="mt-0.5 font-mono text-[10px]"
+                      style={{ color: colors.text.muted }}
+                    >
+                      {course.course_code || "PERSONAL"}
+                    </p>
                   </div>
-
-                  <Link
-                    to={replayRoute(session.id)}
-                    className="shrink-0 text-[12px] font-semibold"
-                    style={{ color: colors.brand }}
+                  <span
+                    className="font-bold tabular-nums"
+                    style={{ color: colors.text.primary }}
                   >
-                    View →
-                  </Link>
+                    {course.session_count} · {share}%
+                  </span>
+                </div>
+                <div
+                  className="h-2 rounded-md"
+                  style={{ background: colors.surface[150] }}
+                >
+                  <div
+                    className="h-2 rounded-md"
+                    style={{ width: `${clamp(share)}%`, background: accent }}
+                  />
                 </div>
               </div>
             );
           })}
         </div>
       ) : (
-        <p
-          className="py-6 text-center text-[13px]"
-          style={{ color: colors.text.muted }}
-        >
-          All caught up. No pending reviews.
-        </p>
+        <EmptyPanel message="No course-linked sessions yet. Join a course to see distribution." />
       )}
-    </Card>
+    </Panel>
   );
 }
 
-function GettingStartedCard({
-  totalSessions,
-  certificateCount,
-  courseCount,
-}: {
-  totalSessions: number;
-  certificateCount: number;
-  courseCount: number;
-}) {
-  const items = [
-    { label: "Create your first writing session", done: totalSessions > 0 },
-    { label: "Generate an evidence certificate", done: certificateCount > 0 },
-    { label: "Join or link a course workspace", done: courseCount > 0 },
-  ];
+function LatestSessionsPanel({ sessions }: { sessions: StudentSession[] }) {
+  return (
+    <Panel className="overflow-hidden p-4 md:p-5">
+      <PanelHeader
+        title="Latest evidence sessions"
+        subtitle="Recent writing records and certificate status"
+        action={
+          <Link
+            to={ROUTES.SESSIONS}
+            className="inline-flex h-8 items-center rounded-md border px-3 text-[12px] font-bold"
+            style={{
+              background: colors.surface[50],
+              borderColor: colors.surface[200],
+              color: colors.text.primary,
+            }}
+          >
+            View all
+          </Link>
+        }
+      />
 
-  const complete = items.filter((item) => item.done).length;
-  const progress = Math.round((complete / items.length) * 100);
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[740px] border-collapse text-left">
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${colors.surface[200]}` }}>
+              {[
+                "Document",
+                "Classification",
+                "Review",
+                "Confidence",
+                "Evidence",
+                "Date",
+              ].map((heading) => (
+                <th
+                  key={heading}
+                  className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.13em]"
+                  style={{ color: colors.text.muted }}
+                >
+                  {heading}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sessions.slice(0, 6).map((session) => {
+              const classification = classificationTone(
+                session.classification_bucket,
+              );
+              const review = reviewTone(session.review_status);
+              const confidence = clamp(Math.round(session.confidence));
+              return (
+                <tr
+                  key={session.id}
+                  className="transition"
+                  style={{ borderBottom: `1px solid ${colors.surface[150]}` }}
+                >
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border"
+                        style={{
+                          background: colors.surface[100],
+                          borderColor: colors.surface[200],
+                          color: colors.brand,
+                        }}
+                      >
+                        <Icon type="document" size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <Link
+                          to={ROUTES.REPLAY.replace(
+                            ":sessionId",
+                            String(session.id),
+                          )}
+                          className="block max-w-[220px] truncate text-[13px] font-bold"
+                          style={{ color: colors.text.primary }}
+                        >
+                          {session.title}
+                        </Link>
+                        <p
+                          className="mt-0.5 truncate text-[11px]"
+                          style={{ color: colors.text.muted }}
+                        >
+                          {session.course_name || "Personal session"}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <StatusBadge
+                      label={session.classification_bucket || "Unknown"}
+                      tone={classification}
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <StatusBadge
+                      label={session.review_status || "Pending"}
+                      tone={review}
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-10 font-mono text-[12px] font-bold tabular-nums"
+                        style={{ color: colors.text.primary }}
+                      >
+                        {confidence}%
+                      </span>
+                      <div
+                        className="h-1.5 w-16 rounded-md"
+                        style={{ background: colors.surface[150] }}
+                      >
+                        <div
+                          className="h-1.5 rounded-md"
+                          style={{
+                            width: `${confidence}%`,
+                            background: getToneStyles(classification).accent,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div
+                      className="flex items-center gap-2 text-[11px]"
+                      style={{ color: colors.text.secondary }}
+                    >
+                      <span>{formatNumber(session.word_count)} words</span>
+                      <span style={{ color: colors.surface[300] }}>•</span>
+                      <span>{formatDuration(session.duration_seconds)}</span>
+                    </div>
+                  </td>
+                  <td
+                    className="px-3 py-3 text-[11px] tabular-nums"
+                    style={{ color: colors.text.muted }}
+                  >
+                    {formatDate(session.created_at)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
 
-  if (totalSessions >= 3) return null;
+        {!sessions.length && (
+          <div className="py-10">
+            <EmptyPanel message="No sessions yet. Start a writing session to populate the dashboard." />
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+function RhythmPanel({ trend }: { trend: NormalizedTrendPoint[] }) {
+  const averageWpm =
+    trend.reduce((sum, point) => sum + Number(point.avg_wpm || 0), 0) /
+    Math.max(trend.length, 1);
 
   return (
-    <Card className="p-5">
-      <h2
-        className="text-[14px] font-semibold"
-        style={{ color: colors.text.primary }}
+    <Panel className="h-full p-4 md:p-5">
+      <PanelHeader
+        title="Typing speed trend"
+        subtitle="Average words per minute by day. Single unit: WPM."
+      />
+      <div
+        className="mb-3 flex items-center justify-between rounded-md border px-3 py-2"
+        style={{
+          background: colors.surface[100],
+          borderColor: colors.surface[200],
+        }}
       >
-        Getting Started
-      </h2>
+        <div className="flex items-center gap-2">
+          <span
+            className="h-2 w-2 rounded-md"
+            style={{ background: colors.amber }}
+          />
+          <span
+            className="text-[11px] font-bold"
+            style={{ color: colors.text.primary }}
+          >
+            Avg. WPM
+          </span>
+        </div>
+        <span
+          className="text-[11px] font-bold tabular-nums"
+          style={{ color: colors.text.secondary }}
+        >
+          {Math.round(averageWpm)} WPM average
+        </span>
+      </div>
+      <div className="h-[200px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart
+            data={trend}
+            margin={{ top: 8, right: 8, bottom: 0, left: -20 }}
+          >
+            <defs>
+              <linearGradient
+                id="typetraceRhythmArea"
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
+              >
+                <stop offset="0%" stopColor={colors.amber} stopOpacity={0.18} />
+                <stop
+                  offset="100%"
+                  stopColor={colors.amber}
+                  stopOpacity={0.02}
+                />
+              </linearGradient>
+            </defs>
+            <CartesianGrid
+              vertical={false}
+              stroke={colors.surface[200]}
+              strokeDasharray="4 5"
+            />
+            <XAxis
+              dataKey="weekday"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: colors.text.muted, fontSize: 10 }}
+              dy={8}
+            />
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: colors.text.muted, fontSize: 10 }}
+              width={28}
+            />
+            <Tooltip content={<ChartTooltip />} />
+            <Area
+              type="monotone"
+              dataKey="avg_wpm"
+              name="Average WPM"
+              stroke={colors.amber}
+              strokeWidth={2.2}
+              fill="url(#typetraceRhythmArea)"
+              activeDot={{ r: 4 }}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </Panel>
+  );
+}
 
-      <div className="mt-4 space-y-1">
-        {items.map((item) => (
-          <div key={item.label} className="flex h-10 items-center gap-3">
-            <span
-              className="flex h-5 w-5 items-center justify-center rounded-md border"
-              style={{
-                backgroundColor: item.done ? colors.green : colors.surface[50],
-                borderColor: item.done ? colors.green : colors.surface[300],
-                color: colors.text.light,
-              }}
+function IntegrityPanel({ summary }: { summary: StudentSummary }) {
+  const totalKeystrokes = summary.total_keystrokes ?? 0;
+  const totalDeletions = summary.total_deletions ?? 0;
+  const totalPauses = summary.total_pauses ?? 0;
+  const certificateRate = pct(
+    summary.certificate_count,
+    Math.max(summary.total_sessions, 1),
+  );
+
+  const rows = [
+    {
+      label: "Keystrokes",
+      value: formatNumber(totalKeystrokes),
+      icon: "keyboard",
+    },
+    { label: "Pauses", value: formatNumber(totalPauses), icon: "clock" },
+    { label: "Deletions", value: formatNumber(totalDeletions), icon: "pulse" },
+    {
+      label: "Certificate rate",
+      value: `${certificateRate}%`,
+      icon: "certificate",
+    },
+  ];
+
+  return (
+    <Panel className="h-full p-4 md:p-5">
+      <PanelHeader
+        title="Evidence ledger"
+        subtitle="Process data captured across sessions"
+      />
+      <div className="grid grid-cols-2 gap-3">
+        {rows.map((row) => (
+          <div
+            key={row.label}
+            className="rounded-md border p-3"
+            style={{
+              background: colors.surface[100],
+              borderColor: colors.surface[200],
+            }}
+          >
+            <div
+              className="flex items-center gap-2"
+              style={{ color: colors.brand }}
             >
-              {item.done && <Icon type="check" size={13} />}
-            </span>
-            <span
-              className={`text-[13px] ${item.done ? "line-through" : ""}`}
-              style={{
-                color: item.done ? colors.text.muted : colors.text.primary,
-              }}
+              <Icon type={row.icon} size={15} />
+              <p
+                className="text-[11px] font-semibold"
+                style={{ color: colors.text.secondary }}
+              >
+                {row.label}
+              </p>
+            </div>
+            <p
+              className="mt-3 text-[20px] font-bold tracking-[-0.04em] tabular-nums"
+              style={{ color: colors.text.primary }}
             >
-              {item.label}
-            </span>
+              {row.value}
+            </p>
           </div>
         ))}
       </div>
-
-      <div
-        className="mt-4 h-1 rounded-md"
-        style={{ backgroundColor: colors.surface[200] }}
-      >
-        <div
-          className="h-1 rounded-md transition-all duration-500"
-          style={{ width: `${progress}%`, backgroundColor: colors.brand }}
-        />
-      </div>
-    </Card>
-  );
-}
-
-function CourseBreakdownSection({ courses }: { courses: CourseBreakdown[] }) {
-  return (
-    <section>
-      <div className="mb-3 flex items-center justify-between gap-4">
-        <h2
-          className="text-[14px] font-semibold"
-          style={{ color: colors.text.primary }}
-        >
-          Course Breakdown
-        </h2>
-        <Link
-          to={ROUTES.JOIN_COURSE}
-          className="text-[12px] font-semibold"
-          style={{ color: colors.brand }}
-        >
-          Join course →
-        </Link>
-      </div>
-
-      {courses.length ? (
-        <div className="flex gap-4 overflow-x-auto pb-1">
-          {courses.map((course) => {
-            const humanRatio = pct(course.human_count, course.session_count);
-
-            return (
-              <Card
-                key={`${course.course_name}-${course.course_code}`}
-                className="min-w-[220px] p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3
-                      className="truncate text-[13px] font-semibold"
-                      style={{ color: colors.text.primary }}
-                    >
-                      {course.course_name}
-                    </h3>
-                    <p
-                      className="mt-1 truncate font-mono text-[11px]"
-                      style={{ color: colors.text.muted }}
-                    >
-                      {course.course_code || "PERSONAL"}
-                    </p>
-                  </div>
-
-                  <span
-                    className="rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums"
-                    style={{
-                      backgroundColor: colors.mintTint,
-                      color: brand.humanText,
-                    }}
-                  >
-                    {humanRatio}%
-                  </span>
-                </div>
-
-                <div
-                  className="mt-4 h-1.5 rounded-md"
-                  style={{ backgroundColor: colors.surface[200] }}
-                >
-                  <div
-                    className="h-1.5 rounded-md"
-                    style={{
-                      width: `${clamp(humanRatio)}%`,
-                      backgroundColor: colors.green,
-                    }}
-                  />
-                </div>
-
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  <p
-                    className="text-[12px] tabular-nums"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {course.session_count} sessions
-                  </p>
-                  <p
-                    className="text-[12px] font-semibold tabular-nums"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {course.avg_wpm} WPM
-                  </p>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      ) : (
-        <Card className="p-5">
-          <p className="text-[13px]" style={{ color: colors.text.muted }}>
-            No course-linked sessions yet. Personal sessions will appear here
-            after analysis.
-          </p>
-        </Card>
-      )}
-    </section>
+    </Panel>
   );
 }
 
 export default function DashboardPage() {
   const { showToast } = useToast();
-  const { user } = useAuthStore();
-
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [periodDays, setPeriodDays] = useState<PeriodDays>(14);
 
   useEffect(() => {
     let mounted = true;
+
     async function load() {
       setIsLoading(true);
       setApiError(null);
+
       try {
         const res = await api.get<DashboardResponse>(
           API_ROUTES.student.dashboard,
@@ -1250,6 +1420,7 @@ export default function DashboardPage() {
         if (mounted) setIsLoading(false);
       }
     }
+
     load();
     return () => {
       mounted = false;
@@ -1257,47 +1428,38 @@ export default function DashboardPage() {
   }, [showToast]);
 
   const summary = data?.summary;
-
-  const trend = useMemo(() => normalizeTrend(data?.trend ?? []), [data?.trend]);
+  const trend = useMemo(
+    () => normalizeTrend(data?.trend ?? [], periodDays),
+    [data?.trend, periodDays],
+  );
+  const weekTrend = useMemo(
+    () => normalizeTrend(data?.trend ?? [], 7),
+    [data?.trend],
+  );
 
   const sessionDelta = useMemo(
     () => getTrendDelta(trend, "session_count"),
     [trend],
   );
-
   const confidenceDelta = useMemo(
     () => getTrendDelta(trend, "avg_confidence"),
     [trend],
   );
-
   const wpmDelta = useMemo(() => getTrendDelta(trend, "avg_wpm"), [trend]);
-
-  const certificateRatio = useMemo(
-    () =>
-      summary
-        ? pct(summary.certificate_count, Math.max(summary.total_sessions, 1))
-        : 0,
-    [summary],
-  );
-
-  const totalHumanRate = useMemo(
-    () => (summary ? pct(summary.human_sessions, summary.total_sessions) : 0),
-    [summary],
-  );
 
   if (isLoading) return <DashboardLoadingShell />;
 
-  if (apiError) {
+  if (apiError || !data || !summary) {
     return (
       <ErrorState
-        title="Could not load dashboard"
-        message={apiError}
+        title="Dashboard unavailable"
+        message={apiError || "Could not load workspace data."}
         action={
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="rounded-md px-4 py-2.5 text-[13px] font-bold text-white"
-            style={{ backgroundColor: colors.brand }}
+            className="rounded-md px-4 py-2.5 text-[13px] font-bold"
+            style={{ background: colors.brand, color: colors.text.light }}
           >
             Retry
           </button>
@@ -1306,124 +1468,115 @@ export default function DashboardPage() {
     );
   }
 
-  if (!data || !summary) {
-    return (
-      <ErrorState
-        title="Dashboard unavailable"
-        message="Could not load your workspace data. Try refreshing the page."
-        action={
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="rounded-md px-4 py-2.5 text-[13px] font-bold text-white"
-            style={{ backgroundColor: colors.brand }}
-          >
-            Reload
-          </button>
-        }
-      />
-    );
-  }
-
-  const firstName = user?.first_name || "Student";
-  const hasNoActivity = summary.total_sessions === 0;
+  const certificateRate = pct(
+    summary.certificate_count,
+    Math.max(summary.total_sessions, 1),
+  );
+  const reviewBacklog = summary.pending_count + summary.flagged_count;
 
   return (
-    <div className="space-y-5">
-      <section className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-        <div>
-          <h1
-            className="text-[28px] font-bold tracking-[-0.04em]"
-            style={{ color: colors.text.primary }}
-          >
-            {greetingLabel()}, {firstName}.
-          </h1>
-          <p
-            className="mt-1 text-[13px]"
-            style={{ color: colors.text.secondary }}
-          >
-            Here's what's happening with your authorship evidence today.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link
-            to={ROUTES.EDITOR_NEW}
-            className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-[13px] font-semibold text-white"
-            style={{ backgroundColor: colors.brand }}
-          >
-            <Icon type="plus" />
-            New Session
-          </Link>
-          <Link
-            to={ROUTES.SESSIONS}
-            className="inline-flex h-9 items-center gap-2 rounded-md border bg-white px-3 text-[13px] font-semibold transition-colors hover:bg-surface-100"
-            style={{
-              borderColor: colors.surface[200],
-              color: colors.text.primary,
-            }}
-          >
-            View All Sessions
-          </Link>
-        </div>
-      </section>
-
-      {hasNoActivity && <EmptyDashboard />}
-
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="space-y-3 pb-6">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Total Sessions"
-          value={String(summary.total_sessions)}
-          context="vs last 30 days"
+          title="Total sessions"
+          value={formatNumber(summary.total_sessions)}
+          meta="Writing records captured"
           trend={sessionDelta}
-          icon="list"
+          icon="keyboard"
         />
         <MetricCard
-          label="Avg Confidence"
+          title="Certificates issued"
+          value={formatNumber(summary.certificate_count)}
+          meta={`${certificateRate}% of sessions sealed`}
+          trend={certificateRate}
+          icon="certificate"
+        />
+        <MetricCard
+          title="Avg. confidence"
           value={`${Math.round(summary.avg_confidence)}%`}
-          context={`${totalHumanRate}% human evidence`}
+          meta="Behavioral model confidence"
           trend={confidenceDelta}
           icon="shield"
         />
         <MetricCard
-          label="Certificates Issued"
-          value={String(summary.certificate_count)}
-          context={`${certificateRatio}% of sessions`}
-          trend={certificateRatio}
-          icon="award"
+          title="Avg. typing speed"
+          value={`${Math.round(summary.avg_wpm)}`}
+          meta="Words per minute"
+          trend={wpmDelta}
+          icon="pulse"
         />
-        <MetricCard
-          label="Total Writing Time"
-          value={formatSeconds(summary.total_seconds)}
-          context="captured evidence"
-          trend={sessionDelta}
-          icon="clock"
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.85fr_0.9fr]">
+        <EvidenceTrendPanel
+          trend={trend}
+          periodDays={periodDays}
+          setPeriodDays={setPeriodDays}
         />
-      </section>
+        <ClassificationPanel summary={summary} />
+      </div>
 
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_340px]">
-        <div className="space-y-5">
-          <AuthorshipHealthCard trend={trend} summary={summary} />
-          <RecentSessionsTable sessions={data.recent_sessions} />
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.05fr_1fr_0.95fr]">
+        <WeeklyBreakdownPanel data={weekTrend} />
+        <CourseDistributionPanel
+          courses={data.courses ?? []}
+          totalSessions={summary.total_sessions}
+        />
+        <ReviewStatusPanel summary={summary} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.45fr_0.9fr]">
+        <RhythmPanel trend={weekTrend} />
+        <IntegrityPanel summary={summary} />
+      </div>
+
+      <LatestSessionsPanel sessions={data.recent_sessions ?? []} />
+
+      <div
+        className="flex flex-col justify-between gap-3 rounded-md border p-4 md:flex-row md:items-center"
+        style={{
+          background: colors.text.primary,
+          borderColor: colors.text.primary,
+          boxShadow: `0 14px 32px ${colors.shadowStrong}`,
+        }}
+      >
+        <div>
+          <p
+            className="text-[11px] font-bold uppercase tracking-[0.14em]"
+            style={{ color: colors.surface[300] }}
+          >
+            Evidence workspace
+          </p>
+          <h2
+            className="mt-1 text-[18px] font-bold tracking-[-0.04em]"
+            style={{ color: colors.text.light }}
+          >
+            {reviewBacklog > 0
+              ? `${reviewBacklog} sessions still need review context.`
+              : "Your current evidence queue is clean."}
+          </h2>
         </div>
-
-        <div className="space-y-5">
-          <ClassificationBreakdownCard summary={summary} />
-          <WritingVelocityCard
-            trend={trend}
-            avgWpm={summary.avg_wpm}
-            delta={wpmDelta}
-          />
-          <PendingActionsCard sessions={data.recent_sessions} />
-          <GettingStartedCard
-            totalSessions={summary.total_sessions}
-            certificateCount={summary.certificate_count}
-            courseCount={data.courses.length}
-          />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Link
+            to={ROUTES.EDITOR_NEW}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-[13px] font-bold"
+            style={{ background: colors.text.light, color: colors.brand }}
+          >
+            New writing session
+            <Icon type="arrowRight" size={14} />
+          </Link>
+          <Link
+            to={ROUTES.CERTIFICATES}
+            className="inline-flex h-10 items-center justify-center rounded-md border px-4 text-[13px] font-bold"
+            style={{
+              borderColor: withAlpha(colors.text.light, "33"),
+              color: colors.text.light,
+            }}
+          >
+            View certificates
+          </Link>
         </div>
-      </section>
-
-      <CourseBreakdownSection courses={data.courses} />
+      </div>
     </div>
   );
 }
