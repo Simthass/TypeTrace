@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
-import { Tabs } from "../components/ui/Tabs";
 import { ErrorState } from "../components/ui/AsyncState";
 import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
@@ -33,13 +32,42 @@ interface SessionsResponse {
   sessions: SessionItem[];
 }
 
-const PAGE_SIZE = 20;
+type ClassificationFilter = "ALL" | "HUMAN" | "SUSPICIOUS" | "SYNTHETIC";
+type ReviewFilter = "ALL" | "PENDING" | "APPROVED" | "FLAGGED";
+type SortValue =
+  | "newest"
+  | "oldest"
+  | "confidence-desc"
+  | "confidence-asc"
+  | "wpm-desc"
+  | "duration-desc";
 
-const filters = [
-  { value: "ALL", label: "All" },
+const PAGE_SIZE = 16;
+
+const classificationFilters: Array<{
+  value: ClassificationFilter;
+  label: string;
+}> = [
+  { value: "ALL", label: "All evidence" },
   { value: "HUMAN", label: "Human" },
-  { value: "SUSPICIOUS", label: "Review" },
-  { value: "SYNTHETIC", label: "High Risk" },
+  { value: "SUSPICIOUS", label: "Needs review" },
+  { value: "SYNTHETIC", label: "High risk" },
+];
+
+const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
+  { value: "ALL", label: "All review states" },
+  { value: "PENDING", label: "Pending" },
+  { value: "APPROVED", label: "Approved" },
+  { value: "FLAGGED", label: "Flagged" },
+];
+
+const sortOptions: Array<{ value: SortValue; label: string }> = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "confidence-desc", label: "Confidence high to low" },
+  { value: "confidence-asc", label: "Confidence low to high" },
+  { value: "wpm-desc", label: "Typing speed high to low" },
+  { value: "duration-desc", label: "Longest sessions" },
 ];
 
 function Icon({ type, size = 16 }: { type: string; size?: number }) {
@@ -72,10 +100,11 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
         <path d="M8.5 12.5 7 22l5-3 5 3-1.5-9.5" />
       </>
     ),
-    clock: (
+    certificate: (
       <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7v5l3 2" />
+        <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+        <path d="M14 2v6h6" />
+        <path d="m9 15 2 2 4-5" />
       </>
     ),
     search: (
@@ -111,6 +140,26 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
         <path d="M9 15h6" />
       </>
     ),
+    rows: (
+      <>
+        <rect x="3" y="4" width="18" height="4" rx="1" />
+        <rect x="3" y="10" width="18" height="4" rx="1" />
+        <rect x="3" y="16" width="18" height="4" rx="1" />
+      </>
+    ),
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </>
+    ),
+    filter: (
+      <>
+        <path d="M4 5h16" />
+        <path d="M7 12h10" />
+        <path d="M10 19h4" />
+      </>
+    ),
   };
 
   return (
@@ -130,28 +179,47 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
   );
 }
 
-function getBucket(session: SessionItem): string {
-  return String(
-    session.classification_bucket || session.classification || "UNKNOWN",
-  ).toUpperCase();
+function cardShadow() {
+  return `0 1px 3px ${colors.shadow}`;
 }
 
-function isHighRisk(value: string): boolean {
-  return ["SYNTHETIC", "AI", "AI-GENERATED", "HIGH_RISK", "HIGH RISK"].includes(
-    String(value || "").toUpperCase(),
+function panelStyle() {
+  return {
+    background: colors.surface[50],
+    borderColor: colors.surface[200],
+    boxShadow: cardShadow(),
+  };
+}
+
+function pct(value: number, total: number): number {
+  if (!total) return 0;
+  return Math.round((value / total) * 100);
+}
+
+function safeAverage(values: number[]): number {
+  if (!values.length) return 0;
+  return (
+    values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length
   );
 }
 
-function filterCount(sessions: SessionItem[], filter: string) {
-  if (filter === "ALL") return sessions.length;
+function normalizePercent(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+}
 
-  return sessions.filter((session) => {
-    const bucket = getBucket(session);
+function parseTime(value: string): number {
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
 
-    if (filter === "SYNTHETIC") return isHighRisk(bucket);
-
-    return bucket === filter;
-  }).length;
+function formatShortDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value || "Unknown";
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function formatDuration(seconds: number): string {
@@ -168,12 +236,50 @@ function formatDuration(seconds: number): string {
   return `${minutes}m ${rest}s`;
 }
 
-function normalizePercent(value: number): number {
-  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+function formatCompactDuration(seconds: number): string {
+  const safe = Math.max(0, Math.round(Number(seconds) || 0));
+  const minutes = Math.round(safe / 60);
+  if (minutes >= 60) return `${Math.round(minutes / 60)}h`;
+  return `${minutes}m`;
 }
 
-function cardShadow() {
-  return `0 1px 3px ${colors.shadow}`;
+function getBucket(session: SessionItem): string {
+  return String(
+    session.classification_bucket || session.classification || "UNKNOWN",
+  ).toUpperCase();
+}
+
+function isHighRisk(value: string): boolean {
+  return ["SYNTHETIC", "AI", "AI-GENERATED", "HIGH_RISK", "HIGH RISK"].includes(
+    String(value || "").toUpperCase(),
+  );
+}
+
+function normalizeClassification(
+  value: string,
+): ClassificationFilter | "UNKNOWN" {
+  const bucket = String(value || "UNKNOWN").toUpperCase();
+  if (bucket === "HUMAN") return "HUMAN";
+  if (bucket === "SUSPICIOUS") return "SUSPICIOUS";
+  if (isHighRisk(bucket)) return "SYNTHETIC";
+  return "UNKNOWN";
+}
+
+function normalizeReviewStatus(value?: string): ReviewFilter | "UNKNOWN" {
+  const normalized = String(value || "PENDING").toUpperCase();
+  if (normalized === "APPROVED") return "APPROVED";
+  if (normalized === "FLAGGED") return "FLAGGED";
+  if (normalized === "PENDING" || normalized === "REVIEW_REQUIRED") {
+    return "PENDING";
+  }
+  return "UNKNOWN";
+}
+
+function filterCount(sessions: SessionItem[], filter: ClassificationFilter) {
+  if (filter === "ALL") return sessions.length;
+  return sessions.filter(
+    (session) => normalizeClassification(getBucket(session)) === filter,
+  ).length;
 }
 
 function statusStyle(value?: string) {
@@ -195,13 +301,14 @@ function statusStyle(value?: string) {
   if (
     normalized === "SUSPICIOUS" ||
     normalized === "PENDING" ||
-    normalized === "MEDIUM"
+    normalized === "MEDIUM" ||
+    normalized === "REVIEW_REQUIRED"
   ) {
     return {
       background: colors.amberTint,
       color: brand.suspiciousText,
       borderColor: colors.amberTint,
-      label: normalized === "SUSPICIOUS" ? "Review" : normalized,
+      label: normalized === "SUSPICIOUS" ? "Needs review" : normalized,
     };
   }
 
@@ -214,7 +321,7 @@ function statusStyle(value?: string) {
       background: colors.roseTint,
       color: brand.aiText,
       borderColor: colors.roseTint,
-      label: isHighRisk(normalized) ? "High Risk" : normalized,
+      label: isHighRisk(normalized) ? "High risk" : normalized,
     };
   }
 
@@ -243,6 +350,174 @@ function StatusBadge({ value }: { value?: string }) {
   );
 }
 
+function SectionHeader({
+  eyebrow,
+  title,
+  description,
+  action,
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        {eyebrow && (
+          <p
+            className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: colors.text.muted }}
+          >
+            {eyebrow}
+          </p>
+        )}
+        <h2
+          className="text-[15px] font-bold tracking-[-0.02em]"
+          style={{ color: colors.text.primary }}
+        >
+          {title}
+        </h2>
+        {description && (
+          <p
+            className="mt-0.5 text-[12px] leading-5"
+            style={{ color: colors.text.secondary }}
+          >
+            {description}
+          </p>
+        )}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  helper,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  helper: string;
+  icon: string;
+}) {
+  return (
+    <section className="rounded-md border p-4" style={panelStyle()}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p
+            className="text-[12px] font-semibold"
+            style={{ color: colors.text.secondary }}
+          >
+            {label}
+          </p>
+          <p
+            className="mt-4 text-[30px] font-bold leading-none tracking-[-0.05em] tabular-nums"
+            style={{ color: colors.text.primary }}
+          >
+            {value}
+          </p>
+        </div>
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border"
+          style={{
+            background: colors.surface[100],
+            borderColor: colors.surface[200],
+            color: colors.text.secondary,
+          }}
+        >
+          <Icon type={icon} size={16} />
+        </div>
+      </div>
+      <p
+        className="mt-3 text-[12px] leading-5"
+        style={{ color: colors.text.muted }}
+      >
+        {helper}
+      </p>
+    </section>
+  );
+}
+
+function SummaryPanel({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-md border p-4" style={panelStyle()}>
+      <SectionHeader
+        eyebrow={eyebrow}
+        title={title}
+        description={description}
+      />
+      <div className="mt-4 space-y-2">{children}</div>
+    </section>
+  );
+}
+
+function DataRow({
+  label,
+  value,
+  helper,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string | number;
+  helper?: string;
+  tone?: "neutral" | "good" | "warning" | "danger";
+}) {
+  const toneColor =
+    tone === "good"
+      ? brand.humanText
+      : tone === "warning"
+        ? brand.suspiciousText
+        : tone === "danger"
+          ? brand.aiText
+          : colors.text.primary;
+
+  return (
+    <div
+      className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5"
+      style={{
+        background: colors.surface[100],
+        borderColor: colors.surface[200],
+      }}
+    >
+      <div className="min-w-0">
+        <p
+          className="text-[12px] font-semibold"
+          style={{ color: colors.text.primary }}
+        >
+          {label}
+        </p>
+        {helper && (
+          <p
+            className="mt-0.5 text-[11px]"
+            style={{ color: colors.text.muted }}
+          >
+            {helper}
+          </p>
+        )}
+      </div>
+      <p
+        className="shrink-0 font-mono text-[13px] font-bold tabular-nums"
+        style={{ color: toneColor }}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function EmptyTable({
   title,
   subtitle,
@@ -258,7 +533,7 @@ function EmptyTable({
         className="flex h-10 w-10 items-center justify-center rounded-md"
         style={{ background: colors.brandSoft, color: colors.brand }}
       >
-        <Icon type="empty" size={28} />
+        <Icon type="empty" size={24} />
       </div>
       <p
         className="mt-4 text-[15px] font-semibold"
@@ -267,7 +542,7 @@ function EmptyTable({
         {title}
       </p>
       <p
-        className="mt-1 max-w-md text-[13px]"
+        className="mt-1 max-w-md text-[13px] leading-6"
         style={{ color: colors.text.secondary }}
       >
         {subtitle}
@@ -277,52 +552,9 @@ function EmptyTable({
   );
 }
 
-function MetricTile({
-  label,
-  value,
-  trend,
-  icon,
-}: {
-  label: string;
-  value: string | number;
-  trend: string;
-  icon: string;
-}) {
-  return (
-    <div
-      className="rounded-md border bg-white p-4"
-      style={{ borderColor: colors.surface[200], boxShadow: cardShadow() }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <p
-          className="text-[10px] font-bold uppercase tracking-[0.14em]"
-          style={{ color: colors.text.muted }}
-        >
-          {label}
-        </p>
-        <div
-          className="flex h-7 w-7 items-center justify-center rounded-md"
-          style={{ background: colors.brandSoft, color: colors.brand }}
-        >
-          <Icon type={icon} size={16} />
-        </div>
-      </div>
-      <p
-        className="mt-3 text-[24px] font-bold tracking-[-0.04em] tabular-nums"
-        style={{ color: colors.text.primary }}
-      >
-        {value}
-      </p>
-      <p className="mt-1 text-[11px]" style={{ color: colors.text.secondary }}>
-        {trend}
-      </p>
-    </div>
-  );
-}
-
 function InlineLoader() {
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div
         className="fixed left-0 top-0 z-50 h-0.5 w-full animate-pulse"
         style={{ background: colors.brand }}
@@ -347,14 +579,20 @@ function InlineLoader() {
         {Array.from({ length: 4 }).map((_, index) => (
           <div
             key={index}
-            className="h-28 animate-pulse rounded-md border bg-white"
-            style={{ borderColor: colors.surface[200] }}
+            className="h-28 animate-pulse rounded-md border"
+            style={{
+              background: colors.surface[50],
+              borderColor: colors.surface[200],
+            }}
           />
         ))}
       </div>
       <div
-        className="h-[420px] animate-pulse rounded-md border bg-white"
-        style={{ borderColor: colors.surface[200] }}
+        className="h-[520px] animate-pulse rounded-md border"
+        style={{
+          background: colors.surface[50],
+          borderColor: colors.surface[200],
+        }}
       />
     </div>
   );
@@ -364,80 +602,14 @@ export default function SessionsPage() {
   const { showToast } = useToast();
 
   const [sessions, setSessions] = useState<SessionItem[]>([]);
-  const [selectedFilter, setSelectedFilter] = useState("ALL");
+  const [selectedFilter, setSelectedFilter] =
+    useState<ClassificationFilter>("ALL");
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("ALL");
+  const [sortBy, setSortBy] = useState<SortValue>("newest");
   const [search, setSearch] = useState("");
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(0);
-
-  const filteredSessions = useMemo(() => {
-    return sessions.filter((session) => {
-      const bucket = getBucket(session);
-      const matchesFilter =
-        selectedFilter === "ALL" ||
-        (selectedFilter === "SYNTHETIC"
-          ? isHighRisk(bucket)
-          : bucket === selectedFilter);
-
-      const query = search.trim().toLowerCase();
-      const matchesSearch =
-        !query ||
-        String(session.title || "")
-          .toLowerCase()
-          .includes(query) ||
-        String(session.course_name || "")
-          .toLowerCase()
-          .includes(query) ||
-        String(session.course_code || "")
-          .toLowerCase()
-          .includes(query) ||
-        String(session.certificate_id || "")
-          .toLowerCase()
-          .includes(query);
-
-      return matchesFilter && matchesSearch;
-    });
-  }, [sessions, selectedFilter, search]);
-
-  const stats = useMemo(() => {
-    const total = sessions.length;
-    const human = sessions.filter(
-      (session) => getBucket(session) === "HUMAN",
-    ).length;
-    const avgConfidence = total
-      ? Math.round(
-          sessions.reduce(
-            (sum, session) => sum + Number(session.confidence || 0),
-            0,
-          ) / total,
-        )
-      : 0;
-    const certificates = sessions.filter((session) =>
-      Boolean(session.certificate_id),
-    ).length;
-    const humanRate = total ? Math.round((human / total) * 100) : 0;
-
-    return {
-      total,
-      humanRate,
-      avgConfidence,
-      certificates,
-    };
-  }, [sessions]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredSessions.length / PAGE_SIZE),
-  );
-  const safePage = Math.min(page, totalPages - 1);
-  const paginatedSessions = filteredSessions.slice(
-    safePage * PAGE_SIZE,
-    safePage * PAGE_SIZE + PAGE_SIZE,
-  );
-
-  useEffect(() => {
-    setPage(0);
-  }, [selectedFilter, search]);
 
   useEffect(() => {
     let mounted = true;
@@ -479,7 +651,141 @@ export default function SessionsPage() {
     };
   }, [showToast]);
 
-  const tabItems = filters.map((filter) => ({
+  const stats = useMemo(() => {
+    const total = sessions.length;
+    const human = sessions.filter(
+      (session) => normalizeClassification(getBucket(session)) === "HUMAN",
+    ).length;
+    const needsReview = sessions.filter(
+      (session) => normalizeClassification(getBucket(session)) === "SUSPICIOUS",
+    ).length;
+    const highRisk = sessions.filter(
+      (session) => normalizeClassification(getBucket(session)) === "SYNTHETIC",
+    ).length;
+    const certificates = sessions.filter((session) =>
+      Boolean(session.certificate_id),
+    ).length;
+    const pending = sessions.filter(
+      (session) => normalizeReviewStatus(session.review_status) === "PENDING",
+    ).length;
+    const approved = sessions.filter(
+      (session) => normalizeReviewStatus(session.review_status) === "APPROVED",
+    ).length;
+    const flagged = sessions.filter(
+      (session) => normalizeReviewStatus(session.review_status) === "FLAGGED",
+    ).length;
+    const courseCount = new Set(
+      sessions
+        .map((session) => session.course_code || session.course_name)
+        .filter(Boolean),
+    ).size;
+    const avgConfidence = total
+      ? Math.round(
+          sessions.reduce(
+            (sum, session) => sum + Number(session.confidence || 0),
+            0,
+          ) / total,
+        )
+      : 0;
+
+    return {
+      total,
+      human,
+      needsReview,
+      highRisk,
+      humanRate: pct(human, total),
+      avgConfidence,
+      certificates,
+      certificateRate: pct(certificates, total),
+      avgWpm: Math.round(
+        safeAverage(sessions.map((session) => Number(session.wpm || 0))),
+      ),
+      totalSeconds: sessions.reduce(
+        (sum, session) => sum + Number(session.duration_seconds || 0),
+        0,
+      ),
+      pending,
+      approved,
+      flagged,
+      courseCount,
+      personalCount: sessions.filter(
+        (session) => !session.course_code && !session.course_name,
+      ).length,
+    };
+  }, [sessions]);
+
+  const latestSession = useMemo(() => {
+    return [...sessions].sort(
+      (a, b) => parseTime(b.created_at) - parseTime(a.created_at),
+    )[0];
+  }, [sessions]);
+
+  const filteredSessions = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return sessions
+      .filter((session) => {
+        const bucket = normalizeClassification(getBucket(session));
+        const status = normalizeReviewStatus(session.review_status);
+
+        const matchesClassification =
+          selectedFilter === "ALL" || bucket === selectedFilter;
+        const matchesReview = reviewFilter === "ALL" || status === reviewFilter;
+        const matchesSearch =
+          !query ||
+          String(session.title || "")
+            .toLowerCase()
+            .includes(query) ||
+          String(session.course_name || "")
+            .toLowerCase()
+            .includes(query) ||
+          String(session.course_code || "")
+            .toLowerCase()
+            .includes(query) ||
+          String(session.certificate_id || "")
+            .toLowerCase()
+            .includes(query);
+
+        return matchesClassification && matchesReview && matchesSearch;
+      })
+      .sort((a, b) => {
+        if (sortBy === "oldest") {
+          return parseTime(a.created_at) - parseTime(b.created_at);
+        }
+        if (sortBy === "confidence-desc") {
+          return Number(b.confidence || 0) - Number(a.confidence || 0);
+        }
+        if (sortBy === "confidence-asc") {
+          return Number(a.confidence || 0) - Number(b.confidence || 0);
+        }
+        if (sortBy === "wpm-desc") {
+          return Number(b.wpm || 0) - Number(a.wpm || 0);
+        }
+        if (sortBy === "duration-desc") {
+          return (
+            Number(b.duration_seconds || 0) - Number(a.duration_seconds || 0)
+          );
+        }
+
+        return parseTime(b.created_at) - parseTime(a.created_at);
+      });
+  }, [reviewFilter, search, selectedFilter, sessions, sortBy]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredSessions.length / PAGE_SIZE),
+  );
+  const safePage = Math.min(page, totalPages - 1);
+  const paginatedSessions = filteredSessions.slice(
+    safePage * PAGE_SIZE,
+    safePage * PAGE_SIZE + PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setPage(0);
+  }, [selectedFilter, reviewFilter, sortBy, search]);
+
+  const tabItems = classificationFilters.map((filter) => ({
     ...filter,
     count: filterCount(sessions, filter.value),
   }));
@@ -507,20 +813,28 @@ export default function SessionsPage() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 px-0">
+    <div className="mx-auto max-w-[1440px] space-y-4 px-0 pb-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: colors.text.muted }}
+          >
+            Evidence ledger
+          </p>
           <h1
-            className="text-[22px] font-bold tracking-[-0.03em]"
+            className="mt-1 text-[24px] font-bold tracking-[-0.04em]"
             style={{ color: colors.text.primary }}
           >
             Writing Sessions
           </h1>
           <p
-            className="mt-0.5 text-[13px]"
+            className="mt-1 max-w-2xl text-[13px] leading-6"
             style={{ color: colors.text.secondary }}
           >
-            Your complete authorship evidence library.
+            A structured record of every captured writing session, its
+            behavioral classification, review state, and certificate
+            availability. Detailed visual analytics live in the Analytics page.
           </p>
         </div>
 
@@ -534,99 +848,255 @@ export default function SessionsPage() {
         </Link>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricTile
-          label="Total Sessions"
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Captured sessions"
           value={stats.total}
-          trend="All captured sessions"
+          helper="Every writing session saved in your evidence library"
           icon="list"
         />
-        <MetricTile
-          label="Human Rate"
+        <MetricCard
+          label="Human-classified"
           value={`${stats.humanRate}%`}
-          trend="Human-classified sessions"
+          helper={`${stats.human} of ${stats.total} sessions classified as human`}
           icon="shield"
         />
-        <MetricTile
-          label="Avg Confidence"
+        <MetricCard
+          label="Average confidence"
           value={`${stats.avgConfidence}%`}
-          trend="Across all evidence"
+          helper="Mean confidence across all captured evidence"
           icon="award"
         />
-        <MetricTile
-          label="Certificates Issued"
+        <MetricCard
+          label="Certificates issued"
           value={stats.certificates}
-          trend="Verifiable records"
-          icon="clock"
+          helper={`${stats.certificateRate}% of sessions have a verifiable certificate`}
+          icon="certificate"
         />
       </div>
 
-      <div
-        className="rounded-md border bg-white p-3"
-        style={{ borderColor: colors.surface[200], boxShadow: cardShadow() }}
-      >
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <Tabs
-            items={tabItems}
-            value={selectedFilter}
-            onChange={setSelectedFilter}
-          />
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="relative">
-              <div
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+      {latestSession && (
+        <section className="rounded-md border p-4" style={panelStyle()}>
+          <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr] lg:items-center">
+            <div>
+              <p
+                className="text-[10px] font-bold uppercase tracking-[0.16em]"
                 style={{ color: colors.text.muted }}
               >
-                <Icon type="search" size={14} />
+                Latest evidence
+              </p>
+              <p
+                className="mt-1 truncate text-[15px] font-bold"
+                style={{ color: colors.text.primary }}
+              >
+                {latestSession.title || "Untitled Document"}
+              </p>
+              <p
+                className="mt-1 text-[12px]"
+                style={{ color: colors.text.secondary }}
+              >
+                Captured {formatShortDate(latestSession.created_at)} ·{" "}
+                {latestSession.course_code || "Personal"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px]" style={{ color: colors.text.muted }}>
+                Classification
+              </p>
+              <div className="mt-2">
+                <StatusBadge value={getBucket(latestSession)} />
               </div>
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search sessions..."
-                className="h-9 w-full rounded-md border py-0 pl-9 pr-9 text-[13px] outline-none sm:w-64"
+            </div>
+            <div>
+              <p className="text-[11px]" style={{ color: colors.text.muted }}>
+                Confidence
+              </p>
+              <p
+                className="mt-1 font-mono text-[18px] font-bold"
+                style={{ color: colors.text.primary }}
+              >
+                {normalizePercent(latestSession.confidence)}%
+              </p>
+            </div>
+            <div className="flex gap-2 lg:justify-end">
+              <Link
+                to={ROUTES.REPLAY.replace(
+                  ":sessionId",
+                  String(latestSession.id),
+                )}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold"
                 style={{
                   borderColor: colors.surface[200],
-                  color: colors.text.primary,
                   background: colors.surface[50],
+                  color: colors.text.secondary,
                 }}
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md"
-                  style={{ color: colors.text.secondary }}
-                  aria-label="Clear search"
+              >
+                <Icon type="replay" size={14} />
+                Replay
+              </Link>
+              {latestSession.certificate_id && (
+                <Link
+                  to={`/verify/${latestSession.certificate_id}`}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold"
+                  style={{
+                    borderColor: colors.surface[200],
+                    background: colors.surface[50],
+                    color: colors.text.secondary,
+                  }}
                 >
-                  <Icon type="close" size={13} />
-                </button>
+                  <Icon type="external" size={14} />
+                  Verify
+                </Link>
               )}
             </div>
+          </div>
+        </section>
+      )}
 
-            <button
-              type="button"
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-[12px] font-semibold"
-              style={{
-                background: "transparent",
-                color: colors.text.secondary,
-              }}
-            >
-              Sort by
-              <Icon type="chevron" size={13} />
-            </button>
+      <section className="rounded-md border" style={panelStyle()}>
+        <div
+          className="border-b p-4"
+          style={{ borderColor: colors.surface[200] }}
+        >
+          <SectionHeader
+            eyebrow="Filter and inspect"
+            title="Session ledger"
+            description="Search and review the exact sessions behind the account record."
+            action={
+              <div
+                className="flex items-center gap-2 text-[12px]"
+                style={{ color: colors.text.muted }}
+              >
+                <Icon type="rows" size={14} />
+                Showing {filteredSessions.length} of {sessions.length}
+              </div>
+            }
+          />
+
+          <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              {tabItems.map((item) => {
+                const active = selectedFilter === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setSelectedFilter(item.value)}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-[12px] font-semibold transition"
+                    style={{
+                      background: active
+                        ? colors.text.primary
+                        : colors.surface[50],
+                      borderColor: active
+                        ? colors.text.primary
+                        : colors.surface[200],
+                      color: active ? colors.text.light : colors.text.secondary,
+                    }}
+                  >
+                    {item.label}
+                    <span
+                      className="rounded-md px-1.5 py-0.5 font-mono text-[10px]"
+                      style={{
+                        background: active ? colors.brand : colors.surface[100],
+                        color: active ? colors.text.light : colors.text.muted,
+                      }}
+                    >
+                      {item.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative">
+                <div
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+                  style={{ color: colors.text.muted }}
+                >
+                  <Icon type="search" size={14} />
+                </div>
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search title, course, certificate"
+                  className="h-9 w-full rounded-md border py-0 pl-9 pr-9 text-[13px] outline-none sm:w-72"
+                  style={{
+                    borderColor: colors.surface[200],
+                    color: colors.text.primary,
+                    background: colors.surface[50],
+                  }}
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md"
+                    style={{ color: colors.text.secondary }}
+                    aria-label="Clear search"
+                  >
+                    <Icon type="close" size={13} />
+                  </button>
+                )}
+              </div>
+
+              <div className="relative">
+                <select
+                  value={reviewFilter}
+                  onChange={(event) =>
+                    setReviewFilter(event.target.value as ReviewFilter)
+                  }
+                  className="h-9 appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none"
+                  style={{
+                    background: colors.surface[50],
+                    borderColor: colors.surface[200],
+                    color: colors.text.secondary,
+                  }}
+                >
+                  {reviewFilters.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
+                  style={{ color: colors.text.muted }}
+                >
+                  <Icon type="chevron" size={13} />
+                </span>
+              </div>
+
+              <div className="relative">
+                <select
+                  value={sortBy}
+                  onChange={(event) =>
+                    setSortBy(event.target.value as SortValue)
+                  }
+                  className="h-9 appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none"
+                  style={{
+                    background: colors.surface[50],
+                    borderColor: colors.surface[200],
+                    color: colors.text.secondary,
+                  }}
+                >
+                  {sortOptions.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
+                  style={{ color: colors.text.muted }}
+                >
+                  <Icon type="chevron" size={13} />
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <p className="mt-3 text-[12px]" style={{ color: colors.text.muted }}>
-          Showing {filteredSessions.length} of {sessions.length} sessions
-        </p>
-      </div>
-
-      <div
-        className="overflow-hidden rounded-md border bg-white"
-        style={{ borderColor: colors.surface[200], boxShadow: cardShadow() }}
-      >
         {!sessions.length ? (
           <EmptyTable
             title="No sessions yet"
@@ -644,13 +1114,15 @@ export default function SessionsPage() {
         ) : !filteredSessions.length ? (
           <EmptyTable
             title="No sessions match your filters"
-            subtitle="Try changing the classification filter or clearing the search query."
+            subtitle="Try changing the classification filter, review state, sort order, or search query."
             action={
               <button
                 type="button"
                 onClick={() => {
                   setSearch("");
                   setSelectedFilter("ALL");
+                  setReviewFilter("ALL");
+                  setSortBy("newest");
                 }}
                 className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-[13px] font-semibold"
                 style={{
@@ -666,198 +1138,272 @@ export default function SessionsPage() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <div className="min-w-[1060px]">
-                <div
-                  className="grid grid-cols-[40px_minmax(240px,1fr)_120px_120px_100px_80px_90px_100px_100px] items-center gap-4 border-b px-5 py-3"
+              <table className="w-full min-w-[1120px] border-collapse text-left">
+                <thead>
+                  <tr
+                    className="border-b"
+                    style={{
+                      background: colors.surface[100],
+                      borderColor: colors.surface[200],
+                    }}
+                  >
+                    {[
+                      "Document",
+                      "Course",
+                      "Classification",
+                      "Confidence",
+                      "Capture stats",
+                      "Review",
+                      "Certificate",
+                      "Actions",
+                    ].map((heading) => (
+                      <th
+                        key={heading}
+                        className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em]"
+                        style={{ color: colors.text.muted }}
+                      >
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedSessions.map((session) => {
+                    const bucket = getBucket(session);
+                    const confidence = normalizePercent(session.confidence);
+                    const hasCertificate = Boolean(session.certificate_id);
+
+                    return (
+                      <tr
+                        key={session.id}
+                        className="border-b transition-colors duration-100 hover:bg-surface-100"
+                        style={{ borderColor: colors.surface[200] }}
+                      >
+                        <td className="px-4 py-3 align-middle">
+                          <div className="min-w-0">
+                            <p
+                              className="max-w-[280px] truncate text-[13px] font-semibold"
+                              style={{ color: colors.text.primary }}
+                            >
+                              {session.title || "Untitled Document"}
+                            </p>
+                            <p
+                              className="mt-0.5 text-[11px]"
+                              style={{ color: colors.text.muted }}
+                            >
+                              Captured {formatShortDate(session.created_at)}
+                            </p>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 align-middle">
+                          <div className="min-w-0">
+                            <p
+                              className="max-w-[160px] truncate text-[12px] font-medium"
+                              style={{ color: colors.text.primary }}
+                            >
+                              {session.course_code || "Personal"}
+                            </p>
+                            <p
+                              className="max-w-[160px] truncate text-[11px]"
+                              style={{ color: colors.text.muted }}
+                            >
+                              {session.course_name || "No course linked"}
+                            </p>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 align-middle">
+                          <StatusBadge value={bucket} />
+                        </td>
+
+                        <td className="px-4 py-3 align-middle">
+                          <div className="w-24">
+                            <p
+                              className="font-mono text-[13px] font-bold tabular-nums"
+                              style={{ color: colors.text.primary }}
+                            >
+                              {confidence}%
+                            </p>
+                            <div
+                              className="mt-1 h-1 rounded-md"
+                              style={{ background: colors.surface[200] }}
+                            >
+                              <div
+                                className="h-1 rounded-md"
+                                style={{
+                                  background: colors.brand,
+                                  width: `${confidence}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 align-middle">
+                          <div
+                            className="grid grid-cols-3 gap-2 text-[11px]"
+                            style={{ color: colors.text.secondary }}
+                          >
+                            <div>
+                              <p style={{ color: colors.text.muted }}>Words</p>
+                              <p
+                                className="font-mono font-bold tabular-nums"
+                                style={{ color: colors.text.primary }}
+                              >
+                                {Number(session.word_count || 0)}
+                              </p>
+                            </div>
+                            <div>
+                              <p style={{ color: colors.text.muted }}>WPM</p>
+                              <p
+                                className="font-mono font-bold tabular-nums"
+                                style={{ color: colors.text.primary }}
+                              >
+                                {Math.round(Number(session.wpm) || 0)}
+                              </p>
+                            </div>
+                            <div>
+                              <p style={{ color: colors.text.muted }}>Time</p>
+                              <p
+                                className="font-mono font-bold tabular-nums"
+                                style={{ color: colors.text.primary }}
+                              >
+                                {formatCompactDuration(
+                                  session.duration_seconds,
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 align-middle">
+                          <StatusBadge
+                            value={session.review_status || "PENDING"}
+                          />
+                        </td>
+
+                        <td className="px-4 py-3 align-middle">
+                          {hasCertificate ? (
+                            <span
+                              className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold"
+                              style={{
+                                background: colors.mintTint,
+                                borderColor: colors.mintTint,
+                                color: brand.humanText,
+                              }}
+                            >
+                              <Icon type="certificate" size={12} />
+                              Issued
+                            </span>
+                          ) : (
+                            <span
+                              className="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold"
+                              style={{
+                                background: colors.surface[100],
+                                borderColor: colors.surface[200],
+                                color: colors.text.muted,
+                              }}
+                            >
+                              Not issued
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex items-center gap-1.5">
+                            <Link
+                              to={ROUTES.REPLAY.replace(
+                                ":sessionId",
+                                String(session.id),
+                              )}
+                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold"
+                              style={{
+                                borderColor: colors.surface[200],
+                                color: colors.text.secondary,
+                                background: colors.surface[50],
+                              }}
+                            >
+                              <Icon type="replay" size={13} />
+                              Replay
+                            </Link>
+
+                            {session.certificate_id && (
+                              <Link
+                                to={`/verify/${session.certificate_id}`}
+                                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold"
+                                style={{
+                                  borderColor: colors.surface[200],
+                                  color: colors.text.secondary,
+                                  background: colors.surface[50],
+                                }}
+                              >
+                                <Icon type="external" size={13} />
+                                Verify
+                              </Link>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div
+              className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <p className="text-[12px]" style={{ color: colors.text.muted }}>
+                Showing {showingStart}–{showingEnd} of {filteredSessions.length}{" "}
+                sessions
+              </p>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={safePage === 0}
+                  onClick={() => setPage((current) => Math.max(0, current - 1))}
+                  className="h-8 rounded-md border px-3 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{
+                    borderColor: colors.surface[200],
+                    background: colors.surface[50],
+                    color: colors.text.primary,
+                  }}
+                >
+                  Prev
+                </button>
+                <span
+                  className="rounded-md border px-2.5 py-1 text-[12px] font-semibold"
                   style={{
                     background: colors.surface[100],
                     borderColor: colors.surface[200],
+                    color: colors.text.secondary,
                   }}
                 >
-                  {[
-                    "#",
-                    "Document",
-                    "Course",
-                    "Classification",
-                    "Confidence",
-                    "WPM",
-                    "Duration",
-                    "Review",
-                    "Actions",
-                  ].map((heading) => (
-                    <div
-                      key={heading}
-                      className="text-[10px] font-bold uppercase tracking-[0.14em]"
-                      style={{ color: colors.text.muted }}
-                    >
-                      {heading}
-                    </div>
-                  ))}
-                </div>
-
-                {paginatedSessions.map((session, index) => {
-                  const bucket = getBucket(session);
-                  const confidence = normalizePercent(session.confidence);
-
-                  return (
-                    <div
-                      key={session.id}
-                      className="grid h-[52px] grid-cols-[40px_minmax(240px,1fr)_120px_120px_100px_80px_90px_100px_100px] items-center gap-4 border-b px-5 transition-colors duration-100 hover:bg-surface-100"
-                      style={{ borderColor: colors.surface[200] }}
-                    >
-                      <div
-                        className="text-[12px] tabular-nums"
-                        style={{ color: colors.text.muted }}
-                      >
-                        {safePage * PAGE_SIZE + index + 1}
-                      </div>
-
-                      <div className="min-w-0">
-                        <p
-                          className="truncate text-[13px] font-semibold"
-                          style={{ color: colors.text.primary }}
-                        >
-                          {session.title || "Untitled Document"}
-                        </p>
-                        <p
-                          className="mt-0.5 truncate text-[11px]"
-                          style={{ color: colors.text.muted }}
-                        >
-                          {session.created_at}
-                        </p>
-                      </div>
-
-                      <div
-                        className="truncate text-[12px]"
-                        style={{ color: colors.text.secondary }}
-                      >
-                        {session.course_code || "Personal"}
-                      </div>
-
-                      <StatusBadge value={bucket} />
-
-                      <div>
-                        <p
-                          className="font-mono text-[13px] font-bold tabular-nums"
-                          style={{ color: colors.text.primary }}
-                        >
-                          {confidence}%
-                        </p>
-                        <div
-                          className="mt-1 h-1 rounded-md"
-                          style={{ background: colors.surface[200] }}
-                        >
-                          <div
-                            className="h-1 rounded-md"
-                            style={{
-                              background: colors.brand,
-                              width: `${confidence}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <div
-                        className="text-[13px] font-medium tabular-nums"
-                        style={{ color: colors.text.primary }}
-                      >
-                        {Math.round(Number(session.wpm) || 0)}
-                      </div>
-
-                      <div
-                        className="text-[12px]"
-                        style={{ color: colors.text.secondary }}
-                      >
-                        {formatDuration(session.duration_seconds)}
-                      </div>
-
-                      <StatusBadge value={session.review_status || "PENDING"} />
-
-                      <div className="flex items-center gap-1.5">
-                        <Link
-                          to={ROUTES.REPLAY.replace(
-                            ":sessionId",
-                            String(session.id),
-                          )}
-                          className="inline-flex h-7 items-center justify-center rounded-md border px-2.5 text-[11px] font-semibold"
-                          style={{
-                            borderColor: colors.surface[200],
-                            color: colors.text.secondary,
-                            background: colors.surface[50],
-                          }}
-                        >
-                          Replay
-                        </Link>
-
-                        {session.certificate_id && (
-                          <Link
-                            to={`/verify/${session.certificate_id}`}
-                            className="inline-flex h-7 items-center justify-center rounded-md border px-2.5 text-[11px] font-semibold"
-                            style={{
-                              borderColor: colors.surface[200],
-                              color: colors.text.secondary,
-                              background: colors.surface[50],
-                            }}
-                          >
-                            Verify
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                  {safePage + 1} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={safePage >= totalPages - 1}
+                  onClick={() =>
+                    setPage((current) => Math.min(totalPages - 1, current + 1))
+                  }
+                  className="h-8 rounded-md border px-3 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{
+                    borderColor: colors.surface[200],
+                    background: colors.surface[50],
+                    color: colors.text.primary,
+                  }}
+                >
+                  Next
+                </button>
               </div>
             </div>
-
-            {filteredSessions.length > PAGE_SIZE && (
-              <div
-                className="flex items-center justify-between border-t px-5 py-3"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <p className="text-[12px]" style={{ color: colors.text.muted }}>
-                  Showing {showingStart}–{showingEnd} of{" "}
-                  {filteredSessions.length}
-                </p>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={safePage === 0}
-                    onClick={() =>
-                      setPage((current) => Math.max(0, current - 1))
-                    }
-                    className="h-8 rounded-md border px-3 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                    style={{
-                      borderColor: colors.surface[200],
-                      background: colors.surface[50],
-                      color: colors.text.primary,
-                    }}
-                  >
-                    Prev
-                  </button>
-                  <button
-                    type="button"
-                    disabled={safePage >= totalPages - 1}
-                    onClick={() =>
-                      setPage((current) =>
-                        Math.min(totalPages - 1, current + 1),
-                      )
-                    }
-                    className="h-8 rounded-md border px-3 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                    style={{
-                      borderColor: colors.surface[200],
-                      background: colors.surface[50],
-                      color: colors.text.primary,
-                    }}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
           </>
         )}
-      </div>
+      </section>
     </div>
   );
 }

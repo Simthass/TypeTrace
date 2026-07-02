@@ -8,7 +8,6 @@ import {
 import { Link } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
-import { Tabs } from "../components/ui/Tabs";
 import { ErrorState } from "../components/ui/AsyncState";
 import { ROUTES } from "../constants/routes";
 import { useCertificateDownload } from "../hooks/useCertificateDownload";
@@ -37,11 +36,39 @@ interface CertificatesResponse {
   certificates: CertificateItem[];
 }
 
-const filters = [
-  { value: "ALL", label: "All" },
+type SortMode =
+  | "NEWEST"
+  | "OLDEST"
+  | "CONFIDENCE_HIGH"
+  | "CONFIDENCE_LOW"
+  | "COURSE";
+
+type ReviewFilter = "ALL" | "PENDING" | "APPROVED" | "FLAGGED";
+
+type ClassificationFilter = "ALL" | "HUMAN" | "SUSPICIOUS" | "SYNTHETIC";
+
+const PAGE_SIZE = 16;
+
+const filters: Array<{ value: ClassificationFilter; label: string }> = [
+  { value: "ALL", label: "All certificates" },
   { value: "HUMAN", label: "Human" },
-  { value: "SUSPICIOUS", label: "Review" },
-  { value: "SYNTHETIC", label: "High Risk" },
+  { value: "SUSPICIOUS", label: "Needs review" },
+  { value: "SYNTHETIC", label: "High risk" },
+];
+
+const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
+  { value: "ALL", label: "All review states" },
+  { value: "PENDING", label: "Pending" },
+  { value: "APPROVED", label: "Approved" },
+  { value: "FLAGGED", label: "Flagged" },
+];
+
+const sortOptions: Array<{ value: SortMode; label: string }> = [
+  { value: "NEWEST", label: "Newest first" },
+  { value: "OLDEST", label: "Oldest first" },
+  { value: "CONFIDENCE_HIGH", label: "Confidence high" },
+  { value: "CONFIDENCE_LOW", label: "Confidence low" },
+  { value: "COURSE", label: "Course" },
 ];
 
 function Icon({ type, size = 16 }: { type: string; size?: number }) {
@@ -111,6 +138,41 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
         <path d="m9 15 2 2 4-5" />
       </>
     ),
+    external: (
+      <>
+        <path d="M15 3h6v6" />
+        <path d="M10 14 21 3" />
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      </>
+    ),
+    hash: (
+      <>
+        <path d="M4 9h16" />
+        <path d="M4 15h16" />
+        <path d="M10 3 8 21" />
+        <path d="M16 3l-2 18" />
+      </>
+    ),
+    lock: (
+      <>
+        <rect x="5" y="11" width="14" height="9" rx="2" />
+        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      </>
+    ),
+    replay: (
+      <>
+        <path d="M3 12a9 9 0 1 0 3-6.7" />
+        <path d="M3 4v5h5" />
+      </>
+    ),
+    chevron: <path d="m6 9 6 6 6-6" />,
+    rows: (
+      <>
+        <rect x="3" y="4" width="18" height="4" rx="1" />
+        <rect x="3" y="10" width="18" height="4" rx="1" />
+        <rect x="3" y="16" width="18" height="4" rx="1" />
+      </>
+    ),
   };
 
   return (
@@ -130,20 +192,56 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
   );
 }
 
+function cardShadow() {
+  return `0 1px 3px ${colors.shadow}`;
+}
+
+function panelStyle() {
+  return {
+    background: colors.surface[50],
+    borderColor: colors.surface[200],
+    boxShadow: cardShadow(),
+  };
+}
+
 function isHighRisk(value: string): boolean {
   return ["SYNTHETIC", "AI", "AI-GENERATED", "HIGH_RISK", "HIGH RISK"].includes(
     String(value || "").toUpperCase(),
   );
 }
 
-function countByFilter(certificates: CertificateItem[], filter: string) {
+function classificationBucket(
+  value?: string,
+): "HUMAN" | "SUSPICIOUS" | "HIGH_RISK" | "UNKNOWN" {
+  const normalized = String(value || "UNKNOWN").toUpperCase();
+
+  if (normalized === "HUMAN") return "HUMAN";
+  if (normalized === "SUSPICIOUS") return "SUSPICIOUS";
+  if (isHighRisk(normalized)) return "HIGH_RISK";
+  return "UNKNOWN";
+}
+
+function reviewBucket(
+  value?: string,
+): "PENDING" | "APPROVED" | "FLAGGED" | "OTHER" {
+  const normalized = String(value || "PENDING").toUpperCase();
+
+  if (normalized === "APPROVED") return "APPROVED";
+  if (normalized === "FLAGGED") return "FLAGGED";
+  if (normalized === "PENDING" || normalized === "REVIEW_REQUIRED")
+    return "PENDING";
+  return "OTHER";
+}
+
+function countByFilter(
+  certificates: CertificateItem[],
+  filter: ClassificationFilter,
+) {
   if (filter === "ALL") return certificates.length;
 
   return certificates.filter((item) => {
-    const value = String(item.classification || "").toUpperCase();
-
-    if (filter === "SYNTHETIC") return isHighRisk(value);
-
+    const value = classificationBucket(item.classification);
+    if (filter === "SYNTHETIC") return value === "HIGH_RISK";
     return value === filter;
   }).length;
 }
@@ -152,38 +250,75 @@ function normalizePercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
 }
 
-function shortCertificateId(value: string): string {
-  if (!value) return "Unknown";
-  if (value.length <= 16) return value;
-  return `${value.slice(0, 16)}...`;
+function safeNumber(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function cardShadow() {
-  return `0 1px 3px ${colors.shadow}`;
+function pct(value: number, total: number): number {
+  if (!total) return 0;
+  return Math.round((value / total) * 100);
+}
+
+function shortCertificateId(value: string): string {
+  if (!value) return "Unknown";
+  if (value.length <= 18) return value;
+  return `${value.slice(0, 18)}...`;
+}
+
+function shortHash(value?: string | null): string {
+  if (!value) return "Not available";
+  if (value.length <= 18) return value;
+  return `${value.slice(0, 10)}...${value.slice(-8)}`;
+}
+
+function parseTime(value: string): number {
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function formatShortDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value || "Unknown";
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function statusStyle(value?: string) {
   const normalized = String(value || "UNKNOWN").toUpperCase();
 
-  if (normalized === "HUMAN" || normalized === "LOW") {
+  if (
+    normalized === "HUMAN" ||
+    normalized === "LOW" ||
+    normalized === "APPROVED"
+  ) {
     return {
       background: colors.mintTint,
       color: brand.humanText,
       borderColor: colors.mintTint,
-      label: normalized === "LOW" ? "Low" : "Human",
+      label:
+        normalized === "LOW"
+          ? "Low"
+          : normalized === "APPROVED"
+            ? "Approved"
+            : "Human",
     };
   }
 
   if (
     normalized === "SUSPICIOUS" ||
     normalized === "MEDIUM" ||
-    normalized === "PENDING"
+    normalized === "PENDING" ||
+    normalized === "REVIEW_REQUIRED"
   ) {
     return {
       background: colors.amberTint,
       color: brand.suspiciousText,
       borderColor: colors.amberTint,
-      label: normalized === "SUSPICIOUS" ? "Review" : normalized,
+      label: normalized === "SUSPICIOUS" ? "Needs review" : normalized,
     };
   }
 
@@ -196,7 +331,7 @@ function statusStyle(value?: string) {
       background: colors.roseTint,
       color: brand.aiText,
       borderColor: colors.roseTint,
-      label: isHighRisk(normalized) ? "High Risk" : normalized,
+      label: isHighRisk(normalized) ? "High risk" : normalized,
     };
   }
 
@@ -225,42 +360,169 @@ function StatusBadge({ value }: { value?: string }) {
   );
 }
 
-function MetricTile({
+function SectionHeader({
+  eyebrow,
+  title,
+  description,
+  action,
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        {eyebrow && (
+          <p
+            className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: colors.text.muted }}
+          >
+            {eyebrow}
+          </p>
+        )}
+        <h2
+          className="text-[15px] font-bold tracking-[-0.02em]"
+          style={{ color: colors.text.primary }}
+        >
+          {title}
+        </h2>
+        {description && (
+          <p
+            className="mt-0.5 text-[12px] leading-5"
+            style={{ color: colors.text.secondary }}
+          >
+            {description}
+          </p>
+        )}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function MetricCard({
   label,
   value,
+  helper,
   icon,
 }: {
   label: string;
   value: string | number;
+  helper: string;
   icon: string;
 }) {
   return (
-    <div
-      className="rounded-md border bg-white p-4"
-      style={{ borderColor: colors.surface[200], boxShadow: cardShadow() }}
-    >
+    <section className="rounded-md border p-4" style={panelStyle()}>
       <div className="flex items-start justify-between gap-3">
-        <p
-          className="text-[10px] font-bold uppercase tracking-[0.14em]"
-          style={{ color: colors.text.muted }}
-        >
-          {label}
-        </p>
+        <div className="min-w-0">
+          <p
+            className="text-[12px] font-semibold"
+            style={{ color: colors.text.secondary }}
+          >
+            {label}
+          </p>
+          <p
+            className="mt-4 text-[30px] font-bold leading-none tracking-[-0.05em] tabular-nums"
+            style={{ color: colors.text.primary }}
+          >
+            {value}
+          </p>
+        </div>
         <div
-          className="flex h-7 w-7 items-center justify-center rounded-md"
-          style={{ background: colors.brandSoft, color: colors.brand }}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border"
+          style={{
+            background: colors.surface[100],
+            borderColor: colors.surface[200],
+            color: colors.text.secondary,
+          }}
         >
           <Icon type={icon} size={16} />
         </div>
       </div>
       <p
-        className="mt-3 text-[24px] font-bold tracking-[-0.04em] tabular-nums"
-        style={{ color: colors.text.primary }}
+        className="mt-3 text-[12px] leading-5"
+        style={{ color: colors.text.muted }}
+      >
+        {helper}
+      </p>
+    </section>
+  );
+}
+
+function SummaryPanel({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-md border p-4" style={panelStyle()}>
+      <SectionHeader
+        eyebrow={eyebrow}
+        title={title}
+        description={description}
+      />
+      <div className="mt-4 space-y-2">{children}</div>
+    </section>
+  );
+}
+
+function DataRow({
+  label,
+  value,
+  helper,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string | number;
+  helper?: string;
+  tone?: "neutral" | "good" | "warning" | "danger";
+}) {
+  const toneColor =
+    tone === "good"
+      ? brand.humanText
+      : tone === "warning"
+        ? brand.suspiciousText
+        : tone === "danger"
+          ? brand.aiText
+          : colors.text.primary;
+
+  return (
+    <div
+      className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5"
+      style={{
+        background: colors.surface[100],
+        borderColor: colors.surface[200],
+      }}
+    >
+      <div className="min-w-0">
+        <p
+          className="text-[12px] font-semibold"
+          style={{ color: colors.text.primary }}
+        >
+          {label}
+        </p>
+        {helper && (
+          <p
+            className="mt-0.5 text-[11px]"
+            style={{ color: colors.text.muted }}
+          >
+            {helper}
+          </p>
+        )}
+      </div>
+      <p
+        className="shrink-0 font-mono text-[13px] font-bold tabular-nums"
+        style={{ color: toneColor }}
       >
         {value}
-      </p>
-      <p className="mt-1 text-[11px]" style={{ color: colors.text.secondary }}>
-        Current certificate vault
       </p>
     </div>
   );
@@ -281,7 +543,7 @@ function EmptyTable({
         className="flex h-10 w-10 items-center justify-center rounded-md"
         style={{ background: colors.brandSoft, color: colors.brand }}
       >
-        <Icon type="empty" size={28} />
+        <Icon type="empty" size={24} />
       </div>
       <p
         className="mt-4 text-[15px] font-semibold"
@@ -290,7 +552,7 @@ function EmptyTable({
         {title}
       </p>
       <p
-        className="mt-1 max-w-md text-[13px]"
+        className="mt-1 max-w-md text-[13px] leading-6"
         style={{ color: colors.text.secondary }}
       >
         {subtitle}
@@ -302,7 +564,7 @@ function EmptyTable({
 
 function InlineLoader() {
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div
         className="fixed left-0 top-0 z-50 h-0.5 w-full animate-pulse"
         style={{ background: colors.brand }}
@@ -310,7 +572,7 @@ function InlineLoader() {
       <div className="flex items-end justify-between gap-4">
         <div>
           <div
-            className="h-7 w-48 animate-pulse rounded-md"
+            className="h-7 w-56 animate-pulse rounded-md"
             style={{ background: colors.surface[200] }}
           />
           <div
@@ -327,14 +589,20 @@ function InlineLoader() {
         {Array.from({ length: 4 }).map((_, index) => (
           <div
             key={index}
-            className="h-28 animate-pulse rounded-md border bg-white"
-            style={{ borderColor: colors.surface[200] }}
+            className="h-28 animate-pulse rounded-md border"
+            style={{
+              background: colors.surface[50],
+              borderColor: colors.surface[200],
+            }}
           />
         ))}
       </div>
       <div
-        className="h-[420px] animate-pulse rounded-md border bg-white"
-        style={{ borderColor: colors.surface[200] }}
+        className="h-[520px] animate-pulse rounded-md border"
+        style={{
+          background: colors.surface[50],
+          borderColor: colors.surface[200],
+        }}
       />
     </div>
   );
@@ -345,61 +613,17 @@ export default function CertificatesPage() {
   const { downloadingId, downloadCertificate } = useCertificateDownload();
 
   const [certificates, setCertificates] = useState<CertificateItem[]>([]);
-  const [selectedFilter, setSelectedFilter] = useState("ALL");
+  const [selectedFilter, setSelectedFilter] =
+    useState<ClassificationFilter>("ALL");
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("ALL");
+  const [sortBy, setSortBy] = useState<SortMode>("NEWEST");
   const [search, setSearch] = useState("");
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCertificate, setSelectedCertificate] =
     useState<CertificateItem | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  const filteredCertificates = useMemo(() => {
-    return certificates.filter((item) => {
-      const value = String(item.classification || "").toUpperCase();
-      const matchesFilter =
-        selectedFilter === "ALL" ||
-        (selectedFilter === "SYNTHETIC"
-          ? isHighRisk(value)
-          : value === selectedFilter);
-
-      const query = search.trim().toLowerCase();
-      const matchesSearch =
-        !query ||
-        String(item.title || "")
-          .toLowerCase()
-          .includes(query) ||
-        String(item.certificate_id || "")
-          .toLowerCase()
-          .includes(query) ||
-        String(item.document_hash || "")
-          .toLowerCase()
-          .includes(query) ||
-        String(item.course_name || "")
-          .toLowerCase()
-          .includes(query) ||
-        String(item.course_code || "")
-          .toLowerCase()
-          .includes(query);
-
-      return matchesFilter && matchesSearch;
-    });
-  }, [certificates, selectedFilter, search]);
-
-  const stats = useMemo(() => {
-    const total = certificates.length;
-    const human = certificates.filter(
-      (item) => String(item.classification || "").toUpperCase() === "HUMAN",
-    ).length;
-    const review = certificates.filter(
-      (item) =>
-        String(item.classification || "").toUpperCase() === "SUSPICIOUS",
-    ).length;
-    const highRisk = certificates.filter((item) =>
-      isHighRisk(item.classification),
-    ).length;
-
-    return { total, human, review, highRisk };
-  }, [certificates]);
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -435,6 +659,132 @@ export default function CertificatesPage() {
       mounted = false;
     };
   }, [showToast]);
+
+  const stats = useMemo(() => {
+    const total = certificates.length;
+    const human = certificates.filter(
+      (item) => classificationBucket(item.classification) === "HUMAN",
+    ).length;
+    const review = certificates.filter(
+      (item) => classificationBucket(item.classification) === "SUSPICIOUS",
+    ).length;
+    const highRisk = certificates.filter(
+      (item) => classificationBucket(item.classification) === "HIGH_RISK",
+    ).length;
+    const hashes = certificates.filter((item) =>
+      Boolean(item.document_hash),
+    ).length;
+    const approved = certificates.filter(
+      (item) => reviewBucket(item.review_status) === "APPROVED",
+    ).length;
+    const pending = certificates.filter(
+      (item) => reviewBucket(item.review_status) === "PENDING",
+    ).length;
+    const flagged = certificates.filter(
+      (item) => reviewBucket(item.review_status) === "FLAGGED",
+    ).length;
+    const publicUrls = certificates.filter((item) =>
+      Boolean(item.verify_url),
+    ).length;
+    const courseCount = new Set(
+      certificates
+        .map((item) => item.course_code || item.course_name)
+        .filter(Boolean),
+    ).size;
+    const avgConfidence = total
+      ? Math.round(
+          certificates.reduce(
+            (sum, item) => sum + safeNumber(item.confidence),
+            0,
+          ) / total,
+        )
+      : 0;
+
+    return {
+      total,
+      human,
+      review,
+      highRisk,
+      hashes,
+      hashCoverage: pct(hashes, total),
+      approved,
+      pending,
+      flagged,
+      publicUrls,
+      publicUrlCoverage: pct(publicUrls, total),
+      courseCount,
+      avgConfidence,
+    };
+  }, [certificates]);
+
+  const latestCertificate = useMemo(() => {
+    return [...certificates].sort(
+      (a, b) => parseTime(b.created_at) - parseTime(a.created_at),
+    )[0];
+  }, [certificates]);
+
+  const filteredCertificates = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return certificates
+      .filter((item) => {
+        const classification = classificationBucket(item.classification);
+        const review = reviewBucket(item.review_status);
+        const matchesClassification =
+          selectedFilter === "ALL" ||
+          (selectedFilter === "SYNTHETIC"
+            ? classification === "HIGH_RISK"
+            : classification === selectedFilter);
+        const matchesReview = reviewFilter === "ALL" || review === reviewFilter;
+        const matchesSearch =
+          !query ||
+          String(item.title || "")
+            .toLowerCase()
+            .includes(query) ||
+          String(item.certificate_id || "")
+            .toLowerCase()
+            .includes(query) ||
+          String(item.document_hash || "")
+            .toLowerCase()
+            .includes(query) ||
+          String(item.course_name || "")
+            .toLowerCase()
+            .includes(query) ||
+          String(item.course_code || "")
+            .toLowerCase()
+            .includes(query);
+
+        return matchesClassification && matchesReview && matchesSearch;
+      })
+      .sort((a, b) => {
+        if (sortBy === "OLDEST")
+          return parseTime(a.created_at) - parseTime(b.created_at);
+        if (sortBy === "CONFIDENCE_HIGH")
+          return safeNumber(b.confidence) - safeNumber(a.confidence);
+        if (sortBy === "CONFIDENCE_LOW")
+          return safeNumber(a.confidence) - safeNumber(b.confidence);
+        if (sortBy === "COURSE") {
+          return String(
+            a.course_code || a.course_name || "Personal",
+          ).localeCompare(String(b.course_code || b.course_name || "Personal"));
+        }
+        return parseTime(b.created_at) - parseTime(a.created_at);
+      });
+  }, [certificates, reviewFilter, search, selectedFilter, sortBy]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredCertificates.length / PAGE_SIZE),
+  );
+  const safePage = Math.min(page, totalPages - 1);
+  const paginatedCertificates = filteredCertificates.slice(
+    safePage * PAGE_SIZE,
+    safePage * PAGE_SIZE + PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setPage(0);
+  }, [selectedFilter, reviewFilter, sortBy, search]);
 
   const tabItems = filters.map((filter) => ({
     ...filter,
@@ -490,21 +840,37 @@ export default function CertificatesPage() {
     );
   }
 
+  const showingStart = filteredCertificates.length
+    ? safePage * PAGE_SIZE + 1
+    : 0;
+  const showingEnd = Math.min(
+    (safePage + 1) * PAGE_SIZE,
+    filteredCertificates.length,
+  );
+
   return (
-    <div className="mx-auto max-w-7xl space-y-5 px-0">
+    <div className="mx-auto max-w-[1440px] space-y-4 px-0 pb-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: colors.text.muted }}
+          >
+            Certificate vault
+          </p>
           <h1
-            className="text-[22px] font-bold tracking-[-0.03em]"
+            className="mt-1 text-[24px] font-bold tracking-[-0.04em]"
             style={{ color: colors.text.primary }}
           >
             Certificates
           </h1>
           <p
-            className="mt-0.5 text-[13px]"
+            className="mt-1 max-w-2xl text-[13px] leading-6"
             style={{ color: colors.text.secondary }}
           >
-            Verifiable authorship records sealed with SHA-256.
+            A structured vault for verifiable authorship records, SHA-256
+            document hashes, public verification links, and certificate PDF
+            exports. Detailed visual analytics live in the Analytics page.
           </p>
         </div>
 
@@ -518,81 +884,269 @@ export default function CertificatesPage() {
         </Link>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricTile
-          label="Total Certificates"
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Total certificates"
           value={stats.total}
+          helper="Issued certificate records in the vault"
           icon="file"
         />
-        <MetricTile label="Human Verified" value={stats.human} icon="shield" />
-        <MetricTile
-          label="Review Required"
-          value={stats.review}
-          icon="warning"
+        <MetricCard
+          label="Human verified"
+          value={stats.human}
+          helper="Certificates linked to human-classified sessions"
+          icon="shield"
         />
-        <MetricTile label="High Risk" value={stats.highRisk} icon="alert" />
+        <MetricCard
+          label="Average confidence"
+          value={`${stats.avgConfidence}%`}
+          helper="Mean model confidence across certificates"
+          icon="lock"
+        />
+        <MetricCard
+          label="Hash coverage"
+          value={`${stats.hashCoverage}%`}
+          helper={`${stats.hashes} certificates include a document hash`}
+          icon="hash"
+        />
       </div>
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <Tabs
-          items={tabItems}
-          value={selectedFilter}
-          onChange={setSelectedFilter}
-        />
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative">
-            <div
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
-              style={{ color: colors.text.muted }}
-            >
-              <Icon type="search" size={14} />
+      {latestCertificate && (
+        <section className="rounded-md border p-4" style={panelStyle()}>
+          <div className="grid gap-4 lg:grid-cols-[1.2fr_0.9fr_0.8fr_0.9fr] lg:items-center">
+            <div>
+              <p
+                className="text-[10px] font-bold uppercase tracking-[0.16em]"
+                style={{ color: colors.text.muted }}
+              >
+                Latest certificate
+              </p>
+              <p
+                className="mt-1 truncate text-[15px] font-bold"
+                style={{ color: colors.text.primary }}
+              >
+                {latestCertificate.title || "Untitled Document"}
+              </p>
+              <p
+                className="mt-1 text-[12px]"
+                style={{ color: colors.text.secondary }}
+              >
+                Issued {formatShortDate(latestCertificate.created_at)} ·{" "}
+                {latestCertificate.course_code || "Personal"}
+              </p>
             </div>
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search certificates..."
-              className="h-9 w-full rounded-md border py-0 pl-9 pr-9 text-[13px] outline-none sm:w-56"
-              style={{
-                borderColor: colors.surface[200],
-                color: colors.text.primary,
-                background: colors.surface[50],
-              }}
-            />
-            {search && (
+            <div>
+              <p className="text-[11px]" style={{ color: colors.text.muted }}>
+                Certificate ID
+              </p>
+              <p
+                className="mt-1 font-mono text-[12px] font-bold"
+                style={{ color: colors.text.primary }}
+              >
+                {shortCertificateId(latestCertificate.certificate_id)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px]" style={{ color: colors.text.muted }}>
+                Classification
+              </p>
+              <div className="mt-2">
+                <StatusBadge value={latestCertificate.classification} />
+              </div>
+            </div>
+            <div className="flex gap-2 lg:justify-end">
+              <Link
+                to={`/verify/${latestCertificate.certificate_id}`}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold"
+                style={{
+                  borderColor: colors.surface[200],
+                  background: colors.surface[50],
+                  color: colors.text.secondary,
+                }}
+              >
+                <Icon type="external" size={14} />
+                Verify
+              </Link>
               <button
                 type="button"
-                onClick={() => setSearch("")}
-                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md"
-                style={{ color: colors.text.secondary }}
-                aria-label="Clear search"
+                disabled={downloadingId === latestCertificate.certificate_id}
+                onClick={(event) =>
+                  handleDownload(event, latestCertificate.certificate_id)
+                }
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                style={{
+                  borderColor: colors.surface[200],
+                  background: colors.surface[50],
+                  color: colors.text.secondary,
+                }}
               >
-                <Icon type="close" size={13} />
+                <Icon type="download" size={14} />
+                PDF
               </button>
-            )}
+            </div>
           </div>
+        </section>
+      )}
 
-          <button
-            type="button"
-            disabled={!filteredCertificates.length}
-            onClick={handleDownloadAll}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-            style={{
-              borderColor: colors.surface[200],
-              background: colors.surface[50],
-              color: colors.text.primary,
-            }}
-          >
-            <Icon type="download" size={14} />
-            Download All
-          </button>
+      <section className="rounded-md border" style={panelStyle()}>
+        <div
+          className="border-b p-4"
+          style={{ borderColor: colors.surface[200] }}
+        >
+          <SectionHeader
+            eyebrow="Filter and inspect"
+            title="Certificate ledger"
+            description="Search issued records by certificate ID, document hash, course, or document title."
+            action={
+              <div
+                className="flex items-center gap-2 text-[12px]"
+                style={{ color: colors.text.muted }}
+              >
+                <Icon type="rows" size={14} />
+                Showing {filteredCertificates.length} of {certificates.length}
+              </div>
+            }
+          />
+
+          <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              {tabItems.map((item) => {
+                const active = selectedFilter === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setSelectedFilter(item.value)}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-[12px] font-semibold transition"
+                    style={{
+                      background: active
+                        ? colors.text.primary
+                        : colors.surface[50],
+                      borderColor: active
+                        ? colors.text.primary
+                        : colors.surface[200],
+                      color: active ? colors.text.light : colors.text.secondary,
+                    }}
+                  >
+                    {item.label}
+                    <span
+                      className="rounded-md px-1.5 py-0.5 font-mono text-[10px]"
+                      style={{
+                        background: active ? colors.brand : colors.surface[100],
+                        color: active ? colors.text.light : colors.text.muted,
+                      }}
+                    >
+                      {item.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative">
+                <div
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+                  style={{ color: colors.text.muted }}
+                >
+                  <Icon type="search" size={14} />
+                </div>
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search ID, hash, course, title"
+                  className="h-9 w-full rounded-md border py-0 pl-9 pr-9 text-[13px] outline-none sm:w-72"
+                  style={{
+                    borderColor: colors.surface[200],
+                    color: colors.text.primary,
+                    background: colors.surface[50],
+                  }}
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md"
+                    style={{ color: colors.text.secondary }}
+                    aria-label="Clear search"
+                  >
+                    <Icon type="close" size={13} />
+                  </button>
+                )}
+              </div>
+
+              <div className="relative">
+                <select
+                  value={reviewFilter}
+                  onChange={(event) =>
+                    setReviewFilter(event.target.value as ReviewFilter)
+                  }
+                  className="h-9 appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none"
+                  style={{
+                    background: colors.surface[50],
+                    borderColor: colors.surface[200],
+                    color: colors.text.secondary,
+                  }}
+                >
+                  {reviewFilters.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
+                  style={{ color: colors.text.muted }}
+                >
+                  <Icon type="chevron" size={13} />
+                </span>
+              </div>
+
+              <div className="relative">
+                <select
+                  value={sortBy}
+                  onChange={(event) =>
+                    setSortBy(event.target.value as SortMode)
+                  }
+                  className="h-9 appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none"
+                  style={{
+                    background: colors.surface[50],
+                    borderColor: colors.surface[200],
+                    color: colors.text.secondary,
+                  }}
+                >
+                  {sortOptions.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
+                  style={{ color: colors.text.muted }}
+                >
+                  <Icon type="chevron" size={13} />
+                </span>
+              </div>
+
+              <button
+                type="button"
+                disabled={!filteredCertificates.length}
+                onClick={handleDownloadAll}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                style={{
+                  borderColor: colors.surface[200],
+                  background: colors.surface[50],
+                  color: colors.text.primary,
+                }}
+              >
+                <Icon type="download" size={14} />
+                Download PDFs
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div
-        className="overflow-hidden rounded-md border bg-white"
-        style={{ borderColor: colors.surface[200], boxShadow: cardShadow() }}
-      >
         {!certificates.length ? (
           <EmptyTable
             title="No certificates yet"
@@ -610,13 +1164,15 @@ export default function CertificatesPage() {
         ) : !filteredCertificates.length ? (
           <EmptyTable
             title="No certificates match this filter"
-            subtitle="Try another classification filter or clear the search query."
+            subtitle="Try another classification filter, review state, sort order, or search query."
             action={
               <button
                 type="button"
                 onClick={() => {
                   setSearch("");
                   setSelectedFilter("ALL");
+                  setReviewFilter("ALL");
+                  setSortBy("NEWEST");
                 }}
                 className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-[13px] font-semibold"
                 style={{
@@ -625,183 +1181,299 @@ export default function CertificatesPage() {
                   color: colors.text.primary,
                 }}
               >
-                Show all certificates
+                Reset filters
               </button>
             }
           />
         ) : (
-          <div className="overflow-x-auto">
-            <div className="min-w-[1100px]">
-              <div
-                className="grid grid-cols-[200px_minmax(240px,1fr)_110px_120px_100px_80px_130px_140px] items-center gap-4 border-b px-5 py-3"
-                style={{
-                  background: colors.surface[100],
-                  borderColor: colors.surface[200],
-                }}
-              >
-                {[
-                  "Certificate ID",
-                  "Document",
-                  "Course",
-                  "Classification",
-                  "Confidence",
-                  "Risk",
-                  "Date",
-                  "Actions",
-                ].map((heading) => (
-                  <div
-                    key={heading}
-                    className="text-[10px] font-bold uppercase tracking-[0.14em]"
-                    style={{ color: colors.text.muted }}
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1220px] border-collapse text-left">
+                <thead>
+                  <tr
+                    className="border-b"
+                    style={{
+                      background: colors.surface[100],
+                      borderColor: colors.surface[200],
+                    }}
                   >
-                    {heading}
-                  </div>
-                ))}
-              </div>
-
-              {filteredCertificates.map((certificate) => {
-                const confidence = normalizePercent(certificate.confidence);
-
-                return (
-                  <button
-                    key={certificate.certificate_id}
-                    type="button"
-                    onClick={() => setSelectedCertificate(certificate)}
-                    className="grid h-[56px] w-full grid-cols-[200px_minmax(240px,1fr)_110px_120px_100px_80px_130px_140px] items-center gap-4 border-b px-5 text-left transition-colors duration-100 hover:bg-surface-100"
-                    style={{ borderColor: colors.surface[200] }}
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span
-                        className="truncate font-mono text-[12px] font-bold"
-                        style={{ color: colors.text.primary }}
+                    {[
+                      "Certificate",
+                      "Document",
+                      "Course",
+                      "Classification",
+                      "Confidence",
+                      "Risk",
+                      "Review",
+                      "Issued",
+                      "Actions",
+                    ].map((heading) => (
+                      <th
+                        key={heading}
+                        className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em]"
+                        style={{ color: colors.text.muted }}
                       >
-                        {shortCertificateId(certificate.certificate_id)}
-                      </span>
-                      <span className="relative shrink-0">
-                        <button
-                          type="button"
-                          onClick={(event) =>
-                            copyCertificateId(event, certificate.certificate_id)
-                          }
-                          className="flex h-6 w-6 items-center justify-center rounded-md"
-                          style={{ color: colors.text.secondary }}
-                          aria-label="Copy certificate ID"
-                        >
-                          <Icon type="copy" size={12} />
-                        </button>
-                        {copiedId === certificate.certificate_id && (
-                          <span
-                            className="absolute left-1/2 top-7 z-10 -translate-x-1/2 whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-semibold"
-                            style={{
-                              background: colors.text.primary,
-                              color: colors.text.light,
-                            }}
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedCertificates.map((certificate) => {
+                    const confidence = normalizePercent(certificate.confidence);
+
+                    return (
+                      <tr
+                        key={certificate.certificate_id}
+                        className="border-b transition-colors duration-100 hover:bg-surface-100"
+                        style={{ borderColor: colors.surface[200] }}
+                      >
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedCertificate(certificate)
+                              }
+                              className="min-w-0 text-left"
+                            >
+                              <p
+                                className="max-w-[180px] truncate font-mono text-[12px] font-bold"
+                                style={{ color: colors.text.primary }}
+                              >
+                                {shortCertificateId(certificate.certificate_id)}
+                              </p>
+                              <p
+                                className="mt-0.5 max-w-[180px] truncate font-mono text-[11px]"
+                                style={{ color: colors.text.muted }}
+                              >
+                                {shortHash(certificate.document_hash)}
+                              </p>
+                            </button>
+                            <span className="relative shrink-0">
+                              <button
+                                type="button"
+                                onClick={(event) =>
+                                  copyCertificateId(
+                                    event,
+                                    certificate.certificate_id,
+                                  )
+                                }
+                                className="flex h-6 w-6 items-center justify-center rounded-md"
+                                style={{ color: colors.text.secondary }}
+                                aria-label="Copy certificate ID"
+                              >
+                                <Icon type="copy" size={12} />
+                              </button>
+                              {copiedId === certificate.certificate_id && (
+                                <span
+                                  className="absolute left-1/2 top-7 z-10 -translate-x-1/2 whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-semibold"
+                                  style={{
+                                    background: colors.text.primary,
+                                    color: colors.text.light,
+                                  }}
+                                >
+                                  Copied
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 align-middle">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCertificate(certificate)}
+                            className="min-w-0 text-left"
                           >
-                            Copied
-                          </span>
-                        )}
-                      </span>
-                    </div>
+                            <p
+                              className="max-w-[260px] truncate text-[13px] font-semibold"
+                              style={{ color: colors.text.primary }}
+                            >
+                              {certificate.title || "Untitled Document"}
+                            </p>
+                            <p
+                              className="mt-0.5 text-[11px]"
+                              style={{ color: colors.text.muted }}
+                            >
+                              Session #{certificate.session_id}
+                            </p>
+                          </button>
+                        </td>
 
-                    <div className="min-w-0">
-                      <p
-                        className="truncate text-[13px] font-semibold"
-                        style={{ color: colors.text.primary }}
-                      >
-                        {certificate.title || "Untitled Document"}
-                      </p>
-                    </div>
+                        <td className="px-4 py-3 align-middle">
+                          <p
+                            className="max-w-[140px] truncate text-[12px] font-medium"
+                            style={{ color: colors.text.primary }}
+                          >
+                            {certificate.course_code || "Personal"}
+                          </p>
+                          <p
+                            className="max-w-[140px] truncate text-[11px]"
+                            style={{ color: colors.text.muted }}
+                          >
+                            {certificate.course_name || "No course linked"}
+                          </p>
+                        </td>
 
-                    <div
-                      className="truncate text-[12px]"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      {certificate.course_code || "Personal"}
-                    </div>
+                        <td className="px-4 py-3 align-middle">
+                          <StatusBadge value={certificate.classification} />
+                        </td>
 
-                    <StatusBadge value={certificate.classification} />
+                        <td className="px-4 py-3 align-middle">
+                          <div className="w-24">
+                            <p
+                              className="font-mono text-[13px] font-bold tabular-nums"
+                              style={{ color: colors.text.primary }}
+                            >
+                              {confidence}%
+                            </p>
+                            <div
+                              className="mt-1 h-1 rounded-md"
+                              style={{ background: colors.surface[200] }}
+                            >
+                              <div
+                                className="h-1 rounded-md"
+                                style={{
+                                  background: colors.brand,
+                                  width: `${confidence}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </td>
 
-                    <div>
-                      <p
-                        className="font-mono text-[13px] font-bold tabular-nums"
-                        style={{ color: colors.text.primary }}
-                      >
-                        {confidence}%
-                      </p>
-                      <div
-                        className="mt-1 h-1 rounded-md"
-                        style={{ background: colors.surface[200] }}
-                      >
-                        <div
-                          className="h-1 rounded-md"
-                          style={{
-                            background: colors.brand,
-                            width: `${confidence}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
+                        <td className="px-4 py-3 align-middle">
+                          <StatusBadge
+                            value={certificate.risk_level || "LOW"}
+                          />
+                        </td>
 
-                    <StatusBadge value={certificate.risk_level || "LOW"} />
+                        <td className="px-4 py-3 align-middle">
+                          <StatusBadge
+                            value={certificate.review_status || "PENDING"}
+                          />
+                        </td>
 
-                    <div
-                      className="text-[12px]"
-                      style={{ color: colors.text.muted }}
-                    >
-                      {certificate.created_at}
-                    </div>
+                        <td
+                          className="px-4 py-3 text-[12px] align-middle"
+                          style={{ color: colors.text.muted }}
+                        >
+                          {formatShortDate(certificate.created_at)}
+                        </td>
 
-                    <div className="flex items-center gap-1.5">
-                      <Link
-                        to={`/verify/${certificate.certificate_id}`}
-                        onClick={(event) => event.stopPropagation()}
-                        className="inline-flex h-7 items-center justify-center rounded-md border px-2 text-[11px] font-semibold"
-                        style={{
-                          borderColor: colors.surface[200],
-                          color: colors.brand,
-                          background: colors.surface[50],
-                        }}
-                      >
-                        Verify
-                      </Link>
-                      <Link
-                        to={ROUTES.REPLAY.replace(
-                          ":sessionId",
-                          String(certificate.session_id),
-                        )}
-                        onClick={(event) => event.stopPropagation()}
-                        className="inline-flex h-7 items-center justify-center rounded-md border px-2 text-[11px] font-semibold"
-                        style={{
-                          borderColor: colors.surface[200],
-                          color: colors.text.secondary,
-                          background: colors.surface[50],
-                        }}
-                      >
-                        Replay
-                      </Link>
-                      <button
-                        type="button"
-                        disabled={downloadingId === certificate.certificate_id}
-                        onClick={(event) =>
-                          handleDownload(event, certificate.certificate_id)
-                        }
-                        className="inline-flex h-7 items-center justify-center rounded-md border px-2 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                        style={{
-                          borderColor: colors.surface[200],
-                          color: colors.text.secondary,
-                          background: colors.surface[50],
-                        }}
-                      >
-                        PDF
-                      </button>
-                    </div>
-                  </button>
-                );
-              })}
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex items-center gap-1.5">
+                            <Link
+                              to={`/verify/${certificate.certificate_id}`}
+                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold"
+                              style={{
+                                borderColor: colors.surface[200],
+                                color: colors.text.secondary,
+                                background: colors.surface[50],
+                              }}
+                            >
+                              <Icon type="external" size={13} />
+                              Verify
+                            </Link>
+                            <Link
+                              to={ROUTES.REPLAY.replace(
+                                ":sessionId",
+                                String(certificate.session_id),
+                              )}
+                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold"
+                              style={{
+                                borderColor: colors.surface[200],
+                                color: colors.text.secondary,
+                                background: colors.surface[50],
+                              }}
+                            >
+                              <Icon type="replay" size={13} />
+                              Replay
+                            </Link>
+                            <button
+                              type="button"
+                              disabled={
+                                downloadingId === certificate.certificate_id
+                              }
+                              onClick={(event) =>
+                                handleDownload(
+                                  event,
+                                  certificate.certificate_id,
+                                )
+                              }
+                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                              style={{
+                                borderColor: colors.surface[200],
+                                color: colors.text.secondary,
+                                background: colors.surface[50],
+                              }}
+                            >
+                              <Icon type="download" size={13} />
+                              PDF
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          </div>
+
+            <div
+              className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <p className="text-[12px]" style={{ color: colors.text.muted }}>
+                Showing {showingStart}–{showingEnd} of{" "}
+                {filteredCertificates.length} certificates
+              </p>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={safePage === 0}
+                  onClick={() => setPage((current) => Math.max(0, current - 1))}
+                  className="h-8 rounded-md border px-3 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{
+                    borderColor: colors.surface[200],
+                    background: colors.surface[50],
+                    color: colors.text.primary,
+                  }}
+                >
+                  Prev
+                </button>
+                <span
+                  className="rounded-md border px-2.5 py-1 text-[12px] font-semibold"
+                  style={{
+                    background: colors.surface[100],
+                    borderColor: colors.surface[200],
+                    color: colors.text.secondary,
+                  }}
+                >
+                  {safePage + 1} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={safePage >= totalPages - 1}
+                  onClick={() =>
+                    setPage((current) => Math.min(totalPages - 1, current + 1))
+                  }
+                  className="h-8 rounded-md border px-3 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{
+                    borderColor: colors.surface[200],
+                    background: colors.surface[50],
+                    color: colors.text.primary,
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
         )}
-      </div>
+      </section>
 
       {selectedCertificate && (
         <div
@@ -813,22 +1485,37 @@ export default function CertificatesPage() {
             style={{ background: colors.shadowStrong }}
           />
           <aside
-            className="absolute right-0 top-0 h-full w-full max-w-[360px] overflow-y-auto border-l bg-white p-5"
-            style={{ borderColor: colors.surface[200] }}
+            className="absolute right-0 top-0 h-full w-full max-w-[420px] overflow-y-auto border-l p-5"
+            style={{
+              background: colors.surface[50],
+              borderColor: colors.surface[200],
+            }}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-4">
-              <h2
-                className="text-[14px] font-bold"
-                style={{ color: colors.text.primary }}
-              >
-                Certificate Detail
-              </h2>
+              <div>
+                <p
+                  className="text-[10px] font-bold uppercase tracking-[0.16em]"
+                  style={{ color: colors.text.muted }}
+                >
+                  Certificate audit
+                </p>
+                <h2
+                  className="mt-1 text-[16px] font-bold"
+                  style={{ color: colors.text.primary }}
+                >
+                  Certificate detail
+                </h2>
+              </div>
               <button
                 type="button"
                 onClick={() => setSelectedCertificate(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-md"
-                style={{ color: colors.text.secondary }}
+                className="flex h-8 w-8 items-center justify-center rounded-md border"
+                style={{
+                  background: colors.surface[50],
+                  borderColor: colors.surface[200],
+                  color: colors.text.secondary,
+                }}
                 aria-label="Close certificate detail"
               >
                 <Icon type="close" size={16} />
@@ -844,9 +1531,10 @@ export default function CertificatesPage() {
                   Certificate ID
                 </p>
                 <div
-                  className="mt-2 break-all rounded-md p-3 font-mono text-[12px]"
+                  className="mt-2 break-all rounded-md border p-3 font-mono text-[12px]"
                   style={{
                     background: colors.surface[100],
+                    borderColor: colors.surface[200],
                     color: colors.text.primary,
                   }}
                 >
@@ -862,9 +1550,10 @@ export default function CertificatesPage() {
                   Document hash
                 </p>
                 <div
-                  className="mt-2 break-all rounded-md p-3 font-mono text-[12px]"
+                  className="mt-2 break-all rounded-md border p-3 font-mono text-[12px]"
                   style={{
                     background: colors.surface[100],
+                    borderColor: colors.surface[200],
                     color: colors.text.primary,
                   }}
                 >
@@ -875,7 +1564,10 @@ export default function CertificatesPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div
                   className="rounded-md border p-3"
-                  style={{ borderColor: colors.surface[200] }}
+                  style={{
+                    background: colors.surface[100],
+                    borderColor: colors.surface[200],
+                  }}
                 >
                   <p
                     className="text-[11px]"
@@ -889,7 +1581,10 @@ export default function CertificatesPage() {
                 </div>
                 <div
                   className="rounded-md border p-3"
-                  style={{ borderColor: colors.surface[200] }}
+                  style={{
+                    background: colors.surface[100],
+                    borderColor: colors.surface[200],
+                  }}
                 >
                   <p
                     className="text-[11px]"
@@ -904,17 +1599,73 @@ export default function CertificatesPage() {
                     {normalizePercent(selectedCertificate.confidence)}%
                   </p>
                 </div>
+                <div
+                  className="rounded-md border p-3"
+                  style={{
+                    background: colors.surface[100],
+                    borderColor: colors.surface[200],
+                  }}
+                >
+                  <p
+                    className="text-[11px]"
+                    style={{ color: colors.text.muted }}
+                  >
+                    Risk
+                  </p>
+                  <div className="mt-2">
+                    <StatusBadge
+                      value={selectedCertificate.risk_level || "LOW"}
+                    />
+                  </div>
+                </div>
+                <div
+                  className="rounded-md border p-3"
+                  style={{
+                    background: colors.surface[100],
+                    borderColor: colors.surface[200],
+                  }}
+                >
+                  <p
+                    className="text-[11px]"
+                    style={{ color: colors.text.muted }}
+                  >
+                    Review
+                  </p>
+                  <div className="mt-2">
+                    <StatusBadge
+                      value={selectedCertificate.review_status || "PENDING"}
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div
-                className="rounded-md border p-3"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <p className="text-[11px]" style={{ color: colors.text.muted }}>
-                  Risk
+              <div>
+                <p
+                  className="text-[10px] font-bold uppercase tracking-[0.14em]"
+                  style={{ color: colors.text.muted }}
+                >
+                  Document
                 </p>
-                <div className="mt-2">
-                  <StatusBadge value={selectedCertificate.risk_level} />
+                <div
+                  className="mt-2 rounded-md border p-3"
+                  style={{
+                    background: colors.surface[100],
+                    borderColor: colors.surface[200],
+                  }}
+                >
+                  <p
+                    className="text-[13px] font-semibold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {selectedCertificate.title || "Untitled Document"}
+                  </p>
+                  <p
+                    className="mt-1 text-[12px]"
+                    style={{ color: colors.text.muted }}
+                  >
+                    {selectedCertificate.course_code || "Personal"} ·{" "}
+                    {formatShortDate(selectedCertificate.created_at)}
+                  </p>
                 </div>
               </div>
 
@@ -927,9 +1678,10 @@ export default function CertificatesPage() {
                 </p>
                 <Link
                   to={`/verify/${selectedCertificate.certificate_id}`}
-                  className="mt-2 block break-all rounded-md p-3 text-[12px] font-semibold"
+                  className="mt-2 block break-all rounded-md border p-3 text-[12px] font-semibold"
                   style={{
                     background: colors.surface[100],
+                    borderColor: colors.surface[200],
                     color: colors.brand,
                   }}
                 >
@@ -941,10 +1693,26 @@ export default function CertificatesPage() {
               <div className="space-y-2 pt-2">
                 <Link
                   to={`/verify/${selectedCertificate.certificate_id}`}
-                  className="flex h-11 w-full items-center justify-center rounded-md text-[13px] font-semibold"
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-md text-[13px] font-semibold"
                   style={{ background: colors.brand, color: colors.text.light }}
                 >
+                  <Icon type="external" size={14} />
                   Verify Certificate
+                </Link>
+                <Link
+                  to={ROUTES.REPLAY.replace(
+                    ":sessionId",
+                    String(selectedCertificate.session_id),
+                  )}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-md border text-[13px] font-semibold"
+                  style={{
+                    background: colors.surface[50],
+                    borderColor: colors.surface[200],
+                    color: colors.text.primary,
+                  }}
+                >
+                  <Icon type="replay" size={14} />
+                  Replay Session
                 </Link>
                 <button
                   type="button"
@@ -954,13 +1722,14 @@ export default function CertificatesPage() {
                   disabled={
                     downloadingId === selectedCertificate.certificate_id
                   }
-                  className="flex h-11 w-full items-center justify-center rounded-md border text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-md border text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                   style={{
                     background: colors.surface[50],
                     borderColor: colors.surface[200],
                     color: colors.text.primary,
                   }}
                 >
+                  <Icon type="download" size={14} />
                   Download PDF
                 </button>
               </div>
