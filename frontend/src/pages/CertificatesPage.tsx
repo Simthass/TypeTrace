@@ -43,8 +43,6 @@ type SortMode =
   | "CONFIDENCE_LOW"
   | "COURSE";
 
-type ReviewFilter = "ALL" | "PENDING" | "APPROVED" | "FLAGGED";
-
 type ClassificationFilter = "ALL" | "HUMAN" | "SUSPICIOUS" | "SYNTHETIC";
 
 const PAGE_SIZE = 16;
@@ -54,13 +52,6 @@ const filters: Array<{ value: ClassificationFilter; label: string }> = [
   { value: "HUMAN", label: "Human" },
   { value: "SUSPICIOUS", label: "Needs review" },
   { value: "SYNTHETIC", label: "High risk" },
-];
-
-const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
-  { value: "ALL", label: "All review states" },
-  { value: "PENDING", label: "Pending" },
-  { value: "APPROVED", label: "Approved" },
-  { value: "FLAGGED", label: "Flagged" },
 ];
 
 const sortOptions: Array<{ value: SortMode; label: string }> = [
@@ -787,14 +778,6 @@ export default function CertificatesPage() {
           >
             Certificates
           </h1>
-          <p
-            className="mt-1 max-w-2xl text-[13px] leading-6"
-            style={{ color: colors.text.secondary }}
-          >
-            A structured vault for verifiable authorship records, SHA-256
-            document hashes, public verification links, and certificate PDF
-            exports. Detailed visual analytics live in the Analytics page.
-          </p>
         </div>
 
         <Link
@@ -834,103 +817,11 @@ export default function CertificatesPage() {
         />
       </div>
 
-      {latestCertificate && (
-        <section className="rounded-md border p-4" style={panelStyle()}>
-          <div className="grid gap-4 lg:grid-cols-[1.2fr_0.9fr_0.8fr_0.9fr] lg:items-center">
-            <div>
-              <p
-                className="text-[10px] font-bold uppercase tracking-[0.16em]"
-                style={{ color: colors.text.muted }}
-              >
-                Latest certificate
-              </p>
-              <p
-                className="mt-1 truncate text-[15px] font-bold"
-                style={{ color: colors.text.primary }}
-              >
-                {latestCertificate.title || "Untitled Document"}
-              </p>
-              <p
-                className="mt-1 text-[12px]"
-                style={{ color: colors.text.secondary }}
-              >
-                Issued {formatShortDate(latestCertificate.created_at)} ·{" "}
-                {latestCertificate.course_code || "Personal"}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px]" style={{ color: colors.text.muted }}>
-                Certificate ID
-              </p>
-              <p
-                className="mt-1 font-mono text-[12px] font-bold"
-                style={{ color: colors.text.primary }}
-              >
-                {shortCertificateId(latestCertificate.certificate_id)}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px]" style={{ color: colors.text.muted }}>
-                Classification
-              </p>
-              <div className="mt-2">
-                <StatusBadge value={latestCertificate.classification} />
-              </div>
-            </div>
-            <div className="flex gap-2 lg:justify-end">
-              <Link
-                to={`/verify/${latestCertificate.certificate_id}`}
-                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold"
-                style={{
-                  borderColor: colors.surface[200],
-                  background: colors.surface[50],
-                  color: colors.text.secondary,
-                }}
-              >
-                <Icon type="external" size={14} />
-                Verify
-              </Link>
-              <button
-                type="button"
-                disabled={downloadingId === latestCertificate.certificate_id}
-                onClick={(event) =>
-                  handleDownload(event, latestCertificate.certificate_id)
-                }
-                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                style={{
-                  borderColor: colors.surface[200],
-                  background: colors.surface[50],
-                  color: colors.text.secondary,
-                }}
-              >
-                <Icon type="download" size={14} />
-                PDF
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
-
       <section className="rounded-md border" style={panelStyle()}>
         <div
           className="border-b p-4"
           style={{ borderColor: colors.surface[200] }}
         >
-          <SectionHeader
-            eyebrow="Filter and inspect"
-            title="Certificate ledger"
-            description="Search issued records by certificate ID, document hash, course, or document title."
-            action={
-              <div
-                className="flex items-center gap-2 text-[12px]"
-                style={{ color: colors.text.muted }}
-              >
-                <Icon type="rows" size={14} />
-                Showing {filteredCertificates.length} of {certificates.length}
-              </div>
-            }
-          />
-
           <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-wrap items-center gap-2">
               {tabItems.map((item) => {
@@ -999,24 +890,6 @@ export default function CertificatesPage() {
               </div>
 
               <div className="relative">
-                <select
-                  value={reviewFilter}
-                  onChange={(event) =>
-                    setReviewFilter(event.target.value as ReviewFilter)
-                  }
-                  className="h-9 appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none"
-                  style={{
-                    background: colors.surface[50],
-                    borderColor: colors.surface[200],
-                    color: colors.text.secondary,
-                  }}
-                >
-                  {reviewFilters.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
                 <span
                   className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
                   style={{ color: colors.text.muted }}

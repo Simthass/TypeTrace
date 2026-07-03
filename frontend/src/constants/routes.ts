@@ -1,5 +1,3 @@
-// frontend/src/constants/routes.ts
-
 export const ROUTES = {
   // Public
   HOME: "/",
@@ -20,6 +18,7 @@ export const ROUTES = {
   STUDENT_SETTINGS: "/dashboard/settings",
   EDITOR: "/editor",
   EDITOR_NEW: "/editor/new",
+  DRAFTS: "/drafts",
   SESSIONS: "/sessions",
   CERTIFICATES: "/certificates",
   ANALYTICS: "/analytics",
@@ -55,6 +54,7 @@ export const PUBLIC_NAV = [
 
 export const AUTH_NAV = [
   { label: "Dashboard", path: ROUTES.DASHBOARD },
+  { label: "Drafts", path: ROUTES.DRAFTS },
   { label: "Sessions", path: ROUTES.SESSIONS },
   { label: "Analytics", path: ROUTES.ANALYTICS },
 ] as const;

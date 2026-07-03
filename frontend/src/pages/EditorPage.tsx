@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { ROUTES } from "../constants/routes";
 import { useKeystrokeCapture } from "../hooks/useKeystrokeCapture";
@@ -223,7 +223,13 @@ function CaptureBar({
 }
 
 /** Inline save state badge - top of editor */
-function SaveIndicator({ state }: { state: "saved" | "saving" | "unsaved" }) {
+function SaveIndicator({
+  state,
+  offlineSafe,
+}: {
+  state: "saved" | "saving" | "unsaved";
+  offlineSafe?: boolean;
+}) {
   const cfg = {
     saved: {
       dot: colors.green,
@@ -242,6 +248,8 @@ function SaveIndicator({ state }: { state: "saved" | "saving" | "unsaved" }) {
     },
   }[state];
 
+  const label = offlineSafe && state === "saved" ? "Saved locally" : cfg.label;
+
   return (
     <div className="flex items-center gap-[6px]">
       <span
@@ -253,7 +261,7 @@ function SaveIndicator({ state }: { state: "saved" | "saving" | "unsaved" }) {
         }}
       />
       <span className="text-[12px] font-medium" style={{ color: cfg.text }}>
-        {cfg.label}
+        {label}
       </span>
     </div>
   );
@@ -1002,6 +1010,8 @@ export default function EditorPage() {
   const { showToast } = useToast();
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const routeDraftId = searchParams.get("draftId");
 
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
@@ -1017,11 +1027,18 @@ export default function EditorPage() {
   const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved">(
     "saved",
   );
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
+  const [hasHydratedRouteDraft, setHasHydratedRouteDraft] = useState<
+    string | null
+  >(null);
 
   // Track whether user is actively typing (for CaptureBar pulse)
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const suspendingDraftRef = useRef(false);
 
   const {
     keystrokeLogRef,
@@ -1040,13 +1057,14 @@ export default function EditorPage() {
 
   const userDraftId = String(user?.id ?? user?.email ?? "anonymous");
   const {
+    activeDraftId,
     recoveredDraft,
     hasCheckedDraft,
     isSavingDraft,
     saveDraft,
     clearDraft,
     dismissRecoveredDraft,
-  } = useEditorDraftRecovery({ userId: userDraftId });
+  } = useEditorDraftRecovery({ userId: userDraftId, draftId: routeDraftId });
 
   const [captureTelemetry, setCaptureTelemetry] = useState({
     eventCount: 0,
@@ -1184,19 +1202,37 @@ export default function EditorPage() {
     };
   }, []);
 
-  const buildDraftSnapshot = useCallback(() => {
-    const snapshot = getCaptureSnapshot();
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
 
-    return {
-      title,
-      text,
-      selectedCourseId,
-      keystrokeLog: snapshot.events,
-      startedAt: snapshot.startedAt,
-      lastActivityAt: snapshot.lastActivityAt,
-      lastKeyDownTimestamp: snapshot.lastKeyDownTimestamp,
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
     };
-  }, [getCaptureSnapshot, selectedCourseId, text, title]);
+  }, []);
+
+  const buildDraftSnapshot = useCallback(
+    (options?: { pause?: boolean }) => {
+      const snapshot = getCaptureSnapshot({ pause: options?.pause });
+
+      return {
+        title,
+        text,
+        selectedCourseId,
+        keystrokeLog: snapshot.events,
+        startedAt: snapshot.startedAt,
+        lastActivityAt: snapshot.lastActivityAt,
+        lastKeyDownTimestamp: snapshot.lastKeyDownTimestamp,
+        activeDurationMs: snapshot.activeDurationMs,
+        pausedAt: snapshot.pausedAt,
+      };
+    },
+    [getCaptureSnapshot, selectedCourseId, text, title],
+  );
 
   const hasRecoverableDraft = useMemo(() => {
     return Boolean(
@@ -1210,8 +1246,13 @@ export default function EditorPage() {
     if (!hasRecoverableDraft) return;
 
     const timer = window.setTimeout(() => {
+      if (suspendingDraftRef.current) return;
       setSaveState("saving");
-      void saveDraft(buildDraftSnapshot()).then(() => setSaveState("saved"));
+      void saveDraft(buildDraftSnapshot(), { saveReason: "autosave" }).then(
+        () => {
+          setSaveState("saved");
+        },
+      );
     }, 350);
 
     return () => window.clearTimeout(timer);
@@ -1223,7 +1264,10 @@ export default function EditorPage() {
     if (!hasRecoverableDraft) return;
 
     const persistImmediately = () => {
-      void saveDraft(buildDraftSnapshot());
+      if (suspendingDraftRef.current) return;
+      void saveDraft(buildDraftSnapshot({ pause: true }), {
+        saveReason: "recovery",
+      });
     };
 
     const handleVisibilityChange = () => {
@@ -1239,17 +1283,58 @@ export default function EditorPage() {
     };
   }, [buildDraftSnapshot, hasRecoverableDraft, saveDraft]);
 
+  useEffect(() => {
+    if (!routeDraftId || !hasCheckedDraft || !recoveredDraft) return;
+    if (hasHydratedRouteDraft === recoveredDraft.draftId) return;
+
+    const timer = window.setTimeout(() => {
+      setTitle(recoveredDraft.title || "");
+      setText(recoveredDraft.text || "");
+      setSelectedCourseId(recoveredDraft.selectedCourseId ?? null);
+      setAnalysisResult(null);
+      setShowResultModal(false);
+      hydrateCapture({
+        events: recoveredDraft.keystrokeLog,
+        startedAt: recoveredDraft.startedAt,
+        lastActivityAt: recoveredDraft.lastActivityAt,
+        lastKeyDownTimestamp: recoveredDraft.lastKeyDownTimestamp,
+        activeDurationMs: recoveredDraft.activeDurationMs,
+        pausedAt: recoveredDraft.pausedAt,
+      });
+      syncCaptureTelemetry(recoveredDraft.keystrokeLog);
+      setSaveState("saved");
+      setHasHydratedRouteDraft(recoveredDraft.draftId);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    hasCheckedDraft,
+    hasHydratedRouteDraft,
+    hydrateCapture,
+    recoveredDraft,
+    routeDraftId,
+    syncCaptureTelemetry,
+  ]);
+
   // Show recovery prompt only after local draft lookup finishes.
   useEffect(() => {
-    if (!hasCheckedDraft || !recoveredDraft) return;
-    if (text.trim() || hasCapturedEvents) return;
+    if (routeDraftId || !hasCheckedDraft || !recoveredDraft) return;
+    if (recoveredDraft.saveReason === "manual") return;
+    if (title.trim() || text.trim() || hasCapturedEvents) return;
 
     const timer = window.setTimeout(() => {
       setShowDraftRecoveryModal(true);
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [hasCapturedEvents, hasCheckedDraft, recoveredDraft, text]);
+  }, [
+    hasCapturedEvents,
+    hasCheckedDraft,
+    recoveredDraft,
+    routeDraftId,
+    text,
+    title,
+  ]);
 
   // Cleanup typing timeout
   useEffect(
@@ -1292,11 +1377,14 @@ export default function EditorPage() {
       startedAt: recoveredDraft.startedAt,
       lastActivityAt: recoveredDraft.lastActivityAt,
       lastKeyDownTimestamp: recoveredDraft.lastKeyDownTimestamp,
+      activeDurationMs: recoveredDraft.activeDurationMs,
+      pausedAt: recoveredDraft.pausedAt,
     });
     syncCaptureTelemetry(recoveredDraft.keystrokeLog);
     dismissRecoveredDraft();
     setShowDraftRecoveryModal(false);
     setSaveState("saved");
+    setSearchParams({ draftId: recoveredDraft.draftId }, { replace: true });
 
     showToast({
       type: "success",
@@ -1307,7 +1395,7 @@ export default function EditorPage() {
   };
 
   const discardRecoveredDraft = () => {
-    void clearDraft();
+    void clearDraft(recoveredDraft?.draftId);
     dismissRecoveredDraft();
     setShowDraftRecoveryModal(false);
 
@@ -1316,6 +1404,44 @@ export default function EditorPage() {
       title: "Draft discarded",
       message: "The local unfinished session was removed from this browser.",
     });
+  };
+
+  const saveCurrentSessionAsDraft = async () => {
+    if (!hasRecoverableDraft) {
+      showToast({
+        type: "info",
+        title: "Nothing to save",
+        message: "Start writing before saving this session as a draft.",
+      });
+      return;
+    }
+
+    setSaveState("saving");
+    suspendingDraftRef.current = true;
+
+    try {
+      await saveDraft(buildDraftSnapshot({ pause: true }), {
+        saveReason: "manual",
+      });
+      setSaveState("saved");
+
+      showToast({
+        type: "success",
+        title: "Draft saved",
+        message: "Your writing session was paused and saved to Drafts.",
+      });
+
+      navigate(ROUTES.DASHBOARD, { replace: true });
+    } catch {
+      suspendingDraftRef.current = false;
+      setSaveState("unsaved");
+      showToast({
+        type: "error",
+        title: "Draft save failed",
+        message:
+          "The browser could not persist this draft. Copy your text before leaving this page.",
+      });
+    }
   };
 
   const openAnalyzeModal = () => {
@@ -1435,7 +1561,8 @@ export default function EditorPage() {
       setShowCourseModal(false);
       setShowResultModal(true);
       setSaveState("saved");
-      void clearDraft();
+      void clearDraft(activeDraftId);
+      setSearchParams({}, { replace: true });
 
       showToast({
         type: "success",
@@ -1463,7 +1590,7 @@ export default function EditorPage() {
     setSaveState("saved");
     resetCapture();
     setCaptureTelemetry({ eventCount: 0, pasteEventCount: 0 });
-    void clearDraft();
+    void clearDraft(activeDraftId);
     navigate(ROUTES.DASHBOARD, { replace: true });
   };
 
@@ -1477,7 +1604,8 @@ export default function EditorPage() {
     setSaveState("saved");
     resetCapture();
     setCaptureTelemetry({ eventCount: 0, pasteEventCount: 0 });
-    void clearDraft();
+    void clearDraft(activeDraftId);
+    setSearchParams({}, { replace: true });
 
     showToast({
       type: "info",
@@ -1530,7 +1658,10 @@ export default function EditorPage() {
 
         {/* Right: status + actions */}
         <div className="flex items-center gap-4">
-          <SaveIndicator state={isSavingDraft ? "saving" : saveState} />
+          <SaveIndicator
+            state={isSavingDraft ? "saving" : saveState}
+            offlineSafe={!isOnline}
+          />
 
           {/* Capture status pill */}
           <div
@@ -1580,6 +1711,20 @@ export default function EditorPage() {
 
           <button
             type="button"
+            onClick={saveCurrentSessionAsDraft}
+            disabled={!hasRecoverableDraft || isSubmitting}
+            className="rounded-md border px-3 py-[6px] text-[12px] font-semibold transition-all duration-150 hover:brightness-95 disabled:opacity-40"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.primary,
+              background: colors.surface[50],
+            }}
+          >
+            Save draft
+          </button>
+
+          <button
+            type="button"
             onClick={openAnalyzeModal}
             disabled={!canAnalyze || isSubmitting}
             className="flex items-center gap-2 rounded-md px-4 py-[7px] text-[12px] font-semibold text-white transition-all duration-150 hover:brightness-110 active:scale-[0.98] disabled:opacity-40"
@@ -1618,6 +1763,16 @@ export default function EditorPage() {
                 style={{ color: colors.text.muted }}
               >
                 {charCount.toLocaleString()} chars
+              </span>
+              <span
+                className="hidden rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] sm:inline-flex"
+                style={{
+                  borderColor: colors.surface[200],
+                  background: colors.surface[100],
+                  color: isOnline ? colors.text.muted : colors.amber,
+                }}
+              >
+                {isOnline ? "Autosave active" : "Offline safe"}
               </span>
             </div>
 

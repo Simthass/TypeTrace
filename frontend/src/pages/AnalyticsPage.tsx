@@ -903,14 +903,6 @@ export default function AnalyticsPage() {
           >
             Analytics
           </h1>
-          <p
-            className="mt-1 max-w-3xl text-[13px] leading-6"
-            style={{ color: colors.text.secondary }}
-          >
-            Account-level writing evidence, typing rhythm, revision behavior,
-            confidence trends, and course performance. Every chart uses one
-            clear unit or explicitly normalized scores.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

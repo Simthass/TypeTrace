@@ -21,6 +21,7 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import CertificatesPage from "./pages/CertificatesPage";
 import CertificateVerificationResultPage from "./pages/CertificateVerificationResultPage";
 import DashboardPage from "./pages/DashboardPage";
+import DraftsPage from "./pages/DraftsPage";
 import EditorPage from "./pages/EditorPage";
 import FeaturesPage from "./pages/FeaturesPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
@@ -118,6 +119,7 @@ export default function App() {
 
                 <Route element={<DashboardLayout />}>
                   <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+                  <Route path={ROUTES.DRAFTS} element={<DraftsPage />} />
                   <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
                   <Route
                     path={ROUTES.CERTIFICATES}

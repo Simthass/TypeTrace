@@ -123,6 +123,12 @@ export const PAGE_METADATA_ROUTES: PageMetadataRoute[] = [
       "Review your TypeTrace sessions, certificate activity, writing evidence metrics, and academic authorship status.",
   },
   {
+    path: ROUTES.DRAFTS,
+    title: "Drafts",
+    description:
+      "Resume unfinished TypeTrace writing drafts with text, keystroke evidence, timing state, and course selection preserved.",
+  },
+  {
     path: ROUTES.SESSIONS,
     title: "Sessions",
     description:

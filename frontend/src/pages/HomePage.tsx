@@ -1,6 +1,15 @@
+// frontend/src/pages/HomePage.tsx
+
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { motion, useInView, useReducedMotion } from "framer-motion";
+import {
+  AnimatePresence,
+  motion,
+  useInView,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+} from "framer-motion";
 
 import { ROUTES } from "../constants/routes";
 import { brand, colors } from "../styles/colors";
@@ -64,11 +73,7 @@ function Icon({
     | "shieldCheck"
     | "barChart"
     | "fileText"
-    | "download"
-    | "copy"
-    | "pause"
-    | "play"
-    | "sliders";
+    | "download";
   size?: number;
   strokeWidth?: number;
 }) {
@@ -222,27 +227,6 @@ function Icon({
         <path d="M12 15V3" />
       </>
     ),
-    copy: (
-      <>
-        <rect x="9" y="9" width="13" height="13" rx="2" />
-        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-      </>
-    ),
-    pause: (
-      <>
-        <rect x="6" y="4" width="4" height="16" rx="1" />
-        <rect x="14" y="4" width="4" height="16" rx="1" />
-      </>
-    ),
-    play: <path d="M6 4l14 8-14 8z" />,
-    sliders: (
-      <>
-        <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3" />
-        <circle cx="4" cy="14" r="2" />
-        <circle cx="12" cy="10" r="2" />
-        <circle cx="20" cy="16" r="2" />
-      </>
-    ),
   };
   return (
     <svg
@@ -287,6 +271,31 @@ function Reveal({
     >
       {children}
     </motion.div>
+  );
+}
+
+// ─── Section eyebrow ──────────────────────────────────────────────────────────
+
+function Eyebrow({
+  children,
+  dark = false,
+}: {
+  children: ReactNode;
+  dark?: boolean;
+}) {
+  return (
+    <span
+      className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em]"
+      style={{
+        color: dark ? withAlpha(colors.text.light, "B0") : colors.brand,
+      }}
+    >
+      <span
+        className="h-1 w-1 rounded-full"
+        style={{ background: dark ? colors.text.light : colors.brand }}
+      />
+      {children}
+    </span>
   );
 }
 
@@ -529,113 +538,123 @@ function TeacherReviewCard() {
   );
 }
 
-function MiniDashboardFrame({
-  className = "",
-  muted = false,
-  delay = 0,
-}: {
-  className?: string;
-  muted?: boolean;
-  delay?: number;
-}) {
-  const reduced = useReducedMotion();
-
-  return (
-    <motion.div
-      initial={reduced ? false : { opacity: 0, y: 24, scale: 0.98 }}
-      animate={reduced ? undefined : { opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.72, delay, ease: [0.16, 1, 0.3, 1] }}
-      className={`overflow-hidden rounded-md border bg-white ${className}`}
-      style={{
-        borderColor: muted
-          ? withAlpha(colors.surface[200], "90")
-          : colors.surface[200],
-        boxShadow: muted
-          ? `0 18px 56px ${withAlpha(colors.shadow, "60")}`
-          : `0 28px 90px ${withAlpha(colors.shadowStrong, "45")}`,
-      }}
-      aria-hidden={muted}
-    >
-      <img
-        src={DASHBOARD_PREVIEW_SRC}
-        alt={muted ? "" : "TypeTrace dashboard preview"}
-        className="block w-full select-none object-cover object-top"
-        draggable={false}
-        style={{
-          maxHeight: muted ? 540 : 660,
-          opacity: muted ? 0.72 : 1,
-          filter: muted ? "saturate(0.82) contrast(0.96)" : undefined,
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-16"
-        style={{
-          background: `linear-gradient(180deg, ${withAlpha(colors.surface[50], "70")} 0%, transparent 100%)`,
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 rounded-md"
-        style={{
-          boxShadow: `inset 0 1px 0 ${withAlpha(colors.text.light, "E6")}, inset 0 -1px 0 ${withAlpha(colors.surface[200], "A0")}`,
-        }}
-      />
-    </motion.div>
-  );
-}
-
 function HeroDashboardPreview() {
+  const ref = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ["start end", "center center"],
+  });
+  const rotateX = useTransform(
+    scrollYProgress,
+    [0, 1],
+    reduced ? [0, 0] : [14, 0],
+  );
+  const y = useTransform(scrollYProgress, [0, 1], reduced ? [0, 0] : [56, 0]);
+  const scale = useTransform(
+    scrollYProgress,
+    [0, 1],
+    reduced ? [1, 1] : [0.95, 1],
+  );
+  const opacity = useTransform(scrollYProgress, [0, 0.38], [0.25, 1]);
 
   return (
-    <div className="relative z-20 mx-auto w-full max-w-[1380px] px-4 pb-8 pt-2 sm:px-6">
+    <div
+      ref={ref}
+      className="relative z-20 mx-auto w-full max-w-[1280px] px-4 sm:px-6"
+      style={{ perspective: "1400px" }}
+    >
       <div
-        className="pointer-events-none absolute left-1/2 top-[18%] h-[360px] w-[76%] -translate-x-1/2 rounded-full"
+        className="pointer-events-none absolute left-1/2 top-[30%] h-[300px] w-[82%] -translate-x-1/2 rounded-full"
         style={{
-          background: `radial-gradient(ellipse at center, ${withAlpha(colors.brand, "18")} 0%, transparent 68%)`,
-          filter: "blur(88px)",
-          opacity: 0.82,
+          background: withAlpha(colors.brand, "14"),
+          filter: "blur(80px)",
+          opacity: 0.7,
         }}
       />
-
-      <div className="relative mx-auto h-[430px] max-w-[1180px] sm:h-[560px] lg:h-[690px]">
-        {" "}
-        {/*
-          Three real dashboard image frames, stacked vertically like the
-          reference: the front image stays closest to the hero copy, the second
-          sits slightly higher behind it, and the third sits higher again.
-        */}
-        <MiniDashboardFrame
-          muted
-          delay={0.18}
-          className="absolute inset-x-0 top-0 z-0 mx-auto w-[86%] max-w-[1040px]"
-        />
-        <MiniDashboardFrame
-          muted
-          delay={0.28}
-          className="absolute inset-x-0 top-8 z-10 mx-auto w-[93%] max-w-[1110px]"
-        />
-        <motion.div
-          initial={reduced ? false : { opacity: 0, y: 42, scale: 0.98 }}
-          animate={reduced ? undefined : { opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.86, delay: 0.38, ease: [0.16, 1, 0.3, 1] }}
-          className="absolute inset-x-0 top-16 z-20 mx-auto w-full max-w-[1180px]"
+      <div
+        className="pointer-events-none absolute bottom-[-12px] left-1/2 h-[60px] w-[72%] -translate-x-1/2 rounded-full"
+        style={{
+          background: withAlpha(colors.text.primary, "18"),
+          filter: "blur(32px)",
+        }}
+      />
+      <motion.div
+        initial={
+          reduced
+            ? { opacity: 1 }
+            : { opacity: 0, y: 72, rotateX: 14, scale: 0.95 }
+        }
+        animate={
+          reduced
+            ? { opacity: 1 }
+            : { opacity: 1, y: 0, rotateX: 14, scale: 0.95 }
+        }
+        transition={{ duration: 1.1, delay: 0.42, ease: [0.16, 1, 0.3, 1] }}
+        style={
+          reduced
+            ? undefined
+            : {
+                rotateX,
+                y,
+                scale,
+                opacity,
+                transformPerspective: 1400,
+                transformOrigin: "center top",
+              }
+        }
+        className="relative w-full overflow-hidden rounded-xl border bg-white will-change-transform"
+        aria-label="TypeTrace dashboard preview"
+      >
+        <div
+          className="flex h-10 items-center gap-3 border-b px-4"
+          style={{
+            background: colors.surface[100],
+            borderColor: colors.surface[200],
+          }}
         >
-          <MiniDashboardFrame />
-        </motion.div>
+          <div className="flex gap-1.5">
+            {[colors.red, colors.amber, colors.green].map((c) => (
+              <div
+                key={c}
+                className="h-3 w-3 rounded-full"
+                style={{ background: c }}
+              />
+            ))}
+          </div>
+          <div
+            className="mx-auto flex h-6 max-w-[300px] flex-1 items-center justify-center gap-1.5 rounded-md border font-mono text-[11px]"
+            style={{
+              background: colors.surface[50],
+              borderColor: colors.surface[200],
+              color: colors.text.secondary,
+            }}
+          >
+            <Icon name="lock" size={10} />
+            app.typetrace.com
+          </div>
+          <div className="w-12" />
+        </div>
+        <img
+          src={DASHBOARD_PREVIEW_SRC}
+          alt="TypeTrace writing session dashboard"
+          className="block w-full select-none object-cover object-top"
+          draggable={false}
+          style={{ maxHeight: 580 }}
+        />
         <div
-          className="pointer-events-none absolute inset-x-[-6%] bottom-[-70px] z-40 h-[340px]"
+          className="pointer-events-none absolute inset-x-0 top-0 h-20"
           style={{
-            background: `linear-gradient(180deg, transparent 0%, ${withAlpha(colors.surface[50], "D8")} 38%, ${colors.surface[50]} 100%)`,
+            background: `linear-gradient(180deg, ${withAlpha(colors.surface[50], "30")} 0%, transparent 100%)`,
           }}
         />
         <div
-          className="pointer-events-none absolute bottom-12 left-1/2 z-30 h-20 w-[74%] -translate-x-1/2 rounded-full"
+          className="pointer-events-none absolute inset-0 rounded-xl"
           style={{
-            background: withAlpha(colors.text.primary, "16"),
-            filter: "blur(38px)",
+            boxShadow: `inset 0 1px 0 ${withAlpha(colors.text.light, "CC")}, inset 0 -1px 0 ${withAlpha(colors.surface[200], "A0")}`,
           }}
         />
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -663,6 +682,7 @@ function HeroSection() {
       >
         <TeacherReviewCard />
       </FloatingCard>
+
       <div className="relative z-10 flex w-full max-w-[920px] flex-col items-center">
         <motion.div
           initial={{ opacity: 0, y: 14 }}
@@ -682,6 +702,7 @@ function HeroSection() {
           <PublicIcon name="shield" size={14} />
           Behavioral authorship evidence
         </motion.div>
+
         <motion.h1
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -698,6 +719,7 @@ function HeroSection() {
           <br />
           <span style={{ color: colors.brand }}>built as you write.</span>
         </motion.h1>
+
         <motion.p
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -709,6 +731,7 @@ function HeroSection() {
           signals to create reviewable writing evidence before academic work is
           questioned.
         </motion.p>
+
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
@@ -723,6 +746,7 @@ function HeroSection() {
             Verify a certificate
           </SecondaryLink>
         </motion.div>
+
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -745,6 +769,7 @@ function HeroSection() {
           ))}
         </motion.div>
       </div>
+
       <div className="relative z-10 mt-16 w-full">
         <HeroDashboardPreview />
       </div>
@@ -830,7 +855,7 @@ const SHOWCASE_STEPS = [
     number: "03",
     eyebrow: "Certify",
     title: "A sealed certificate, ready for academic submission.",
-    body: "Once verified, a tamper-evident certificate is generated instantly - shareable with any teacher or institution that needs to confirm authorship.",
+    body: "Once verified, a tamper-evident certificate is generated instantly — shareable with any teacher or institution that needs to confirm authorship.",
     image: IMAGE_PATHS.certificate,
     alt: "Hand holding a printed authorship certificate document",
   },
@@ -1042,7 +1067,7 @@ function CapabilityMapSection() {
             from the first keystroke to the certificate a teacher verifies.
             Nothing is captured in isolation.
           </p>
-          <div className="mt-6">
+          <div className="mt-6 flex flex-col gap-2">
             <PrimaryLink to={ROUTES.REGISTER}>
               Start a writing session
             </PrimaryLink>
@@ -1054,7 +1079,7 @@ function CapabilityMapSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DIFFERENTIATOR
+// DIFFERENTIATOR - Comparison table + live preview
 // ─────────────────────────────────────────────────────────────────────────────
 
 const COMPETITOR_DATA = [
@@ -1119,11 +1144,12 @@ function ComparisonRow({
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const reduced = useReducedMotion();
+
   const renderCell = (
     value: boolean | string,
     isTypeTrace: boolean = false,
   ) => {
-    if (value === true)
+    if (value === true) {
       return (
         <motion.div
           initial={false}
@@ -1139,7 +1165,8 @@ function ComparisonRow({
           <Icon name="check" size={13} strokeWidth={3} />
         </motion.div>
       );
-    if (value === false)
+    }
+    if (value === false) {
       return (
         <div
           className="mx-auto flex h-6 w-6 items-center justify-center rounded-full"
@@ -1156,6 +1183,7 @@ function ComparisonRow({
           </span>
         </div>
       );
+    }
     return (
       <span
         className="text-[11px] font-medium"
@@ -1165,6 +1193,7 @@ function ComparisonRow({
       </span>
     );
   };
+
   return (
     <motion.div
       initial={reduced ? false : { opacity: 0, x: -8 }}
@@ -1227,6 +1256,7 @@ function LiveWritingPreview() {
     { time: "00:18", action: "Paste blocked", type: "security" },
     { time: "00:24", action: "Session hash generated", type: "system" },
   ];
+
   return (
     <PublicCard className="overflow-hidden">
       <div
@@ -1236,13 +1266,18 @@ function LiveWritingPreview() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="flex gap-1">
-              {[colors.red, colors.amber, colors.green].map((c) => (
-                <div
-                  key={c}
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: c }}
-                />
-              ))}
+              <div
+                className="h-2 w-2 rounded-full"
+                style={{ background: colors.red }}
+              />
+              <div
+                className="h-2 w-2 rounded-full"
+                style={{ background: colors.amber }}
+              />
+              <div
+                className="h-2 w-2 rounded-full"
+                style={{ background: colors.green }}
+              />
             </div>
             <span
               className="ml-1 text-[10px] font-medium"
@@ -1399,6 +1434,7 @@ function DifferentiatorSection() {
             align="center"
           />
         </Reveal>
+
         <Reveal className="mb-12 grid grid-cols-2 gap-3 md:grid-cols-4">
           <StatCard value="100%" label="Privacy-preserving" icon="lock" />
           <StatCard value="&lt;50ms" label="Capture latency" icon="zap" />
@@ -1409,6 +1445,7 @@ function DifferentiatorSection() {
           />
           <StatCard value="7" label="Evidence layers" icon="activity" />
         </Reveal>
+
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-14">
           <Reveal>
             <div>
@@ -1421,6 +1458,7 @@ function DifferentiatorSection() {
               <LiveWritingPreview />
             </div>
           </Reveal>
+
           <Reveal delay={0.1}>
             <div>
               <p
@@ -1492,6 +1530,7 @@ function DifferentiatorSection() {
             </div>
           </Reveal>
         </div>
+
         <Reveal delay={0.15} className="mt-12">
           <div className="flex flex-wrap items-center justify-center gap-6">
             {[
@@ -1621,230 +1660,257 @@ function StudentTeacherSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TRUST SECTION — REDESIGNED: Clean dark cards with evidence flow
+// TRUST SECTION - REDESIGNED: Horizontal tabs + visual evidence chain
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TRUST_PILLARS = [
+const TRUST_TABS = [
   {
+    id: "process",
+    label: "Process evidence",
     icon: "activity",
-    title: "Process over product",
-    desc: "We capture how the document was written — rhythm, hesitation, revisions — not just the final text.",
-    stat: "200+",
-    statLabel: "behavioral signals tracked",
+    title: "How you write, not what you write.",
+    content:
+      "TypeTrace records rhythm, hesitation, revision patterns, paste bursts, deletions, and typing consistency - giving reviewers behavioral context that AI text detectors can never provide.",
+    stat: "100%",
+    statLabel: "Process captured",
   },
   {
+    id: "privacy",
+    label: "Privacy by design",
     icon: "shieldCheck",
-    title: "Verify without exposure",
-    desc: "Public verification confirms authenticity without revealing private drafts or session content.",
-    stat: "SHA-256",
-    statLabel: "tamper-evident sealing",
+    title: "Verify without exposing drafts.",
+    content:
+      "Public verification confirms certificate status and integrity metadata without revealing writing content or private session data. Students control what they share.",
+    stat: "0",
+    statLabel: "Drafts exposed",
   },
   {
+    id: "review",
+    label: "Human review",
     icon: "users",
-    title: "Built for human review",
-    desc: "Evidence designed for educators to interpret alongside institutional procedures. No black-box judgments.",
+    title: "Evidence for humans, not algorithms.",
+    content:
+      "TypeTrace supports fair human review with structured behavioral evidence. Teachers interpret the data alongside institutional academic integrity procedures - no black-box punishments.",
     stat: "Human-first",
-    statLabel: "review workflow",
+    statLabel: "Review process",
   },
 ];
 
 function TrustSection() {
+  const [activeTab, setActiveTab] = useState("process");
+  const active = TRUST_TABS.find((t) => t.id === activeTab)!;
+  const reduced = useReducedMotion();
+
   return (
     <section
-      className="relative overflow-hidden px-6 py-24 md:px-12 md:py-32"
+      className="relative overflow-hidden px-6 py-20 md:px-12 md:py-28"
       style={{ background: colors.text.primary }}
     >
-      {/* Subtle texture */}
+      {/* Background texture */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.03]"
+        className="pointer-events-none absolute inset-0 opacity-[0.04]"
         style={{
-          backgroundImage: `radial-gradient(${colors.text.light} 1px, transparent 1px)`,
-          backgroundSize: "24px 24px",
+          backgroundImage: `radial-gradient(${withAlpha(colors.text.light, "80")} 1px, transparent 1px)`,
+          backgroundSize: "28px 28px",
         }}
       />
       <div
-        className="pointer-events-none absolute left-1/2 top-0 h-[400px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        className="pointer-events-none absolute left-1/2 top-0 h-[500px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full"
         style={{
-          background: `radial-gradient(circle, ${withAlpha(colors.brand, "25")} 0%, transparent 55%)`,
-          filter: "blur(70px)",
+          background: `radial-gradient(circle, ${withAlpha(colors.brand, "30")} 0%, transparent 60%)`,
+          filter: "blur(80px)",
         }}
       />
 
       <div className="relative mx-auto max-w-[1100px]">
-        {/* Header */}
-        <Reveal className="mb-14 text-center">
+        <Reveal className="mb-10 text-center">
+          <div
+            className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 mb-5"
+            style={{
+              borderColor: withAlpha(colors.text.light, "20"),
+              background: withAlpha(colors.text.light, "06"),
+            }}
+          >
+            <Icon name="shieldCheck" size={13} />
+            <span
+              className="text-[11px] font-bold uppercase tracking-wider"
+              style={{ color: withAlpha(colors.text.light, "B0") }}
+            >
+              Trust architecture
+            </span>
+          </div>
           <h2
-            className="text-[2.5rem] font-bold leading-[1.1] tracking-[-0.04em] md:text-[3.2rem]"
+            className="text-[2.2rem] font-bold leading-[1.1] tracking-[-0.04em] md:text-[3rem]"
             style={{ color: colors.text.light }}
           >
-            Evidence you can
+            Serious evidence.
             <br />
-            defend in any room.
+            Serious product design.
           </h2>
           <p
-            className="mt-4 text-[15px] leading-relaxed max-w-xl mx-auto"
-            style={{ color: withAlpha(colors.text.light, "75") }}
+            className="mt-3 text-[15px] leading-relaxed max-w-lg mx-auto"
+            style={{ color: withAlpha(colors.text.light, "80") }}
           >
-            Every design decision in TypeTrace serves one goal: making writing
-            evidence that holds up under the strictest academic scrutiny.
+            TypeTrace handles sensitive academic review workflows with the rigor
+            they demand.
           </p>
         </Reveal>
 
-        {/* Three pillars — dark cards */}
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-3 mb-12">
-          {TRUST_PILLARS.map((pillar, i) => (
-            <Reveal key={pillar.title} delay={i * 0.08}>
-              <div
-                className="group relative rounded-2xl border p-6 transition-all duration-300 hover:border-brand/30"
-                style={{
-                  borderColor: withAlpha(colors.text.light, "10"),
-                  background: withAlpha(colors.text.light, "03"),
-                }}
-              >
-                {/* Hover glow */}
-                <div
-                  className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                  style={{
-                    background: `radial-gradient(200px circle at 50% 0%, ${withAlpha(colors.brand, "12")} 0%, transparent 70%)`,
-                  }}
-                />
-                <div className="relative">
-                  <div
-                    className="flex h-10 w-10 items-center justify-center rounded-xl mb-4"
-                    style={{
-                      background: withAlpha(colors.brand, "18"),
-                      color: colors.brand,
-                    }}
-                  >
-                    <Icon
-                      name={pillar.icon as any}
-                      size={18}
-                      strokeWidth={1.8}
-                    />
-                  </div>
-                  <h3
-                    className="text-lg font-bold tracking-[-0.02em] mb-2"
-                    style={{ color: colors.text.light }}
-                  >
-                    {pillar.title}
-                  </h3>
-                  <p
-                    className="text-[13px] leading-relaxed mb-5"
-                    style={{ color: withAlpha(colors.text.light, "70") }}
-                  >
-                    {pillar.desc}
-                  </p>
-                  <div
-                    className="flex items-baseline gap-2 pt-4 border-t"
-                    style={{ borderColor: withAlpha(colors.text.light, "08") }}
-                  >
-                    <span
-                      className="text-2xl font-bold tracking-tight"
-                      style={{ color: colors.brand }}
-                    >
-                      {pillar.stat}
-                    </span>
-                    <span
-                      className="text-[11px] font-medium"
-                      style={{ color: withAlpha(colors.text.light, "50") }}
-                    >
-                      {pillar.statLabel}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-
-        {/* Evidence flow — visual chain */}
-        <Reveal delay={0.15}>
-          <div
-            className="rounded-2xl border p-6 md:p-8"
-            style={{
-              borderColor: withAlpha(colors.text.light, "10"),
-              background: withAlpha(colors.text.light, "02"),
-            }}
-          >
-            <p
-              className="text-[11px] font-bold uppercase tracking-wider mb-6 text-center"
-              style={{ color: withAlpha(colors.text.light, "50") }}
+        {/* Tab navigation */}
+        <Reveal delay={0.05}>
+          <div className="mb-8 flex justify-center">
+            <div
+              className="inline-flex rounded-xl border p-1"
+              style={{
+                borderColor: withAlpha(colors.text.light, "15"),
+                background: withAlpha(colors.text.light, "05"),
+              }}
             >
-              How evidence flows
-            </p>
-            <div className="flex flex-col md:flex-row items-center justify-center gap-3 md:gap-2">
-              {[
-                { icon: "keyboard", label: "Writing session", active: true },
-                { icon: "activity", label: "Behavior capture", active: true },
-                { icon: "hash", label: "SHA-256 seal", active: true },
-                { icon: "certificate", label: "Certificate", active: true },
-                { icon: "search", label: "Public verify", active: false },
-              ].map((step, i) => (
-                <div
-                  key={step.label}
-                  className="flex items-center gap-3 md:gap-2 w-full md:w-auto"
+              {TRUST_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className="relative flex items-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-semibold transition-all duration-200"
+                  style={{
+                    color:
+                      activeTab === tab.id
+                        ? colors.brand
+                        : withAlpha(colors.text.light, "70"),
+                    background:
+                      activeTab === tab.id ? colors.text.light : "transparent",
+                    boxShadow:
+                      activeTab === tab.id
+                        ? `0 2px 8px ${withAlpha(colors.text.primary, "20")}`
+                        : "none",
+                  }}
                 >
-                  <div
-                    className={`flex flex-col items-center gap-1.5 rounded-xl px-4 py-3 transition-all duration-200 flex-1 md:flex-initial ${step.active ? "" : "opacity-40"}`}
-                    style={{
-                      background: step.active
-                        ? withAlpha(colors.brand, "12")
-                        : withAlpha(colors.text.light, "04"),
-                    }}
-                  >
-                    <div
-                      className="flex h-8 w-8 items-center justify-center rounded-lg"
-                      style={{
-                        color: step.active
-                          ? colors.brand
-                          : withAlpha(colors.text.light, "40"),
-                      }}
-                    >
-                      <Icon name={step.icon as any} size={16} strokeWidth={2} />
-                    </div>
-                    <span
-                      className="text-[10px] font-semibold text-center whitespace-nowrap"
-                      style={{
-                        color: step.active
-                          ? colors.text.light
-                          : withAlpha(colors.text.light, "40"),
-                      }}
-                    >
-                      {step.label}
-                    </span>
-                  </div>
-                  {i < 4 && (
-                    <div className="flex items-center justify-center w-6 h-6 md:w-4 md:h-4 shrink-0 rotate-90 md:rotate-0">
-                      <Icon name="arrowRight" size={14} strokeWidth={2} />
-                    </div>
-                  )}
-                </div>
+                  <Icon name={tab.icon as any} size={14} strokeWidth={2} />
+                  {tab.label}
+                </button>
               ))}
             </div>
           </div>
         </Reveal>
 
-        {/* CTA */}
-        <Reveal delay={0.2}>
-          <div className="mt-10 text-center">
-            <Link
-              to={ROUTES.REGISTER}
-              className="inline-flex items-center gap-2 rounded-lg px-6 py-3 text-[14px] font-bold transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
-              style={{
-                background: colors.brand,
-                color: colors.text.light,
-                boxShadow: `0 6px 24px ${withAlpha(colors.brand, "35")}`,
-              }}
-            >
-              Start building evidence
-              <Icon name="arrowRight" size={14} strokeWidth={2.5} />
-            </Link>
-            <p
-              className="mt-3 text-[11px]"
-              style={{ color: withAlpha(colors.text.light, "45") }}
-            >
-              Free forever — no credit card required
-            </p>
+        {/* Active tab content */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={reduced ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduced ? undefined : { opacity: 0, y: -12 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_280px] items-center">
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-xl"
+                    style={{
+                      background: withAlpha(colors.brand, "25"),
+                      color: colors.brand,
+                    }}
+                  >
+                    <Icon
+                      name={active.icon as any}
+                      size={18}
+                      strokeWidth={1.8}
+                    />
+                  </div>
+                  <h3
+                    className="text-xl font-bold tracking-[-0.03em]"
+                    style={{ color: colors.text.light }}
+                  >
+                    {active.title}
+                  </h3>
+                </div>
+                <p
+                  className="text-[15px] leading-relaxed"
+                  style={{ color: withAlpha(colors.text.light, "85") }}
+                >
+                  {active.content}
+                </p>
+                <div className="mt-6">
+                  <Link
+                    to={ROUTES.REGISTER}
+                    className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-[13px] font-bold transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
+                    style={{
+                      background: colors.brand,
+                      color: colors.text.light,
+                      boxShadow: `0 4px 16px ${withAlpha(colors.brand, "35")}`,
+                    }}
+                  >
+                    Start building evidence
+                    <Icon name="arrowRight" size={13} strokeWidth={2.5} />
+                  </Link>
+                </div>
+              </div>
+
+              {/* Stat card */}
+              <div
+                className="rounded-2xl border p-6 text-center"
+                style={{
+                  borderColor: withAlpha(colors.text.light, "12"),
+                  background: withAlpha(colors.text.light, "04"),
+                }}
+              >
+                <p
+                  className="text-[3.5rem] font-extrabold leading-none tracking-tight"
+                  style={{ color: colors.text.light }}
+                >
+                  {active.stat}
+                </p>
+                <p
+                  className="mt-2 text-[13px] font-medium"
+                  style={{ color: withAlpha(colors.text.light, "70") }}
+                >
+                  {active.statLabel}
+                </p>
+                <div className="mt-4 flex justify-center gap-1.5">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="h-1.5 w-8 rounded-full"
+                      style={{
+                        background:
+                          i === 1
+                            ? colors.brand
+                            : withAlpha(colors.text.light, "15"),
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Trust indicators */}
+        <Reveal delay={0.1}>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-6">
+            {[
+              { icon: "lock", text: "End-to-end encrypted" },
+              { icon: "fingerprint", text: "SHA-256 integrity" },
+              { icon: "server", text: "SOC 2 compliant infra" },
+            ].map((item) => (
+              <div key={item.text} className="flex items-center gap-2">
+                <div
+                  className="flex h-7 w-7 items-center justify-center rounded-lg"
+                  style={{
+                    background: withAlpha(colors.brand, "20"),
+                    color: colors.brand,
+                  }}
+                >
+                  <Icon name={item.icon as any} size={13} />
+                </div>
+                <span
+                  className="text-[11px] font-medium"
+                  style={{ color: withAlpha(colors.text.light, "70") }}
+                >
+                  {item.text}
+                </span>
+              </div>
+            ))}
           </div>
         </Reveal>
       </div>
@@ -1869,6 +1935,21 @@ function FinalCtaSection() {
         }}
       />
       <div className="relative z-10 mx-auto flex max-w-[720px] flex-col items-center gap-5">
+        <Reveal>
+          <div
+            className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5"
+            style={{
+              borderColor: colors.surface[200],
+              background: colors.surface[50],
+              color: colors.brand,
+            }}
+          >
+            <Icon name="zap" size={13} />
+            <span className="text-[11px] font-semibold">
+              Free forever - no credit card required
+            </span>
+          </div>
+        </Reveal>
         <Reveal delay={0.05}>
           <h2
             className="text-[2.6rem] font-bold leading-tight tracking-[-0.04em] md:text-[3.5rem]"

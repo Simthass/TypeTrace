@@ -1,276 +1,165 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { KeystrokeEvent } from "../types/editor";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const DB_NAME = "typetrace-editor-drafts";
-const DB_VERSION = 1;
-const STORE_NAME = "drafts";
-const LOCAL_MIRROR_PREFIX = "typetrace:draft:";
-const DRAFT_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
+import {
+  createEditorDraftId,
+  deleteEditorDraft,
+  deleteEditorDraftByKey,
+  listEditorDrafts,
+  readEditorDraft,
+  saveEditorDraft,
+  safeDraftUserId,
+  type DraftSaveReason,
+  type EditorDraftInput,
+  type EditorDraftSnapshot,
+} from "../lib/editorDraftStore";
 
-export interface EditorDraftSnapshot {
-  version: 1;
-  draftKey: string;
-  userId: string;
-  title: string;
-  text: string;
-  selectedCourseId: number | null;
-  keystrokeLog: KeystrokeEvent[];
-  startedAt: number | null;
-  lastActivityAt: number | null;
-  lastKeyDownTimestamp: number | null;
-  savedAt: number;
-}
+export type { EditorDraftSnapshot } from "../lib/editorDraftStore";
 
 interface UseEditorDraftRecoveryOptions {
   userId?: string | null;
-}
-
-function safeUserId(userId?: string | null): string {
-  return String(userId || "anonymous").trim() || "anonymous";
-}
-
-function createDraftKey(userId?: string | null): string {
-  return `editor:${safeUserId(userId)}`;
-}
-
-function localMirrorKey(draftKey: string): string {
-  return `${LOCAL_MIRROR_PREFIX}${draftKey}`;
-}
-
-function isRecoverableDraft(value: unknown): value is EditorDraftSnapshot {
-  if (!value || typeof value !== "object") return false;
-
-  const draft = value as EditorDraftSnapshot;
-  const hasText =
-    typeof draft.text === "string" && draft.text.trim().length > 0;
-  const hasEvents =
-    Array.isArray(draft.keystrokeLog) && draft.keystrokeLog.length > 0;
-  const isFresh =
-    typeof draft.savedAt === "number" &&
-    Date.now() - draft.savedAt < DRAFT_TTL_MS;
-
-  return (
-    draft.version === 1 &&
-    Boolean(draft.draftKey) &&
-    isFresh &&
-    (hasText || hasEvents)
-  );
-}
-
-function openDraftDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (!("indexedDB" in window)) {
-      reject(new Error("IndexedDB is not available in this browser."));
-      return;
-    }
-
-    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "draftKey" });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () =>
-      reject(request.error ?? new Error("Failed to open draft database."));
-  });
-}
-
-async function readIndexedDbDraft(
-  draftKey: string,
-): Promise<EditorDraftSnapshot | null> {
-  const db = await openDraftDb();
-
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const store = tx.objectStore(STORE_NAME);
-    const request = store.get(draftKey);
-
-    request.onsuccess = () => {
-      const result = request.result;
-      resolve(isRecoverableDraft(result) ? result : null);
-    };
-    request.onerror = () =>
-      reject(request.error ?? new Error("Failed to read editor draft."));
-    tx.oncomplete = () => db.close();
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error ?? new Error("Failed to read editor draft."));
-    };
-  });
-}
-
-async function writeIndexedDbDraft(
-  snapshot: EditorDraftSnapshot,
-): Promise<void> {
-  const db = await openDraftDb();
-
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put(snapshot);
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error ?? new Error("Failed to save editor draft."));
-    };
-  });
-}
-
-async function deleteIndexedDbDraft(draftKey: string): Promise<void> {
-  const db = await openDraftDb();
-
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).delete(draftKey);
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error ?? new Error("Failed to delete editor draft."));
-    };
-  });
-}
-
-function readLocalMirror(draftKey: string): EditorDraftSnapshot | null {
-  try {
-    const raw = window.localStorage.getItem(localMirrorKey(draftKey));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return isRecoverableDraft(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeLocalMirror(snapshot: EditorDraftSnapshot): void {
-  try {
-    window.localStorage.setItem(
-      localMirrorKey(snapshot.draftKey),
-      JSON.stringify(snapshot),
-    );
-  } catch {
-    // Local storage can be full/private-mode blocked. IndexedDB is still attempted.
-  }
-}
-
-function deleteLocalMirror(draftKey: string): void {
-  try {
-    window.localStorage.removeItem(localMirrorKey(draftKey));
-  } catch {
-    // Ignore cleanup failure.
-  }
+  draftId?: string | null;
 }
 
 export function useEditorDraftRecovery({
   userId,
+  draftId,
 }: UseEditorDraftRecoveryOptions) {
-  const draftKey = createDraftKey(userId);
+  const safeUser = safeDraftUserId(userId);
+  const generatedDraftIdRef = useRef(createEditorDraftId());
+  const requestedDraftId = draftId?.trim() || null;
+  const initialDraftId = requestedDraftId ?? generatedDraftIdRef.current;
+
+  const [activeDraftId, setActiveDraftId] = useState(initialDraftId);
+  const [activeCreatedAt, setActiveCreatedAt] = useState<number | null>(null);
   const [recoveredDraft, setRecoveredDraft] =
     useState<EditorDraftSnapshot | null>(null);
   const [hasCheckedDraft, setHasCheckedDraft] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
-  const latestSaveRef = useRef<Promise<void> | null>(null);
+  const latestSaveRef = useRef<Promise<EditorDraftSnapshot> | null>(null);
+
+  useEffect(() => {
+    if (!requestedDraftId) return;
+
+    const timer = window.setTimeout(() => {
+      setActiveDraftId(requestedDraftId);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [requestedDraftId]);
 
   useEffect(() => {
     let mounted = true;
 
-    async function loadDraft() {
-      setHasCheckedDraft(false);
-
-      const localDraft = readLocalMirror(draftKey);
-      if (mounted && localDraft) {
-        setRecoveredDraft(localDraft);
+    const timer = window.setTimeout(() => {
+      async function loadDraft() {
+        try {
+          const draft = await readEditorDraft(safeUser, requestedDraftId);
+          if (!mounted) return;
+          setRecoveredDraft(draft);
+          if (draft) {
+            setActiveCreatedAt(draft.createdAt);
+            setActiveDraftId(draft.draftId);
+          }
+        } catch {
+          if (!mounted) return;
+          setRecoveredDraft(null);
+        } finally {
+          if (mounted) setHasCheckedDraft(true);
+        }
       }
 
-      try {
-        const indexedDraft = await readIndexedDbDraft(draftKey);
-        if (!mounted) return;
-        setRecoveredDraft(indexedDraft ?? localDraft ?? null);
-      } catch {
-        if (!mounted) return;
-        setRecoveredDraft(localDraft ?? null);
-      } finally {
-        if (mounted) setHasCheckedDraft(true);
-      }
-    }
-
-    void loadDraft();
+      void loadDraft();
+    }, 0);
 
     return () => {
       mounted = false;
+      window.clearTimeout(timer);
     };
-  }, [draftKey]);
+  }, [requestedDraftId, safeUser]);
 
   const saveDraft = useCallback(
     async (
-      snapshot: Omit<
-        EditorDraftSnapshot,
-        "version" | "draftKey" | "userId" | "savedAt"
-      >,
+      snapshot: EditorDraftInput,
+      options?: { saveReason?: DraftSaveReason },
     ) => {
-      const nextSnapshot: EditorDraftSnapshot = {
-        version: 1,
-        draftKey,
-        userId: safeUserId(userId),
-        title: snapshot.title,
-        text: snapshot.text,
-        selectedCourseId: snapshot.selectedCourseId,
-        keystrokeLog: snapshot.keystrokeLog,
-        startedAt: snapshot.startedAt,
-        lastActivityAt: snapshot.lastActivityAt,
-        lastKeyDownTimestamp: snapshot.lastKeyDownTimestamp,
-        savedAt: Date.now(),
-      };
-
-      writeLocalMirror(nextSnapshot);
       setIsSavingDraft(true);
 
-      const savePromise = writeIndexedDbDraft(nextSnapshot)
-        .catch(() => {
-          // Local mirror is already saved. Do not break typing UX if IndexedDB fails.
-        })
-        .finally(() => {
-          if (latestSaveRef.current === savePromise) {
-            setIsSavingDraft(false);
-            latestSaveRef.current = null;
-          }
-        });
+      const savePromise = saveEditorDraft({
+        userId: safeUser,
+        draftId: activeDraftId,
+        snapshot,
+        saveReason: options?.saveReason ?? "autosave",
+        existingCreatedAt: activeCreatedAt,
+      }).finally(() => {
+        if (latestSaveRef.current === savePromise) {
+          setIsSavingDraft(false);
+          latestSaveRef.current = null;
+        }
+      });
 
       latestSaveRef.current = savePromise;
-      await savePromise;
+      const saved = await savePromise;
+      setRecoveredDraft(saved);
+      setActiveDraftId(saved.draftId);
+      setActiveCreatedAt(saved.createdAt);
+      return saved;
     },
-    [draftKey, userId],
+    [activeCreatedAt, activeDraftId, safeUser],
   );
 
-  const clearDraft = useCallback(async () => {
-    deleteLocalMirror(draftKey);
-    setRecoveredDraft(null);
-    try {
-      await deleteIndexedDbDraft(draftKey);
-    } catch {
-      // Local mirror is removed; ignore IndexedDB cleanup failure.
-    }
-  }, [draftKey]);
+  const clearDraft = useCallback(
+    async (draftIdToClear?: string | null) => {
+      const targetDraftId = draftIdToClear || activeDraftId;
+      await deleteEditorDraft(safeUser, targetDraftId);
+      setRecoveredDraft((current) =>
+        current?.draftId === targetDraftId ? null : current,
+      );
+      if (targetDraftId === activeDraftId) {
+        const nextDraftId = createEditorDraftId();
+        generatedDraftIdRef.current = nextDraftId;
+        setActiveDraftId(nextDraftId);
+        setActiveCreatedAt(null);
+      }
+    },
+    [activeDraftId, safeUser],
+  );
+
+  const deleteDraftByKey = useCallback(async (draftKey: string) => {
+    await deleteEditorDraftByKey(draftKey);
+    setRecoveredDraft((current) =>
+      current?.draftKey === draftKey ? null : current,
+    );
+  }, []);
 
   const dismissRecoveredDraft = useCallback(() => {
     setRecoveredDraft(null);
   }, []);
 
+  const refreshDrafts = useCallback(
+    () => listEditorDrafts(safeUser),
+    [safeUser],
+  );
+
+  const status = useMemo(
+    () => ({
+      activeDraftId,
+      hasRecoveredDraft: Boolean(recoveredDraft),
+      hasCheckedDraft,
+      isSavingDraft,
+    }),
+    [activeDraftId, hasCheckedDraft, isSavingDraft, recoveredDraft],
+  );
+
   return {
-    draftKey,
+    activeDraftId,
     recoveredDraft,
     hasCheckedDraft,
     isSavingDraft,
+    status,
     saveDraft,
     clearDraft,
+    deleteDraftByKey,
     dismissRecoveredDraft,
+    refreshDrafts,
   };
 }

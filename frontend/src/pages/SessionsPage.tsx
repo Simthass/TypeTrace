@@ -733,14 +733,6 @@ export default function SessionsPage() {
           >
             Writing Sessions
           </h1>
-          <p
-            className="mt-1 max-w-2xl text-[13px] leading-6"
-            style={{ color: colors.text.secondary }}
-          >
-            A structured record of every captured writing session, its
-            behavioral classification, review state, and certificate
-            availability. Detailed visual analytics live in the Analytics page.
-          </p>
         </div>
 
         <Link
@@ -780,104 +772,11 @@ export default function SessionsPage() {
         />
       </div>
 
-      {latestSession && (
-        <section className="rounded-md border p-4" style={panelStyle()}>
-          <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr] lg:items-center">
-            <div>
-              <p
-                className="text-[10px] font-bold uppercase tracking-[0.16em]"
-                style={{ color: colors.text.muted }}
-              >
-                Latest evidence
-              </p>
-              <p
-                className="mt-1 truncate text-[15px] font-bold"
-                style={{ color: colors.text.primary }}
-              >
-                {latestSession.title || "Untitled Document"}
-              </p>
-              <p
-                className="mt-1 text-[12px]"
-                style={{ color: colors.text.secondary }}
-              >
-                Captured {formatShortDate(latestSession.created_at)} ·{" "}
-                {latestSession.course_code || "Personal"}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px]" style={{ color: colors.text.muted }}>
-                Classification
-              </p>
-              <div className="mt-2">
-                <StatusBadge value={getBucket(latestSession)} />
-              </div>
-            </div>
-            <div>
-              <p className="text-[11px]" style={{ color: colors.text.muted }}>
-                Confidence
-              </p>
-              <p
-                className="mt-1 font-mono text-[18px] font-bold"
-                style={{ color: colors.text.primary }}
-              >
-                {normalizePercent(latestSession.confidence)}%
-              </p>
-            </div>
-            <div className="flex gap-2 lg:justify-end">
-              <Link
-                to={ROUTES.REPLAY.replace(
-                  ":sessionId",
-                  String(latestSession.id),
-                )}
-                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold"
-                style={{
-                  borderColor: colors.surface[200],
-                  background: colors.surface[50],
-                  color: colors.text.secondary,
-                }}
-              >
-                <Icon type="replay" size={14} />
-                Replay
-              </Link>
-              {latestSession.certificate_id && (
-                <Link
-                  to={`/verify/${latestSession.certificate_id}`}
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold"
-                  style={{
-                    borderColor: colors.surface[200],
-                    background: colors.surface[50],
-                    color: colors.text.secondary,
-                  }}
-                >
-                  <Icon type="external" size={14} />
-                  Verify
-                </Link>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-
       <section className="rounded-md border" style={panelStyle()}>
         <div
           className="border-b p-4"
           style={{ borderColor: colors.surface[200] }}
         >
-          <SectionHeader
-            eyebrow="Filter and inspect"
-            title="Session ledger"
-            description="Search and review the exact sessions behind the account record."
-            action={
-              <div
-                className="flex items-center gap-2 text-[12px]"
-                style={{ color: colors.text.muted }}
-              >
-                <Icon type="rows" size={14} />
-                Showing {filteredSessions.length} of {sessions.length}
-              </div>
-            }
-          />
-
           <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-wrap items-center gap-2">
               {tabItems.map((item) => {

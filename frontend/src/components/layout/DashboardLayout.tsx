@@ -37,6 +37,14 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
         <path d="M3 18h.01" />
       </>
     ),
+    drafts: (
+      <>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <path d="M14 2v6h6" />
+        <path d="M8 13h8" />
+        <path d="M8 17h5" />
+      </>
+    ),
     certificates: (
       <>
         <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
@@ -173,20 +181,7 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
   );
 }
 
-interface NavItem {
-  label: string;
-  path: string;
-  icon: string;
-  end?: boolean;
-  external?: boolean;
-}
-
-interface NavSection {
-  label: string;
-  items: NavItem[];
-}
-
-const navSections: NavSection[] = [
+const navSections = [
   {
     label: "Main",
     items: [
@@ -202,6 +197,7 @@ const navSections: NavSection[] = [
   {
     label: "Evidence",
     items: [
+      { label: "Drafts", path: ROUTES.DRAFTS, icon: "drafts" },
       { label: "Sessions", path: ROUTES.SESSIONS, icon: "sessions" },
       {
         label: "Certificates",
@@ -225,19 +221,19 @@ const navSections: NavSection[] = [
   },
 ];
 
-const resourceLinks: NavItem[] = [
+const resourceLinks = [
   {
     label: "Help & Docs",
     path: ROUTES.HELP_DOCS,
     icon: "helpCircle",
     external: true,
   },
-  { label: "Keyboard Shortcuts", path: "", icon: "key" },
 ];
 
 function getPageTitle(pathname: string) {
   if (pathname === ROUTES.DASHBOARD) return "Dashboard";
   if (pathname.startsWith(ROUTES.EDITOR)) return "Writing Session";
+  if (pathname.startsWith(ROUTES.DRAFTS)) return "Drafts";
   if (pathname.startsWith(ROUTES.SESSIONS)) return "Sessions";
   if (pathname.startsWith(ROUTES.CERTIFICATES)) return "Certificates";
   if (pathname.startsWith(ROUTES.ANALYTICS)) return "Analytics";
@@ -700,7 +696,7 @@ export default function DashboardLayout() {
                 <Icon type="search" size={15} />
                 <input
                   type="search"
-                  placeholder="Search sessions, certificates, courses"
+                  placeholder="Search drafts, sessions, certificates"
                   className="h-full flex-1 bg-transparent text-[13px] outline-none placeholder:text-text-muted"
                   style={{ color: colors.text.primary }}
                 />
