@@ -181,7 +181,20 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
   );
 }
 
-const navSections = [
+type StudentNavItem = {
+  label: string;
+  path: string;
+  icon: string;
+  end?: boolean;
+  external?: boolean;
+};
+
+type StudentNavSection = {
+  label: string;
+  items: StudentNavItem[];
+};
+
+const navSections: StudentNavSection[] = [
   {
     label: "Main",
     items: [
@@ -221,7 +234,7 @@ const navSections = [
   },
 ];
 
-const resourceLinks = [
+const resourceLinks: StudentNavItem[] = [
   {
     label: "Help & Docs",
     path: ROUTES.HELP_DOCS,

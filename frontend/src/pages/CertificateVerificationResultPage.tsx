@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 
@@ -61,6 +67,7 @@ function formatPercent(value: unknown): string {
 function Icon({
   name,
   size = 16,
+  style,
 }: {
   name:
     | "arrowLeft"
@@ -83,6 +90,7 @@ function Icon({
     | "x"
     | "alertTriangle";
   size?: number;
+  style?: CSSProperties;
 }) {
   const paths: Record<string, ReactNode> = {
     arrowLeft: (
@@ -200,6 +208,7 @@ function Icon({
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
+      style={style}
     >
       {paths[name]}
     </svg>

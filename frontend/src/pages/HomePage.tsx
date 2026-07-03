@@ -276,29 +276,6 @@ function Reveal({
 
 // ─── Section eyebrow ──────────────────────────────────────────────────────────
 
-function Eyebrow({
-  children,
-  dark = false,
-}: {
-  children: ReactNode;
-  dark?: boolean;
-}) {
-  return (
-    <span
-      className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em]"
-      style={{
-        color: dark ? withAlpha(colors.text.light, "B0") : colors.brand,
-      }}
-    >
-      <span
-        className="h-1 w-1 rounded-full"
-        style={{ background: dark ? colors.text.light : colors.brand }}
-      />
-      {children}
-    </span>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // HERO
 // ─────────────────────────────────────────────────────────────────────────────

@@ -792,7 +792,7 @@ function AnalysisResultModal({
                       className="text-[10px] font-bold uppercase tracking-[0.14em]"
                       style={{ color: style.text, opacity: 0.65 }}
                     >
-                      {label}
+                      {String(label)}
                     </p>
                     <p
                       className="mt-1 break-words text-[14px] font-extrabold leading-5"

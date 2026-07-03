@@ -648,11 +648,11 @@ export default function SettingsPage() {
               </p>
               <div className="mt-4 flex items-center gap-4">
                 <div
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-[16px] font-bold ring-2 ring-offset-2"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-[16px] font-bold"
                   style={{
                     backgroundColor: colors.brandSoft,
                     color: colors.brand,
-                    ringColor: colors.brandSoft,
+                    boxShadow: `0 0 0 2px ${colors.surface[50]}, 0 0 0 4px ${colors.brandSoft}`,
                   }}
                 >
                   {initials}

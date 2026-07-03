@@ -44,6 +44,7 @@ type SortMode =
   | "COURSE";
 
 type ClassificationFilter = "ALL" | "HUMAN" | "SUSPICIOUS" | "SYNTHETIC";
+type ReviewFilter = "ALL" | "PENDING" | "APPROVED" | "FLAGGED";
 
 const PAGE_SIZE = 16;
 
@@ -52,6 +53,13 @@ const filters: Array<{ value: ClassificationFilter; label: string }> = [
   { value: "HUMAN", label: "Human" },
   { value: "SUSPICIOUS", label: "Needs review" },
   { value: "SYNTHETIC", label: "High risk" },
+];
+
+const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
+  { value: "ALL", label: "All review states" },
+  { value: "PENDING", label: "Pending" },
+  { value: "APPROVED", label: "Approved" },
+  { value: "FLAGGED", label: "Flagged" },
 ];
 
 const sortOptions: Array<{ value: SortMode; label: string }> = [
@@ -351,48 +359,6 @@ function StatusBadge({ value }: { value?: string }) {
   );
 }
 
-function SectionHeader({
-  eyebrow,
-  title,
-  description,
-  action,
-}: {
-  eyebrow?: string;
-  title: string;
-  description?: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0">
-        {eyebrow && (
-          <p
-            className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em]"
-            style={{ color: colors.text.muted }}
-          >
-            {eyebrow}
-          </p>
-        )}
-        <h2
-          className="text-[15px] font-bold tracking-[-0.02em]"
-          style={{ color: colors.text.primary }}
-        >
-          {title}
-        </h2>
-        {description && (
-          <p
-            className="mt-0.5 text-[12px] leading-5"
-            style={{ color: colors.text.secondary }}
-          >
-            {description}
-          </p>
-        )}
-      </div>
-      {action}
-    </div>
-  );
-}
-
 function MetricCard({
   label,
   value,
@@ -631,12 +597,6 @@ export default function CertificatesPage() {
     };
   }, [certificates]);
 
-  const latestCertificate = useMemo(() => {
-    return [...certificates].sort(
-      (a, b) => parseTime(b.created_at) - parseTime(a.created_at),
-    )[0];
-  }, [certificates]);
-
   const filteredCertificates = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -695,10 +655,6 @@ export default function CertificatesPage() {
     safePage * PAGE_SIZE,
     safePage * PAGE_SIZE + PAGE_SIZE,
   );
-
-  useEffect(() => {
-    setPage(0);
-  }, [selectedFilter, reviewFilter, sortBy, search]);
 
   const tabItems = filters.map((filter) => ({
     ...filter,
@@ -830,7 +786,10 @@ export default function CertificatesPage() {
                   <button
                     key={item.value}
                     type="button"
-                    onClick={() => setSelectedFilter(item.value)}
+                    onClick={() => {
+                      setSelectedFilter(item.value);
+                      setPage(0);
+                    }}
                     className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-[12px] font-semibold transition"
                     style={{
                       background: active
@@ -867,7 +826,10 @@ export default function CertificatesPage() {
                 </div>
                 <input
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(0);
+                  }}
                   placeholder="Search ID, hash, course, title"
                   className="h-9 w-full rounded-md border py-0 pl-9 pr-9 text-[13px] outline-none sm:w-72"
                   style={{
@@ -879,7 +841,10 @@ export default function CertificatesPage() {
                 {search && (
                   <button
                     type="button"
-                    onClick={() => setSearch("")}
+                    onClick={() => {
+                      setSearch("");
+                      setPage(0);
+                    }}
                     className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md"
                     style={{ color: colors.text.secondary }}
                     aria-label="Clear search"
@@ -890,6 +855,25 @@ export default function CertificatesPage() {
               </div>
 
               <div className="relative">
+                <select
+                  value={reviewFilter}
+                  onChange={(event) => {
+                    setReviewFilter(event.target.value as ReviewFilter);
+                    setPage(0);
+                  }}
+                  className="h-9 appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none"
+                  style={{
+                    background: colors.surface[50],
+                    borderColor: colors.surface[200],
+                    color: colors.text.secondary,
+                  }}
+                >
+                  {reviewFilters.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
                 <span
                   className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
                   style={{ color: colors.text.muted }}
@@ -901,9 +885,10 @@ export default function CertificatesPage() {
               <div className="relative">
                 <select
                   value={sortBy}
-                  onChange={(event) =>
-                    setSortBy(event.target.value as SortMode)
-                  }
+                  onChange={(event) => {
+                    setSortBy(event.target.value as SortMode);
+                    setPage(0);
+                  }}
                   className="h-9 appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none"
                   style={{
                     background: colors.surface[50],
@@ -969,6 +954,7 @@ export default function CertificatesPage() {
                   setSelectedFilter("ALL");
                   setReviewFilter("ALL");
                   setSortBy("NEWEST");
+                  setPage(0);
                 }}
                 className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-[13px] font-semibold"
                 style={{

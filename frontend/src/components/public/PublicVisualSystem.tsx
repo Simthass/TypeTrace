@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 
@@ -146,13 +146,16 @@ export function PublicShell({ children }: { children: ReactNode }) {
 export function PublicSection({
   children,
   className = "",
+  style,
 }: {
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
 }) {
   return (
     <section
       className={`mx-auto max-w-7xl px-5 py-20 sm:px-6 lg:px-8 ${className}`}
+      style={style}
     >
       {children}
     </section>

@@ -336,48 +336,6 @@ function StatusBadge({ value }: { value?: string }) {
   );
 }
 
-function SectionHeader({
-  eyebrow,
-  title,
-  description,
-  action,
-}: {
-  eyebrow?: string;
-  title: string;
-  description?: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0">
-        {eyebrow && (
-          <p
-            className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em]"
-            style={{ color: colors.text.muted }}
-          >
-            {eyebrow}
-          </p>
-        )}
-        <h2
-          className="text-[15px] font-bold tracking-[-0.02em]"
-          style={{ color: colors.text.primary }}
-        >
-          {title}
-        </h2>
-        {description && (
-          <p
-            className="mt-0.5 text-[12px] leading-5"
-            style={{ color: colors.text.secondary }}
-          >
-            {description}
-          </p>
-        )}
-      </div>
-      {action}
-    </div>
-  );
-}
-
 function MetricCard({
   label,
   value,
@@ -621,12 +579,6 @@ export default function SessionsPage() {
         (session) => !session.course_code && !session.course_name,
       ).length,
     };
-  }, [sessions]);
-
-  const latestSession = useMemo(() => {
-    return [...sessions].sort(
-      (a, b) => parseTime(b.created_at) - parseTime(a.created_at),
-    )[0];
   }, [sessions]);
 
   const filteredSessions = useMemo(() => {
