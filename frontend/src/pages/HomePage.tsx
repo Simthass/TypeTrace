@@ -1,5 +1,3 @@
-// frontend/src/pages/HomePage.tsx
-
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {

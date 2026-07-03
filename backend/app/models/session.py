@@ -1,6 +1,7 @@
 # backend/app/models/session.py
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     Column,
     DateTime,
@@ -40,6 +41,9 @@ class TypingSession(Base):
     title = Column(String(255), nullable=False, default="Untitled Document")
     text_content = Column(Text, nullable=False)
 
+    # Canonical backend-computed behavioral metrics. These fields remain for
+    # compatibility with the existing app and are populated from server-side
+    # recomputation during analysis.
     wpm = Column(Float, nullable=False, default=0)
     total_keystrokes = Column(Integer, nullable=False, default=0)
     deletions = Column(Integer, nullable=False, default=0)
@@ -54,6 +58,16 @@ class TypingSession(Base):
 
     certificate_id = Column(String(50), unique=True, index=True, nullable=True)
     document_hash = Column(String(64), index=True, nullable=True)
+
+    # Data-integrity foundation for Part 1. All are nullable/additive so existing
+    # collected sessions remain untouched during migration.
+    evidence_hash = Column(String(64), nullable=True)
+    model_version = Column(String(80), nullable=True, index=True)
+    model_score = Column(Float, nullable=True)
+    canonical_stats_json = Column(JSONB, nullable=True)
+    evidence_metadata = Column(JSONB, nullable=True)
+    active_duration_ms = Column(BigInteger, nullable=True)
+    idle_breaks_json = Column(JSONB, nullable=True)
 
     review_status = Column(String(30), nullable=False, default="PENDING", server_default="PENDING")
     reviewed_by = Column(
@@ -113,4 +127,5 @@ class TypingSession(Base):
         ),
         Index("ix_typing_sessions_user_created", "user_id", "created_at"),
         Index("ix_typing_sessions_course_created", "course_id", "created_at"),
+        Index("ix_typing_sessions_user_model_created", "user_id", "model_version", "created_at"),
     )

@@ -1,4 +1,3 @@
-# backend/migrations/env.py
 
 import asyncio
 import sys
@@ -15,7 +14,15 @@ if str(ROOT_DIR) not in sys.path:
 
 from app.core.config import settings
 from app.db.database import Base
-from app.models import Certificate, Course, CourseStudent, TypingSession, User
+from app.models import (
+    AuditLog,
+    Certificate,
+    Course,
+    CourseStudent,
+    DraftSession,
+    TypingSession,
+    User,
+)
 
 
 config = context.config
