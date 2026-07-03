@@ -90,13 +90,6 @@ function countPasteEvents(
   ).length;
 }
 
-function getEvidenceCount(
-  events: Array<{ type?: string; key?: string }>,
-  keydowns: number,
-): number {
-  return Math.max(keydowns, countPasteEvents(events));
-}
-
 function getResultStyle(classification: string) {
   const n = classification.toUpperCase();
   if (n === "HUMAN")
@@ -164,7 +157,7 @@ function StatRow({
               : colors.text.primary,
         }}
       >
-        {value}
+        {String(value)}
       </span>
     </div>
   );
@@ -571,7 +564,7 @@ function DraftRecoveryModal({
                   className="mt-1 truncate text-[13px] font-bold"
                   style={{ color: colors.text.primary }}
                 >
-                  {value}
+                  {String(value)}
                 </p>
               </div>
             ))}
@@ -854,7 +847,7 @@ function AnalysisResultModal({
                       className="mt-1 text-[16px] font-extrabold"
                       style={{ color: colors.text.primary }}
                     >
-                      {value}
+                      {String(value)}
                     </p>
                   </div>
                 ))}
@@ -1034,9 +1027,9 @@ export default function EditorPage() {
     keystrokeLogRef,
     liveStats,
     handleKeyDown: baseHandleKeyDown,
-    handleKeyUp,
+    handleKeyUp: baseHandleKeyUp,
     handlePaste: baseHandlePaste,
-    handleCut,
+    handleCut: baseHandleCut,
     handleBeforeInput,
     recordTextChange,
     getStats,
@@ -1055,16 +1048,30 @@ export default function EditorPage() {
     dismissRecoveredDraft,
   } = useEditorDraftRecovery({ userId: userDraftId });
 
+  const [captureTelemetry, setCaptureTelemetry] = useState({
+    eventCount: 0,
+    pasteEventCount: 0,
+  });
+
+  const syncCaptureTelemetry = useCallback(
+    (events?: Array<{ type?: string; key?: string }>) => {
+      const eventSource = events ?? getCaptureSnapshot().events;
+
+      setCaptureTelemetry({
+        eventCount: eventSource.length,
+        pasteEventCount: countPasteEvents(eventSource),
+      });
+    },
+    [getCaptureSnapshot],
+  );
+
   const wordCount = useMemo(() => countWords(text), [text]);
   const charCount = text.length;
-  const pasteEventCount = useMemo(
-    () => countPasteEvents(keystrokeLogRef.current),
-    [liveStats.keystrokes, liveStats.sessionSeconds, text.length],
-  );
-  const evidenceCount = getEvidenceCount(
-    keystrokeLogRef.current,
-    liveStats.keystrokes,
-  );
+  const pasteEventCount = captureTelemetry.pasteEventCount;
+  const hasCapturedEvents =
+    captureTelemetry.eventCount > 0 ||
+    liveStats.keystrokes > 0 ||
+    pasteEventCount > 0;
   const hasPasteEvidence = pasteEventCount > 0 && text.trim().length > 0;
   const canAnalyze =
     (liveStats.keystrokes >= MINIMUM_KEYSTROKES || hasPasteEvidence) &&
@@ -1105,6 +1112,7 @@ export default function EditorPage() {
 
       recordTextChange(nextText, { inputType: "insertText" });
       setText(nextText);
+      syncCaptureTelemetry();
 
       window.requestAnimationFrame(() => {
         target.selectionStart = start + 4;
@@ -1115,9 +1123,20 @@ export default function EditorPage() {
     }
 
     baseHandleKeyDown(e);
+    syncCaptureTelemetry();
     setIsTyping(true);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 1200);
+  };
+
+  const handleKeyUp = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    baseHandleKeyUp(e);
+    syncCaptureTelemetry();
+  };
+
+  const handleCut = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    baseHandleCut(e);
+    syncCaptureTelemetry();
   };
 
   // Wrap paste handler with size check
@@ -1138,6 +1157,7 @@ export default function EditorPage() {
     }
 
     baseHandlePaste(e);
+    syncCaptureTelemetry();
   };
 
   useEffect(() => {
@@ -1181,22 +1201,16 @@ export default function EditorPage() {
   const hasRecoverableDraft = useMemo(() => {
     return Boolean(
       !analysisResult &&
-      (text.trim().length > 0 ||
-        title.trim().length > 0 ||
-        keystrokeLogRef.current.length > 0),
+      (text.trim().length > 0 || title.trim().length > 0 || hasCapturedEvents),
     );
-  }, [analysisResult, text, title, liveStats.keystrokes]);
+  }, [analysisResult, hasCapturedEvents, text, title]);
 
   // Real autosave: persists text, title, course, keystroke evidence, and timing state.
   useEffect(() => {
-    if (!hasRecoverableDraft) {
-      setSaveState("saved");
-      return;
-    }
-
-    setSaveState("unsaved");
+    if (!hasRecoverableDraft) return;
 
     const timer = window.setTimeout(() => {
+      setSaveState("saving");
       void saveDraft(buildDraftSnapshot()).then(() => setSaveState("saved"));
     }, 350);
 
@@ -1228,9 +1242,14 @@ export default function EditorPage() {
   // Show recovery prompt only after local draft lookup finishes.
   useEffect(() => {
     if (!hasCheckedDraft || !recoveredDraft) return;
-    if (text.trim() || keystrokeLogRef.current.length > 0) return;
-    setShowDraftRecoveryModal(true);
-  }, [hasCheckedDraft, recoveredDraft, text, liveStats.keystrokes]);
+    if (text.trim() || hasCapturedEvents) return;
+
+    const timer = window.setTimeout(() => {
+      setShowDraftRecoveryModal(true);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [hasCapturedEvents, hasCheckedDraft, recoveredDraft, text]);
 
   // Cleanup typing timeout
   useEffect(
@@ -1274,6 +1293,7 @@ export default function EditorPage() {
       lastActivityAt: recoveredDraft.lastActivityAt,
       lastKeyDownTimestamp: recoveredDraft.lastKeyDownTimestamp,
     });
+    syncCaptureTelemetry(recoveredDraft.keystrokeLog);
     dismissRecoveredDraft();
     setShowDraftRecoveryModal(false);
     setSaveState("saved");
@@ -1442,6 +1462,7 @@ export default function EditorPage() {
     setSelectedCourseId(null);
     setSaveState("saved");
     resetCapture();
+    setCaptureTelemetry({ eventCount: 0, pasteEventCount: 0 });
     void clearDraft();
     navigate(ROUTES.DASHBOARD, { replace: true });
   };
@@ -1455,6 +1476,7 @@ export default function EditorPage() {
     setShowResultModal(false);
     setSaveState("saved");
     resetCapture();
+    setCaptureTelemetry({ eventCount: 0, pasteEventCount: 0 });
     void clearDraft();
 
     showToast({
@@ -1656,11 +1678,13 @@ export default function EditorPage() {
 
                   recordTextChange(limitedValue);
                   setText(limitedValue);
+                  syncCaptureTelemetry();
                   return;
                 }
 
                 recordTextChange(nextValue);
                 setText(nextValue);
+                syncCaptureTelemetry();
                 setSaveState("unsaved");
                 setAnalysisResult(null);
               }}
@@ -1993,7 +2017,7 @@ export default function EditorPage() {
                 className="text-[11px] font-bold tabular-nums"
                 style={{ color: colors.text.primary }}
               >
-                {value}
+                {String(value)}
               </span>
             </div>
           ))}

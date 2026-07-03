@@ -1,5 +1,3 @@
-// frontend/src/pages/SettingsRedirectPage.tsx
-
 import { Navigate } from "react-router-dom";
 
 import { ROUTES } from "../constants/routes";

@@ -173,7 +173,20 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
   );
 }
 
-const navSections = [
+interface NavItem {
+  label: string;
+  path: string;
+  icon: string;
+  end?: boolean;
+  external?: boolean;
+}
+
+interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
   {
     label: "Main",
     items: [
@@ -212,14 +225,14 @@ const navSections = [
   },
 ];
 
-const resourceLinks = [
+const resourceLinks: NavItem[] = [
   {
     label: "Help & Docs",
     path: ROUTES.HELP_DOCS,
     icon: "helpCircle",
     external: true,
   },
-  { label: "Keyboard Shortcuts", icon: "key" },
+  { label: "Keyboard Shortcuts", path: "", icon: "key" },
 ];
 
 function getPageTitle(pathname: string) {

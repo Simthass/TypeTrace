@@ -1,5 +1,3 @@
-// frontend/src/pages/NotFoundPage.tsx
-
 import { Link } from "react-router-dom";
 
 import { ROUTES } from "../constants/routes";

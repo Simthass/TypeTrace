@@ -222,20 +222,6 @@ function formatShortDate(value: string): string {
   });
 }
 
-function formatDuration(seconds: number): string {
-  const safe = Math.max(0, Math.round(Number(seconds) || 0));
-  const minutes = Math.floor(safe / 60);
-  const rest = safe % 60;
-
-  if (minutes >= 60) {
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    return `${hours}h ${remainingMinutes}m`;
-  }
-
-  return `${minutes}m ${rest}s`;
-}
-
 function formatCompactDuration(seconds: number): string {
   const safe = Math.max(0, Math.round(Number(seconds) || 0));
   const minutes = Math.round(safe / 60);
@@ -438,83 +424,6 @@ function MetricCard({
         {helper}
       </p>
     </section>
-  );
-}
-
-function SummaryPanel({
-  eyebrow,
-  title,
-  description,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="rounded-md border p-4" style={panelStyle()}>
-      <SectionHeader
-        eyebrow={eyebrow}
-        title={title}
-        description={description}
-      />
-      <div className="mt-4 space-y-2">{children}</div>
-    </section>
-  );
-}
-
-function DataRow({
-  label,
-  value,
-  helper,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string | number;
-  helper?: string;
-  tone?: "neutral" | "good" | "warning" | "danger";
-}) {
-  const toneColor =
-    tone === "good"
-      ? brand.humanText
-      : tone === "warning"
-        ? brand.suspiciousText
-        : tone === "danger"
-          ? brand.aiText
-          : colors.text.primary;
-
-  return (
-    <div
-      className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5"
-      style={{
-        background: colors.surface[100],
-        borderColor: colors.surface[200],
-      }}
-    >
-      <div className="min-w-0">
-        <p
-          className="text-[12px] font-semibold"
-          style={{ color: colors.text.primary }}
-        >
-          {label}
-        </p>
-        {helper && (
-          <p
-            className="mt-0.5 text-[11px]"
-            style={{ color: colors.text.muted }}
-          >
-            {helper}
-          </p>
-        )}
-      </div>
-      <p
-        className="shrink-0 font-mono text-[13px] font-bold tabular-nums"
-        style={{ color: toneColor }}
-      >
-        {value}
-      </p>
-    </div>
   );
 }
 
@@ -781,10 +690,6 @@ export default function SessionsPage() {
     safePage * PAGE_SIZE + PAGE_SIZE,
   );
 
-  useEffect(() => {
-    setPage(0);
-  }, [selectedFilter, reviewFilter, sortBy, search]);
-
   const tabItems = classificationFilters.map((filter) => ({
     ...filter,
     count: filterCount(sessions, filter.value),
@@ -981,7 +886,10 @@ export default function SessionsPage() {
                   <button
                     key={item.value}
                     type="button"
-                    onClick={() => setSelectedFilter(item.value)}
+                    onClick={() => {
+                      setSelectedFilter(item.value);
+                      setPage(0);
+                    }}
                     className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-[12px] font-semibold transition"
                     style={{
                       background: active
@@ -1018,7 +926,10 @@ export default function SessionsPage() {
                 </div>
                 <input
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(0);
+                  }}
                   placeholder="Search title, course, certificate"
                   className="h-9 w-full rounded-md border py-0 pl-9 pr-9 text-[13px] outline-none sm:w-72"
                   style={{
@@ -1030,7 +941,10 @@ export default function SessionsPage() {
                 {search && (
                   <button
                     type="button"
-                    onClick={() => setSearch("")}
+                    onClick={() => {
+                      setSearch("");
+                      setPage(0);
+                    }}
                     className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md"
                     style={{ color: colors.text.secondary }}
                     aria-label="Clear search"
@@ -1043,9 +957,10 @@ export default function SessionsPage() {
               <div className="relative">
                 <select
                   value={reviewFilter}
-                  onChange={(event) =>
-                    setReviewFilter(event.target.value as ReviewFilter)
-                  }
+                  onChange={(event) => {
+                    setReviewFilter(event.target.value as ReviewFilter);
+                    setPage(0);
+                  }}
                   className="h-9 appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none"
                   style={{
                     background: colors.surface[50],
@@ -1070,9 +985,10 @@ export default function SessionsPage() {
               <div className="relative">
                 <select
                   value={sortBy}
-                  onChange={(event) =>
-                    setSortBy(event.target.value as SortValue)
-                  }
+                  onChange={(event) => {
+                    setSortBy(event.target.value as SortValue);
+                    setPage(0);
+                  }}
                   className="h-9 appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none"
                   style={{
                     background: colors.surface[50],
@@ -1123,6 +1039,7 @@ export default function SessionsPage() {
                   setSelectedFilter("ALL");
                   setReviewFilter("ALL");
                   setSortBy("newest");
+                  setPage(0);
                 }}
                 className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-[13px] font-semibold"
                 style={{

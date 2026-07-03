@@ -1,6 +1,4 @@
-// frontend/src/pages/SettingsPage.tsx
-
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { api, getApiErrorMessage } from "../lib/api";
