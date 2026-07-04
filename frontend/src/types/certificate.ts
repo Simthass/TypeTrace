@@ -1,7 +1,10 @@
 export type CertificateStatus =
   | "VALID"
+  | "VALID_LEGACY"
   | "REVIEW_REQUIRED"
   | "HIGH_RISK"
+  | "REVOKED"
+  | "INVALID_SIGNATURE"
   | "INVALID";
 
 export interface CertificateListItem {
@@ -48,6 +51,18 @@ export interface PublicCertificateVerification {
   risk_level?: string;
   review_status?: string;
   document_hash?: string;
+  evidence_hash?: string;
+  signed_payload_hash?: string;
+  signature_algorithm?: string;
+  signing_key_id?: string;
+  signed_at?: string;
+  signature_status?: string;
+  signature_valid?: boolean;
+  payload_hash_matches?: boolean;
+  ledger_verified?: boolean;
+  ledger_reason?: string;
+  revoked_at?: string | null;
+  revocation_reason?: string | null;
   created_at?: string;
   generated_at?: string;
   ledger_status?: string;

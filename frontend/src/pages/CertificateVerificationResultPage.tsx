@@ -455,6 +455,13 @@ export default function VerifyCertificatePage() {
 
   const confidence = Number(result.confidence || 0);
   const confidenceLabel = formatPercent(result.confidence);
+  const ledgerVerified = result.ledger_verified !== false;
+  const signatureLabel =
+    result.signature_status || result.ledger_status || "Unknown";
+  const signatureColor = ledgerVerified ? colors.green : colors.red;
+  const signatureBg = ledgerVerified
+    ? withAlpha(colors.green, "0.06")
+    : withAlpha(colors.red, "0.06");
   const certificateUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/verify/${encodeURIComponent(result.certificate_id)}`
@@ -774,6 +781,96 @@ export default function VerifyCertificatePage() {
                   >
                     {result.document_hash || "Not available"}
                   </p>
+                </div>
+
+                <div
+                  className="rounded-xl border p-4"
+                  style={{
+                    borderColor: colors.surface[200],
+                    background: signatureBg,
+                  }}
+                >
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Icon
+                        name={ledgerVerified ? "shield" : "alertTriangle"}
+                        size={14}
+                        style={{ color: signatureColor }}
+                      />
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-wider"
+                        style={{ color: signatureColor }}
+                      >
+                        Signed ledger
+                      </span>
+                    </div>
+                    <span
+                      className="rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
+                      style={{
+                        background: colors.surface[50],
+                        color: signatureColor,
+                      }}
+                    >
+                      {signatureLabel.replaceAll("_", " ")}
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <span
+                          className="text-[10px] font-bold uppercase tracking-wider"
+                          style={{ color: colors.text.muted }}
+                        >
+                          Signed payload hash
+                        </span>
+                        <CopyButton value={result.signed_payload_hash} />
+                      </div>
+                      <p
+                        className="break-all font-mono text-[12px] font-semibold leading-5"
+                        style={{ color: colors.text.primary }}
+                      >
+                        {result.signed_payload_hash ||
+                          "Legacy unsigned certificate"}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-[11px]">
+                      <div>
+                        <p
+                          className="font-bold uppercase tracking-wider"
+                          style={{ color: colors.text.muted }}
+                        >
+                          Algorithm
+                        </p>
+                        <p
+                          className="mt-1 font-semibold"
+                          style={{ color: colors.text.primary }}
+                        >
+                          {result.signature_algorithm || "UNSIGNED_LEGACY"}
+                        </p>
+                      </div>
+                      <div>
+                        <p
+                          className="font-bold uppercase tracking-wider"
+                          style={{ color: colors.text.muted }}
+                        >
+                          Key ID
+                        </p>
+                        <p
+                          className="mt-1 truncate font-semibold"
+                          style={{ color: colors.text.primary }}
+                        >
+                          {result.signing_key_id || "—"}
+                        </p>
+                      </div>
+                    </div>
+                    <p
+                      className="text-[11px] leading-5"
+                      style={{ color: colors.text.secondary }}
+                    >
+                      {result.ledger_reason ||
+                        "This certificate is checked against its signed evidence payload."}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

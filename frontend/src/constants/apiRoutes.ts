@@ -45,6 +45,7 @@ export const API_ROUTES = {
     detail: (certificateId: string) => `/certificates/${certificateId}`,
     pdf: (certificateId: string) => `/certificates/${certificateId}/pdf`,
     verifyPublic: (certificateId: string) => `/verify/${certificateId}`,
+    revoke: (certificateId: string) => `/certificates/${certificateId}/revoke`,
   },
 
   verify: {
