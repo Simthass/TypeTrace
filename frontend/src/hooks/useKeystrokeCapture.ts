@@ -629,6 +629,8 @@ export function useKeystrokeCapture({
         deletion_method: "unknown",
         isBulkDeletion: false,
         bulk_deletion: false,
+        idleBreakMs: Math.round(idleBreakMs),
+        idle_break_ms: Math.round(idleBreakMs),
       });
     },
     [],

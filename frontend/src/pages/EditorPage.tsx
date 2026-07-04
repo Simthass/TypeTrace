@@ -849,7 +849,7 @@ function AnalysisResultModal({
                       className="text-[10px] font-bold uppercase tracking-[0.14em]"
                       style={{ color: colors.text.muted }}
                     >
-                      {label}
+                      {String(label)}
                     </p>
                     <p
                       className="mt-1 text-[16px] font-extrabold"
@@ -1041,7 +1041,6 @@ export default function EditorPage() {
   const suspendingDraftRef = useRef(false);
 
   const {
-    keystrokeLogRef,
     liveStats,
     handleKeyDown: baseHandleKeyDown,
     handleKeyUp: baseHandleKeyUp,
@@ -1469,8 +1468,9 @@ export default function EditorPage() {
 
     const finalText = text.trim();
     const finalTitle = truncateTitle(title);
+    const submitSnapshot = getCaptureSnapshot();
     const finalStats = getStats();
-    const evidence = keystrokeLogRef.current;
+    const evidence = submitSnapshot.events;
 
     if (!finalText) {
       showToast({
@@ -1530,6 +1530,12 @@ export default function EditorPage() {
         keystroke_array: evidence,
         stats: finalStats,
         course_id: selectedCourseId,
+        active_duration_ms: submitSnapshot.activeDurationMs,
+        draft_id: activeDraftId,
+        client_metadata: {
+          source: routeDraftId ? "draft_resume" : "editor",
+          localDraftId: activeDraftId,
+        },
       });
 
       const data = response.data;
@@ -2103,7 +2109,7 @@ export default function EditorPage() {
                         className="text-[12px] font-semibold"
                         style={{ color: colors.text.primary }}
                       >
-                        {label}
+                        {String(label)}
                       </p>
                       <p
                         className="text-[11px]"

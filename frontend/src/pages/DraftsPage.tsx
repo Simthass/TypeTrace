@@ -243,7 +243,8 @@ function EmptyState() {
           style={{ color: colors.text.secondary }}
         >
           Drafts appear here when you save a session manually or when TypeTrace
-          autosaves during writing, reloads, or connection loss.
+          autosaves during writing, reloads, or connection loss. Synced drafts
+          are also preserved on the server when you are online.
         </p>
         <Link
           to={ROUTES.EDITOR_NEW}
@@ -738,7 +739,29 @@ export default function DraftsPage() {
                         </td>
 
                         <td className="px-4 py-3 align-middle">
-                          <StatusBadge ready={readiness.ready} />
+                          <div className="flex flex-col items-start gap-1.5">
+                            <StatusBadge ready={readiness.ready} />
+                            <span
+                              className="rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                              style={{
+                                background:
+                                  draft.syncStatus === "SYNCED"
+                                    ? colors.mintTint
+                                    : colors.surface[100],
+                                borderColor: colors.surface[200],
+                                color:
+                                  draft.syncStatus === "SYNCED"
+                                    ? brand.humanText
+                                    : colors.text.muted,
+                              }}
+                            >
+                              {draft.syncStatus === "SYNCED"
+                                ? "Cloud synced"
+                                : draft.syncStatus === "CONFLICT"
+                                  ? "Sync conflict"
+                                  : "Local fallback"}
+                            </span>
+                          </div>
                         </td>
 
                         <td className="px-4 py-3 align-middle">

@@ -1,4 +1,3 @@
-# backend/app/main.py
 
 import logging
 from datetime import datetime, timezone
@@ -138,6 +137,7 @@ def create_application() -> FastAPI:
     from app.api.routes.auth import router as auth_router
     from app.api.routes.certificates import router as certificates_router
     from app.api.routes.courses import router as courses_router
+    from app.api.routes.drafts import router as drafts_router
     from app.api.routes.health import router as health_router
     from app.api.routes.model import router as model_router
     from app.api.routes.replay import router as replay_router
@@ -174,6 +174,12 @@ def create_application() -> FastAPI:
         replay_router,
         prefix=settings.API_V1_PREFIX,
         tags=["Replay Audit"],
+    )
+
+    app.include_router(
+        drafts_router,
+        prefix=settings.API_V1_PREFIX,
+        tags=["Draft Sessions"],
     )
 
     app.include_router(

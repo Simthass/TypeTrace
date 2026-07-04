@@ -47,6 +47,10 @@ export interface KeystrokeEvent {
   deletion_method?: DeletionMethod;
   isBulkDeletion?: boolean;
   bulk_deletion?: boolean;
+
+  /** Long inactive gap excluded from active writing duration. */
+  idleBreakMs?: number;
+  idle_break_ms?: number;
 }
 
 export interface SessionStats {

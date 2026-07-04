@@ -1,5 +1,3 @@
-// frontend/src/constants/apiRoutes.ts
-
 export const API_ROUTES = {
   health: {
     check: "/health",
@@ -22,6 +20,13 @@ export const API_ROUTES = {
     dashboard: "/student/dashboard",
     analytics: "/student/analytics",
     sessions: "/student/sessions",
+  },
+
+  drafts: {
+    list: "/drafts",
+    detail: (draftId: string) => `/drafts/${encodeURIComponent(draftId)}`,
+    submit: (draftId: string) =>
+      `/drafts/${encodeURIComponent(draftId)}/submit`,
   },
 
   sessions: {

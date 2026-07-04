@@ -1,11 +1,9 @@
 
-import hashlib
-import json
 import secrets
 import string
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,8 +13,11 @@ from app.db.database import get_db
 from app.ml.inference_engine import inference_engine
 from app.models.certificate import Certificate
 from app.models.course import CourseStudent
+from app.models.draft import DraftSession
 from app.models.session import TypingSession
 from app.models.user import User
+from app.services.audit_log import create_audit_log
+from app.services.canonical_evidence import compute_canonical_evidence, normalize_title
 
 
 router = APIRouter()
@@ -28,19 +29,13 @@ MINIMUM_KEYSTROKES = 30
 class SessionStats(BaseModel):
     wpm: float = Field(ge=0)
     keystrokes: int = Field(ge=0)
-
-    # Backward-compatible action count: one revision/delete action, not characters.
     deletions: int = Field(default=0, ge=0)
-
-    # Industry-grade revision metrics. These are derived from raw event metadata,
-    # not trusted blindly from the browser summary.
     deletedCharacters: int = Field(default=0, ge=0)
     bulkDeletionEvents: int = Field(default=0, ge=0)
     largestDeletionChars: int = Field(default=0, ge=0)
     selectionDeletionEvents: int = Field(default=0, ge=0)
     wordDeletionEvents: int = Field(default=0, ge=0)
     cutEvents: int = Field(default=0, ge=0)
-
     pauses: int = Field(ge=0)
     avgIki: float = Field(ge=0)
     sessionSeconds: float = Field(ge=0)
@@ -52,6 +47,13 @@ class KeystrokeSessionAnalyzeRequest(BaseModel):
     keystroke_array: List[Dict[str, Any]] = Field(default_factory=list)
     stats: SessionStats
     course_id: Optional[int] = None
+
+    # Part 2: draft/canonical evidence integration. The backend still recomputes
+    # canonical stats from raw events; these fields let it verify the frontend
+    # active-duration clock and retire the submitted draft safely.
+    active_duration_ms: Optional[int] = Field(default=None, ge=0)
+    draft_id: Optional[str] = Field(default=None, max_length=120)
+    client_metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class AnalysisResponse(BaseModel):
@@ -66,246 +68,42 @@ class AnalysisResponse(BaseModel):
     document_hash: str
     risk_level: str
     risk_score: float
+    evidence_hash: Optional[str] = None
+    canonical_stats: Dict[str, Any] = Field(default_factory=dict)
 
 
-def _normalize_title(title: str) -> str:
-    clean = (title or "").strip()
-    return clean[:255] if clean else "Untitled Document"
-
-
-def _count_words(value: str) -> int:
-    return len((value or "").strip().split()) if (value or "").strip() else 0
-
-
-def _safe_event_number(value: Any) -> Optional[float]:
-    try:
-        number = float(value)
-        if number != number or number in {float("inf"), float("-inf")}:
-            return None
-        return number
-    except (TypeError, ValueError):
-        return None
-
-
-def _safe_event_int(value: Any, default: int = 0) -> int:
-    number = _safe_event_number(value)
-    if number is None:
-        return default
-    return max(0, int(round(number)))
-
-
-def _is_keyup_event(event: Dict[str, Any]) -> bool:
-    return str(event.get("type") or "").lower() == "keyup"
-
-
-def _is_delete_keydown_event(event: Dict[str, Any]) -> bool:
-    return (
-        str(event.get("type") or "").lower() == "keydown"
-        and event.get("key") in {"Backspace", "Delete"}
-    )
-
-
-def _event_deleted_characters(event: Dict[str, Any]) -> int:
-    # Keyup is only the key release signal. It must not count as a second
-    # deletion action or another deleted character.
-    if _is_keyup_event(event):
-        return 0
-
-    explicit = _safe_event_number(
-        event.get("chars_deleted", event.get("deletedCharacters"))
-    )
-    if explicit is not None and explicit > 0:
-        return max(0, int(round(explicit)))
-
-    # Legacy fallback for older events without chars_deleted. Apply only to the
-    # keydown half of the action, never to keyup.
-    if _is_delete_keydown_event(event):
-        return 1
-
-    return 0
-
-
-def _is_deletion_evidence(event: Dict[str, Any]) -> bool:
-    if _is_keyup_event(event):
-        return False
-
-    return (
-        _event_deleted_characters(event) > 0
-        or _is_delete_keydown_event(event)
-        or event.get("key") in {"__CUT_EVENT__", "__TEXT_REVISION__"}
-        or bool(event.get("deletion_method"))
-    )
-
-
-def _compute_revision_metrics(events: List[Dict[str, Any]]) -> Dict[str, int]:
-    """
-    Compute privacy-safe revision metrics without trusting client summary stats.
-
-    Events sharing the same revision_id are one user action represented by
-    multiple browser signals (keydown + input confirmation), so they are merged.
-    """
-    revisions: Dict[str, Dict[str, Any]] = {}
-
-    for index, event in enumerate(events):
-        if not isinstance(event, dict) or not _is_deletion_evidence(event):
-            continue
-
-        deleted_chars = _event_deleted_characters(event)
-        revision_id = str(
-            event.get("revision_id")
-            or f"{event.get('timestamp', 0)}-{event.get('type', '')}-{event.get('key', '')}-{index}"
-        )
-        method = str(event.get("deletion_method") or "unknown").lower()
-        selection_len = _safe_event_int(event.get("selection_length_before"))
-        bulk_flag = bool(event.get("isBulkDeletion") or event.get("bulk_deletion"))
-
-        existing = revisions.setdefault(
-            revision_id,
-            {
-                "deleted": 0,
-                "method": method,
-                "selection": 0,
-                "bulk": False,
-                "cut": False,
-            },
-        )
-
-        existing["deleted"] = max(int(existing["deleted"]), deleted_chars)
-        existing["selection"] = max(int(existing["selection"]), selection_len)
-        existing["bulk"] = bool(existing["bulk"]) or bulk_flag or deleted_chars >= 2 or method in {
-            "word",
-            "line",
-            "selection",
-            "replacement",
-            "cut",
-            "all",
-        }
-        existing["cut"] = bool(existing["cut"]) or method == "cut" or event.get("type") == "cut"
-        if existing["method"] == "unknown" and method != "unknown":
-            existing["method"] = method
-
-    values = list(revisions.values())
-
-    return {
-        "delete_actions": len(values),
-        "deleted_characters": sum(max(0, int(item["deleted"])) for item in values),
-        "bulk_deletion_events": sum(1 for item in values if item["bulk"]),
-        "largest_deletion_chars": max([int(item["deleted"]) for item in values] or [0]),
-        "selection_deletion_events": sum(
-            1
-            for item in values
-            if int(item["selection"]) > 0
-            or item["method"] in {"selection", "replacement", "all"}
-        ),
-        "word_deletion_events": sum(1 for item in values if item["method"] == "word"),
-        "cut_events": sum(1 for item in values if item["cut"]),
-    }
-
-
-def _compute_server_stats(
-    *,
-    text_content: str,
-    keystroke_array: List[Dict[str, Any]],
-    client_stats: SessionStats,
-) -> SessionStats:
-    """
-    Recompute core telemetry from raw events on the backend.
-
-    The frontend still sends live stats for UI responsiveness, but persisted
-    evidence must be derived server-side so crash recovery, browser reloads,
-    or malicious clients cannot poison the final certificate metrics.
-    """
-
-    keydown_events = [
-        event
-        for event in keystroke_array
-        if isinstance(event, dict) and event.get("type") == "keydown"
-    ]
-
-    flight_times: List[float] = []
-    for event in keydown_events:
-        value = _safe_event_number(event.get("flight_time"))
-        if value is not None and value > 0:
-            flight_times.append(value)
-
-    revision_metrics = _compute_revision_metrics(keystroke_array)
-    pauses = sum(1 for value in flight_times if value > 1000)
-    avg_iki = (
-        round(sum(flight_times) / len(flight_times)) if flight_times else 0
-    )
-
-    key_timestamps = [
-        _safe_event_number(event.get("timestamp")) for event in keydown_events
-    ]
-    key_timestamps = [value for value in key_timestamps if value is not None]
-
-    if len(key_timestamps) >= 2:
-        duration_seconds = max(
-            1.0,
-            round((max(key_timestamps) - min(key_timestamps)) / 1000, 2),
-        )
-    else:
-        duration_seconds = max(1.0, float(client_stats.sessionSeconds or 1))
-
-    word_count = _count_words(text_content)
-    wpm = round((word_count / duration_seconds) * 60, 2) if duration_seconds > 0 else 0
-
+def _stats_from_dict(value: Dict[str, Any]) -> SessionStats:
     return SessionStats(
-        wpm=wpm,
-        keystrokes=len(keydown_events),
-        deletions=revision_metrics["delete_actions"],
-        deletedCharacters=revision_metrics["deleted_characters"],
-        bulkDeletionEvents=revision_metrics["bulk_deletion_events"],
-        largestDeletionChars=revision_metrics["largest_deletion_chars"],
-        selectionDeletionEvents=revision_metrics["selection_deletion_events"],
-        wordDeletionEvents=revision_metrics["word_deletion_events"],
-        cutEvents=revision_metrics["cut_events"],
-        pauses=pauses,
-        avgIki=avg_iki,
-        sessionSeconds=duration_seconds,
+        wpm=float(value.get("wpm") or 0),
+        keystrokes=int(value.get("keystrokes") or 0),
+        deletions=int(value.get("deletions") or 0),
+        deletedCharacters=int(value.get("deletedCharacters") or 0),
+        bulkDeletionEvents=int(value.get("bulkDeletionEvents") or 0),
+        largestDeletionChars=int(value.get("largestDeletionChars") or 0),
+        selectionDeletionEvents=int(value.get("selectionDeletionEvents") or 0),
+        wordDeletionEvents=int(value.get("wordDeletionEvents") or 0),
+        cutEvents=int(value.get("cutEvents") or 0),
+        pauses=int(value.get("pauses") or 0),
+        avgIki=float(value.get("avgIki") or 0),
+        sessionSeconds=float(value.get("sessionSeconds") or 0),
     )
-
-
-def _event_counts(keystroke_array: List[Dict[str, Any]]) -> Dict[str, int]:
-    keydown_count = 0
-    paste_count = 0
-    pasted_length = 0
-
-    for event in keystroke_array:
-        if not isinstance(event, dict):
-            continue
-
-        if event.get("type") == "keydown":
-            keydown_count += 1
-
-        if event.get("type") == "paste" or event.get("key") == "__PASTE_EVENT__":
-            paste_count += 1
-            try:
-                pasted_length += max(0, int(event.get("pastedLength") or 0))
-            except (TypeError, ValueError):
-                pass
-
-    return {
-        "keydown_count": keydown_count,
-        "paste_count": paste_count,
-        "pasted_length": pasted_length,
-    }
 
 
 def _validate_event_stream(
     *,
-    keystroke_array: List[Dict[str, Any]],
+    event_counts: Dict[str, int],
     text_content: str,
-) -> Dict[str, int]:
-    if not isinstance(keystroke_array, list) or not keystroke_array:
+) -> None:
+    has_typing_evidence = event_counts.get("keydown_count", 0) >= MINIMUM_KEYSTROKES
+    has_paste_evidence = event_counts.get("paste_count", 0) > 0 and bool(
+        (text_content or "").strip()
+    )
+
+    if not event_counts.get("event_count", 0):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Keystroke evidence is required.",
         )
-
-    counts = _event_counts(keystroke_array)
-    has_typing_evidence = counts["keydown_count"] >= MINIMUM_KEYSTROKES
-    has_paste_evidence = counts["paste_count"] > 0 and bool((text_content or "").strip())
 
     if not has_typing_evidence and not has_paste_evidence:
         raise HTTPException(
@@ -315,8 +113,6 @@ def _validate_event_stream(
                 "event are required for analysis."
             ),
         )
-
-    return counts
 
 
 def _apply_paste_dominant_override(
@@ -329,11 +125,7 @@ def _apply_paste_dominant_override(
     risk_score: float,
     risk_level: str,
 ) -> Dict[str, Any]:
-    """
-    Pure pasted sessions have little or no keydown rhythm, so the ML model can
-    produce weak/irrelevant timing predictions. This override makes paste-heavy
-    sessions review-safe and deterministic without changing normal human typing.
-    """
+    """Make paste-heavy sessions deterministic and review-safe."""
 
     text_length = len(text_content or "")
     paste_count = event_counts.get("paste_count", 0)
@@ -388,34 +180,6 @@ def _apply_paste_dominant_override(
         "kill_switch_reason": "Paste-dominant writing session detected.",
     }
 
-def _canonical_json(value: Any) -> str:
-    return json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        default=str,
-    )
-
-
-def _generate_document_hash(
-    *,
-    title: str,
-    text_content: str,
-    keystroke_array: List[Dict[str, Any]],
-    stats: SessionStats,
-    user_id: str,
-) -> str:
-    payload = {
-        "title": title,
-        "text_content": text_content,
-        "keystroke_array": keystroke_array,
-        "stats": stats.model_dump(),
-        "user_id": user_id,
-    }
-
-    return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
-
 
 def _generate_certificate_id() -> str:
     alphabet = string.ascii_uppercase + string.digits
@@ -429,7 +193,6 @@ async def _create_unique_certificate_id(db: AsyncSession) -> str:
         existing = await db.execute(
             select(Certificate.id).where(Certificate.certificate_id == certificate_id)
         )
-
         if existing.scalar_one_or_none() is None:
             return certificate_id
 
@@ -463,51 +226,77 @@ async def _ensure_student_can_submit_to_course(
 
 
 def _clamp_score(value: Any) -> float:
-    """Clamp score values to 0-100 range, handling NaN/Infinity."""
     try:
         score = float(value)
-
-        if score != score:  # NaN check
+        if score != score:
             return 0.0
-
         return round(max(0.0, min(100.0, score)), 2)
     except (TypeError, ValueError):
         return 0.0
 
 
 def _normalize_result_label(value: Any) -> str:
-    """Normalize classification labels to consistent values."""
     label = str(value or "UNKNOWN").strip().upper()
-
     if label in {"HUMAN", "SUSPICIOUS", "SYNTHETIC"}:
         return label
-
     if label in {"AI", "AI-GENERATED", "AI_GENERATED"}:
         return "SYNTHETIC"
-
     if label in {"REAL", "NORMAL"}:
         return "HUMAN"
-
     if label in {"UNCERTAIN", "AMBIGUOUS"}:
         return "SUSPICIOUS"
-
     return "UNKNOWN"
 
 
 def _normalize_risk_level(value: Any, risk_score: float) -> str:
-    """Normalize risk level with fallback to score-based calculation."""
     level = str(value or "").strip().upper()
-
     if level in {"LOW", "MEDIUM", "HIGH"}:
         return level
-
     if risk_score >= 70:
         return "HIGH"
-
     if risk_score >= 40:
         return "MEDIUM"
-
     return "LOW"
+
+
+def _certificate_status_for(classification: str, risk_level: str) -> str:
+    normalized = str(classification or "UNKNOWN").upper()
+    risk = str(risk_level or "LOW").upper()
+    if normalized == "HUMAN" and risk == "LOW":
+        return "VALID"
+    if normalized == "SUSPICIOUS" or risk == "MEDIUM":
+        return "REVIEW_REQUIRED"
+    return "HIGH_RISK"
+
+
+async def _mark_draft_submitted(
+    *,
+    db: AsyncSession,
+    user_id: str,
+    draft_id: Optional[str],
+    session_id: int,
+) -> None:
+    if not draft_id:
+        return
+
+    result = await db.execute(
+        select(DraftSession).where(
+            DraftSession.user_id == user_id,
+            DraftSession.lifecycle_status != "DELETED",
+            (DraftSession.id == draft_id) | (DraftSession.local_draft_id == draft_id),
+        )
+    )
+    draft = result.scalars().first()
+    if draft is None:
+        return
+
+    draft.lifecycle_status = "SUBMITTED"
+    draft.sync_status = "SYNCED"
+    draft.conflict_payload = {
+        "submitted_session_id": session_id,
+        "submitted_from": "sessions.analyze",
+    }
+    db.add(draft)
 
 
 @router.post(
@@ -517,25 +306,33 @@ def _normalize_risk_level(value: Any, risk_score: float) -> str:
 )
 async def analyze_session(
     payload: KeystrokeSessionAnalyzeRequest,
+    request: Request,
     current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Analyzes a student writing session, stores the session,
-    and creates a certificate ledger record.
+    Analyze a student writing session and persist backend-canonical evidence.
 
+    Part 2 guarantee: raw event evidence is the source of truth. The frontend may
+    send live stats for responsiveness, but the backend recomputes persisted
+    metrics, hashes the evidence, stores canonical stats, and retires the draft
+    after successful submission.
     """
 
-    event_counts = _validate_event_stream(
-        keystroke_array=payload.keystroke_array,
-        text_content=payload.text_content,
-    )
-
-    server_stats = _compute_server_stats(
+    title = normalize_title(payload.title)
+    canonical = compute_canonical_evidence(
+        title=title,
         text_content=payload.text_content,
         keystroke_array=payload.keystroke_array,
+        user_id=str(current_user.id),
         client_stats=payload.stats,
+        client_active_duration_ms=payload.active_duration_ms,
     )
+    _validate_event_stream(
+        event_counts=canonical.event_counts,
+        text_content=payload.text_content,
+    )
+    server_stats = _stats_from_dict(canonical.stats)
 
     await _ensure_student_can_submit_to_course(
         db=db,
@@ -555,7 +352,6 @@ async def analyze_session(
             detail="Analysis engine failed to process this writing session.",
         ) from exc
 
-    # Normalize and bound all ML outputs before persisting
     classification = _normalize_result_label(result.classification)
     confidence_score = _clamp_score(result.confidence_score)
     risk_score = _clamp_score(result.risk_score)
@@ -563,7 +359,7 @@ async def analyze_session(
 
     paste_override = _apply_paste_dominant_override(
         result=result,
-        event_counts=event_counts,
+        event_counts=canonical.event_counts,
         text_content=payload.text_content,
         classification=classification,
         confidence_score=confidence_score,
@@ -575,14 +371,20 @@ async def analyze_session(
     risk_score = _clamp_score(paste_override["risk_score"])
     risk_level = _normalize_risk_level(paste_override["risk_level"], risk_score)
 
-    title = _normalize_title(payload.title)
+    advanced_stats = dict(paste_override["advanced_stats"] or {})
+    advanced_stats.update(
+        {
+            "canonical_evidence": canonical.evidence_metadata,
+            "evidence_hash": canonical.evidence_hash,
+            "duration_source": canonical.evidence_metadata.get("duration_source"),
+            "idle_break_count": canonical.evidence_metadata.get("idle_break_count", 0),
+        }
+    )
 
-    document_hash = _generate_document_hash(
-        title=title,
-        text_content=payload.text_content,
-        keystroke_array=payload.keystroke_array,
-        stats=server_stats,
-        user_id=str(current_user.id),
+    model_version = (
+        advanced_stats.get("model_version")
+        or getattr(inference_engine, "artifacts", None) and getattr(inference_engine.artifacts, "metadata", {}).get("model_version")
+        or "fallback-rules"
     )
 
     certificate_id = await _create_unique_certificate_id(db)
@@ -596,13 +398,23 @@ async def analyze_session(
         total_keystrokes=int(server_stats.keystrokes),
         deletions=int(server_stats.deletions),
         pauses=int(server_stats.pauses),
-        avg_iki=int(server_stats.avgIki),
+        avg_iki=int(round(server_stats.avgIki)),
         duration_seconds=float(server_stats.sessionSeconds),
         ml_confidence_score=confidence_score,
         classification_result=classification,
         raw_keystroke_data=payload.keystroke_array,
         certificate_id=certificate_id,
-        document_hash=document_hash,
+        document_hash=canonical.document_hash,
+        evidence_hash=canonical.evidence_hash,
+        model_version=str(model_version),
+        model_score=risk_score,
+        canonical_stats_json=canonical.canonical_stats_json,
+        evidence_metadata={
+            **canonical.evidence_metadata,
+            "client_metadata": payload.client_metadata,
+        },
+        active_duration_ms=canonical.active_duration_ms,
+        idle_breaks_json=canonical.idle_breaks,
         risk_level=risk_level,
         review_status="PENDING",
     )
@@ -613,11 +425,54 @@ async def analyze_session(
     certificate = Certificate(
         session_id=session.id,
         certificate_id=certificate_id,
-        document_hash=document_hash,
-        verification_notes="Generated from TypeTrace writing-session analysis.",
+        document_hash=canonical.document_hash,
+        evidence_hash=canonical.evidence_hash,
+        verification_notes="Generated from backend-canonical TypeTrace writing-session evidence.",
+        signature_algorithm="UNSIGNED_LEGACY",
+        verification_status=_certificate_status_for(classification, risk_level),
+    )
+    db.add(certificate)
+
+    await _mark_draft_submitted(
+        db=db,
+        user_id=str(current_user.id),
+        draft_id=payload.draft_id,
+        session_id=int(session.id),
     )
 
-    db.add(certificate)
+    db.add(
+        create_audit_log(
+            event_type="SESSION_ANALYZED",
+            entity_type="typing_session",
+            entity_id=str(session.id),
+            actor_user_id=str(current_user.id),
+            target_user_id=str(current_user.id),
+            request=request,
+            metadata={
+                "certificate_id": certificate_id,
+                "classification": classification,
+                "risk_level": risk_level,
+                "evidence_hash": canonical.evidence_hash,
+                "draft_id": payload.draft_id,
+            },
+        )
+    )
+    db.add(
+        create_audit_log(
+            event_type="CERTIFICATE_CREATED",
+            entity_type="certificate",
+            entity_id=certificate_id,
+            actor_user_id=str(current_user.id),
+            target_user_id=str(current_user.id),
+            request=request,
+            metadata={
+                "session_id": int(session.id),
+                "document_hash": canonical.document_hash,
+                "evidence_hash": canonical.evidence_hash,
+                "verification_status": certificate.verification_status,
+            },
+        )
+    )
 
     try:
         await db.commit()
@@ -631,12 +486,13 @@ async def analyze_session(
         confidence_score=confidence_score,
         kill_switch_triggered=bool(paste_override["kill_switch_triggered"]),
         kill_switch_reason=paste_override["kill_switch_reason"],
-        advanced_stats=paste_override["advanced_stats"],
+        advanced_stats=advanced_stats,
         stats=server_stats,
         session_id=int(session.id),
         certificate_id=certificate_id,
-        document_hash=document_hash,
+        document_hash=canonical.document_hash,
         risk_level=risk_level,
         risk_score=risk_score,
+        evidence_hash=canonical.evidence_hash,
+        canonical_stats=canonical.canonical_stats_json,
     )
-
