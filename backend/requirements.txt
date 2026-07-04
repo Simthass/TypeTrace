@@ -1,0 +1,56 @@
+# TypeTrace Backend - Python dependencies
+# Install with: pip install -r requirements.txt
+
+# ── Web framework ──────────────────────────────────────────────────────────
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+
+# ── Authentication ─────────────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0
+bcrypt==4.2.0
+passlib[bcrypt]==1.7.4
+
+# ── Database ───────────────────────────────────────────────────────────────
+sqlalchemy==2.0.35
+asyncpg==0.29.0        # async PostgreSQL driver
+psycopg2-binary==2.9.9  # sync driver (used by inference service + training)
+alembic==1.13.2
+
+# ── Cache ──────────────────────────────────────────────────────────────────
+redis[hiredis]==5.0.8
+
+# ── Email ──────────────────────────────────────────────────────────────────
+fastapi-mail==1.4.1
+
+# ── ML core ────────────────────────────────────────────────────────────────
+numpy==1.26.4
+pandas==2.2.3
+scikit-learn==1.5.2
+imbalanced-learn==0.12.3
+joblib==1.4.2
+
+# ── ML enhanced (strongly recommended) ────────────────────────────────────
+xgboost==2.1.1           # Ensemble member - improves accuracy ~2-3%
+optuna==3.6.1            # Hyperparameter search (for optimize_model.py)
+
+# ── ML explainability (for dissertation chapter 4) ────────────────────────
+shap==0.46.0             # Feature importance - generates dissertation figures
+
+# ── Environment ───────────────────────────────────────────────────────────
+python-dotenv==1.0.1
+
+# ── Rate limiting ──────────────────────────────────────────────────────────
+slowapi==0.1.9           # Rate limiting middleware for FastAPI
+
+# ── Validation ─────────────────────────────────────────────────────────────
+pydantic[email]==2.8.2
+
+# ── Certificate generation (dissertation Phase 3 feature) ─────────────────
+reportlab==4.2.2         # PDF generation
+Pillow==10.4.0           # Image support for certificates
+
+pydantic-settings==2.5.2
+
+# ── QR generation for certificate verification ─────────────────────────────
+qrcode[pil]==7.4.2

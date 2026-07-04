@@ -1,40 +1,65 @@
+# =============================================================================
+# TypeTrace .gitignore
+# Keep source, migrations, docs, and small model metadata in Git.
+# Keep secrets, datasets, generated builds, and binary ML artifacts out of Git.
+# =============================================================================
 
+# ── Frontend / Node / Vite ───────────────────────────────────────────────────
 node_modules/
-dist/
-dist-ssr/
-build/
+frontend/node_modules/
 .pnp
 .pnp.js
+.pnp.cjs
+.pnpm-store/
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+frontend/dist/
+frontend/dist-ssr/
+frontend/build/
+dist/
+dist-ssr/
+build/
+coverage/
+frontend/coverage/
+*.tsbuildinfo
+*.local
 
+# ── Python cache / build output ──────────────────────────────────────────────
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+backend/build/
+backend/dist/
+backend/downloads/
+backend/develop-eggs/
+backend/eggs/
+backend/.eggs/
+backend/lib/
+backend/lib64/
+backend/parts/
+backend/sdist/
+backend/var/
+backend/wheels/
+backend/share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# Environments
+# ── Virtual environments ─────────────────────────────────────────────────────
 venv/
 .venv/
 env/
@@ -42,42 +67,103 @@ env/
 ENV/
 env.bak/
 venv.bak/
+backend/venv/
+backend/.venv/
 
-*.csv
-*.tsv
-*.dat
-*.txt
-Datasets.zip
-Datasets/
-
-*.joblib
-*.pkl
-*.h5
-*.hdf5
-*.model
-opt_history.html
-opt_importances.html
-
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints
-
-
+# ── Environment / secrets ────────────────────────────────────────────────────
 .env
+.env.*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
+# ── Local databases / services ───────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+postgres_data/
+redis_data/
+*.dump
+*.backup
+*.sql.gz
 
+# ── Datasets and collected evidence exports ──────────────────────────────────
+Datasets.zip
+Datasets/
+DATASET/
+Dataset/
+dataset/
+backend/Datasets/
+backend/DATASET/
+backend/app/ml/data/raw/
+backend/app/ml/data/external/
+backend/app/ml/data/processed/
+backend/app/ml/exports/
+backend/app/ml/dissertation_figures/
+
+*.csv
+*.tsv
+*.dat
+*.parquet
+*.feather
+*.arrow
+
+# Keep future tiny documented test fixtures if you intentionally add them.
+!backend/tests/fixtures/**/*.csv
+!frontend/src/**/*.csv
+
+# ── Generated text dumps / local scratch files ───────────────────────────────
+final_output*.txt
+Pasted text*.txt
+*.log
+logs/
+backend/logs/
+
+# ── ML binary artifacts ──────────────────────────────────────────────────────
+# Do not commit pickled/joblib model files to normal Git. Use local artifacts,
+# GitHub Releases, or Git LFS only if your supervisor explicitly needs them.
+*.joblib
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+*.model
+*.onnx
+*.pt
+*.pth
+*.sav
+
+# Keep lightweight model documentation/metadata in the repo.
+!backend/app/ml/artifacts/.gitkeep
+!backend/app/ml/artifacts/README.md
+!backend/app/ml/artifacts/feature_schema.json
+!backend/app/ml/artifacts/metrics.json
+!backend/app/ml/artifacts/model_card.json
+
+opt_history.html
+opt_importances.html
+
+# ── Jupyter ──────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── OS / IDE ─────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-*.tsbuildinfo
-*.local
+
+# ── Temporary archives ───────────────────────────────────────────────────────
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+!docs/**/*.zip

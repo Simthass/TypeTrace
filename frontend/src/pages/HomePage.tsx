@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   AnimatePresence,
@@ -23,12 +23,34 @@ import {
 } from "../components/public/PublicVisualSystem";
 
 // ─── Image paths ──────────────────────────────────────────────────────────────
-const DASHBOARD_PREVIEW_SRC = "/dashboard-mockup.png";
+const HERO_BG_ARROW_SRC = "/bg-arrow.png";
+
 const IMAGE_PATHS = {
   capture: "/photo-capture-session.png",
   analysis: "/photo-analysis-review.png",
   certificate: "/photo-certificate-handoff.png",
 };
+
+// Trust avatar images — replace these paths with your actual images
+const TRUST_AVATARS = [
+  "/avatar-1.jpg",
+  "/avatar-2.jpg",
+  "/avatar-3.jpg",
+  "/avatar-4.jpg",
+];
+
+// Student images for WritingSessionsCard — replace with your own
+const STUDENT_AVATARS = [
+  "/student-js.jpg",
+  "/student-ak.jpg",
+  "/student-mp.jpg",
+  "/student-rt.jpg",
+  "/student-ln.jpg",
+  "/student-qw.jpg",
+  "/student-be.jpg",
+  "/student-od.jpg",
+  "/student-cf.jpg",
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -272,144 +294,70 @@ function Reveal({
   );
 }
 
-// ─── Section eyebrow ──────────────────────────────────────────────────────────
-
 // ─────────────────────────────────────────────────────────────────────────────
-// HERO
+// HERO — redesigned to match the supplied reference layout
 // ─────────────────────────────────────────────────────────────────────────────
 
-function HeroGridBackground() {
-  const cols = 12;
-  const rows = 7;
-  const colPositions = Array.from(
-    { length: cols + 1 },
-    (_, i) => `${(i / cols) * 100}%`,
-  );
-  const rowPositions = Array.from(
-    { length: rows + 1 },
-    (_, i) => `${(i / rows) * 100}%`,
-  );
-
+/**
+ * Full-bleed background: the supplied BG-Arrow.png (dashed routing lines +
+ * arrows) layered under a soft radial brand glow. Drop your saved copy of
+ * the uploaded image at /public/bg-arrow.png.
+ */
+function HeroBackground() {
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-      <svg
-        width="100%"
-        height="100%"
-        preserveAspectRatio="xMidYMid slice"
+      <img
+        src={HERO_BG_ARROW_SRC}
+        alt=""
         aria-hidden="true"
-      >
-        <defs>
-          <linearGradient id="home-grid-fade-y" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={colors.surface[50]} stopOpacity="0" />
-            <stop offset="14%" stopColor={colors.surface[50]} stopOpacity="1" />
-            <stop offset="74%" stopColor={colors.surface[50]} stopOpacity="1" />
-            <stop
-              offset="100%"
-              stopColor={colors.surface[50]}
-              stopOpacity="0"
-            />
-          </linearGradient>
-          <radialGradient id="home-grid-center" cx="50%" cy="36%" r="54%">
-            <stop offset="0%" stopColor={colors.surface[50]} stopOpacity="1" />
-            <stop
-              offset="100%"
-              stopColor={colors.surface[50]}
-              stopOpacity="0"
-            />
-          </radialGradient>
-          <mask id="home-grid-mask">
-            <rect width="100%" height="100%" fill="url(#home-grid-fade-y)" />
-          </mask>
-        </defs>
-        <g mask="url(#home-grid-mask)" opacity="0.62">
-          {colPositions.map((x, i) => (
-            <line
-              key={`c${i}`}
-              x1={x}
-              y1="0%"
-              x2={x}
-              y2="100%"
-              stroke={colors.surface[200]}
-              strokeWidth="1"
-            />
-          ))}
-          {rowPositions.map((y, i) => (
-            <line
-              key={`r${i}`}
-              x1="0%"
-              y1={y}
-              x2="100%"
-              y2={y}
-              stroke={colors.surface[200]}
-              strokeWidth="1"
-            />
-          ))}
-          {colPositions.map((x, ci) =>
-            rowPositions.map((y, ri) => (
-              <g key={`${ci}-${ri}`} transform={`translate(${x}, ${y})`}>
-                <line
-                  x1="-4"
-                  y1="0"
-                  x2="4"
-                  y2="0"
-                  stroke={colors.surface[200]}
-                  strokeWidth="1"
-                />
-                <line
-                  x1="0"
-                  y1="-4"
-                  x2="0"
-                  y2="4"
-                  stroke={colors.surface[200]}
-                  strokeWidth="1"
-                />
-              </g>
-            )),
-          )}
-        </g>
-        <rect width="100%" height="100%" fill="url(#home-grid-center)" />
-      </svg>
-      <div
-        className="absolute left-1/2 top-[28%] h-[480px] w-[820px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        className="absolute inset-0 h-full w-full object-cover opacity-70"
         style={{
-          background: `radial-gradient(ellipse at center, ${withAlpha(colors.brand, "10")} 0%, transparent 68%)`,
-          filter: "blur(72px)",
+          maskImage:
+            "radial-gradient(ellipse 70% 60% at 50% 30%, black 45%, transparent 90%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 70% 60% at 50% 30%, black 45%, transparent 90%)",
+        }}
+      />
+      <div
+        className="absolute left-1/2 top-[24%] h-[420px] w-[760px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        style={{
+          background: `radial-gradient(ellipse at center, ${withAlpha(colors.brand, "12")} 0%, transparent 68%)`,
+          filter: "blur(70px)",
+        }}
+      />
+      <div
+        className="absolute inset-x-0 bottom-0 h-40"
+        style={{
+          background: `linear-gradient(180deg, transparent 0%, ${colors.surface[50]} 100%)`,
         }}
       />
     </div>
   );
 }
 
-function FloatingCard({
+/** Small floating widget — plain card, subtle idle float, no rotation. */
+function HeroWidget({
   children,
   positionClass,
-  rotate,
   delay,
-  floatAmp = 8,
 }: {
   children: ReactNode;
   positionClass: string;
-  rotate: number;
   delay: number;
-  floatAmp?: number;
 }) {
   const reduced = useReducedMotion();
   return (
     <motion.div
       className={`absolute hidden lg:block ${positionClass}`}
       initial={{ opacity: 0, y: 14 }}
-      animate={
-        reduced
-          ? { opacity: 1, y: 0, rotate }
-          : { opacity: 1, y: [0, -floatAmp, 0], rotate }
-      }
+      animate={reduced ? { opacity: 1, y: 0 } : { opacity: 1, y: [0, -7, 0] }}
       transition={
         reduced
           ? { duration: 0.5, delay }
           : {
               opacity: { duration: 0.6, delay },
               y: {
-                duration: 5.5 + delay * 0.5,
+                duration: 5,
                 repeat: Infinity,
                 ease: "easeInOut",
                 delay: delay + 0.6,
@@ -420,7 +368,7 @@ function FloatingCard({
         background: colors.surface[50],
         border: `1px solid ${colors.surface[200]}`,
         borderRadius: 14,
-        boxShadow: `0 18px 48px ${colors.shadow}`,
+        boxShadow: `0 18px 44px ${colors.shadow}`,
       }}
     >
       {children}
@@ -428,209 +376,333 @@ function FloatingCard({
   );
 }
 
-function StudentConcernCard() {
-  return (
-    <div className="flex w-[248px] flex-col gap-2.5 p-3.5">
-      <div className="flex items-center gap-2">
-        <div
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
-          style={{ background: brand.aiBg, color: brand.aiText }}
-        >
-          <Icon name="shield" size={14} />
-        </div>
-        <span
-          className="text-[10px] font-bold uppercase tracking-widest"
-          style={{ color: colors.text.secondary }}
-        >
-          Student concern
-        </span>
-      </div>
-      <p
-        className="text-[12.5px] font-semibold leading-snug"
-        style={{ color: colors.text.primary }}
-      >
-        "My essay was flagged even though I wrote every word myself."
-      </p>
-      <div
-        className="flex items-center justify-between border-t pt-2"
-        style={{ borderColor: colors.surface[200] }}
-      >
-        <span className="text-[10px]" style={{ color: colors.text.secondary }}>
-          Academic integrity review
-        </span>
-        <span
-          className="rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide"
-          style={{ background: brand.aiBg, color: brand.aiText }}
-        >
-          Needs context
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function TeacherReviewCard() {
-  return (
-    <div className="flex w-[236px] flex-col gap-2.5 p-3.5">
-      <div className="flex items-center gap-2">
-        <div
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
-          style={{ background: colors.brandSoft, color: colors.brand }}
-        >
-          <Icon name="teacher" size={14} />
-        </div>
-        <span
-          className="text-[10px] font-bold uppercase tracking-widest"
-          style={{ color: colors.text.secondary }}
-        >
-          Teacher review
-        </span>
-      </div>
-      <p
-        className="text-[12.5px] font-semibold leading-snug"
-        style={{ color: colors.text.primary }}
-      >
-        "Can you show how this draft was actually written?"
-      </p>
-      <div
-        className="flex items-center justify-between border-t pt-2"
-        style={{ borderColor: colors.surface[200] }}
-      >
-        <span className="text-[10px]" style={{ color: colors.text.secondary }}>
-          Review request
-        </span>
-        <span
-          className="rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide"
-          style={{
-            background: brand.suspiciousBg,
-            color: brand.suspiciousText,
-          }}
-        >
-          Pending
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function HeroDashboardPreview() {
-  const ref = useRef<HTMLDivElement>(null);
-  const reduced = useReducedMotion();
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start end", "center center"],
-  });
-  const rotateX = useTransform(
-    scrollYProgress,
-    [0, 1],
-    reduced ? [0, 0] : [14, 0],
-  );
-  const y = useTransform(scrollYProgress, [0, 1], reduced ? [0, 0] : [56, 0]);
-  const scale = useTransform(
-    scrollYProgress,
-    [0, 1],
-    reduced ? [1, 1] : [0.95, 1],
-  );
-  const opacity = useTransform(scrollYProgress, [0, 0.38], [0.25, 1]);
-
+function ToggleDot({ on }: { on: boolean }) {
   return (
     <div
-      ref={ref}
-      className="relative z-20 mx-auto w-full max-w-[1280px] px-4 sm:px-6"
-      style={{ perspective: "1400px" }}
+      className="flex h-4 w-8 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200"
+      style={{ background: on ? colors.brand : colors.surface[200] }}
     >
       <div
-        className="pointer-events-none absolute left-1/2 top-[30%] h-[300px] w-[82%] -translate-x-1/2 rounded-full"
-        style={{
-          background: withAlpha(colors.brand, "14"),
-          filter: "blur(80px)",
-          opacity: 0.7,
-        }}
+        className="h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200"
+        style={{ transform: on ? "translateX(16px)" : "translateX(0px)" }}
       />
-      <div
-        className="pointer-events-none absolute bottom-[-12px] left-1/2 h-[60px] w-[72%] -translate-x-1/2 rounded-full"
-        style={{
-          background: withAlpha(colors.text.primary, "18"),
-          filter: "blur(32px)",
-        }}
-      />
-      <motion.div
-        initial={
-          reduced
-            ? { opacity: 1 }
-            : { opacity: 0, y: 72, rotateX: 14, scale: 0.95 }
-        }
-        animate={
-          reduced
-            ? { opacity: 1 }
-            : { opacity: 1, y: 0, rotateX: 14, scale: 0.95 }
-        }
-        transition={{ duration: 1.1, delay: 0.42, ease: [0.16, 1, 0.3, 1] }}
-        style={
-          reduced
-            ? undefined
-            : {
-                rotateX,
-                y,
-                scale,
-                opacity,
-                transformPerspective: 1400,
-                transformOrigin: "center top",
-              }
-        }
-        className="relative w-full overflow-hidden rounded-xl border bg-white will-change-transform"
-        aria-label="TypeTrace dashboard preview"
-      >
-        <div
-          className="flex h-10 items-center gap-3 border-b px-4"
-          style={{
-            background: colors.surface[100],
-            borderColor: colors.surface[200],
-          }}
-        >
-          <div className="flex gap-1.5">
-            {[colors.red, colors.amber, colors.green].map((c) => (
-              <div
-                key={c}
-                className="h-3 w-3 rounded-full"
-                style={{ background: c }}
-              />
-            ))}
-          </div>
-          <div
-            className="mx-auto flex h-6 max-w-[300px] flex-1 items-center justify-center gap-1.5 rounded-md border font-mono text-[11px]"
-            style={{
-              background: colors.surface[50],
-              borderColor: colors.surface[200],
-              color: colors.text.secondary,
-            }}
-          >
-            <Icon name="lock" size={10} />
-            app.typetrace.com
-          </div>
-          <div className="w-12" />
-        </div>
-        <img
-          src={DASHBOARD_PREVIEW_SRC}
-          alt="TypeTrace writing session dashboard"
-          className="block w-full select-none object-cover object-top"
-          draggable={false}
-          style={{ maxHeight: 580 }}
-        />
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-20"
-          style={{
-            background: `linear-gradient(180deg, ${withAlpha(colors.surface[50], "30")} 0%, transparent 100%)`,
-          }}
-        />
-        <div
-          className="pointer-events-none absolute inset-0 rounded-xl"
-          style={{
-            boxShadow: `inset 0 1px 0 ${withAlpha(colors.text.light, "CC")}, inset 0 -1px 0 ${withAlpha(colors.surface[200], "A0")}`,
-          }}
-        />
-      </motion.div>
     </div>
+  );
+}
+
+/** Left widget — mirrors the reference's "8% / 90% sync" toggle stat card. */
+function AccuracyToggleWidget() {
+  return (
+    <div className="flex w-[230px] flex-col gap-2.5 p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p
+            className="text-[9px] font-bold"
+            style={{ color: colors.text.muted }}
+          >
+            62%
+          </p>
+          <p
+            className="text-[11.5px] font-semibold"
+            style={{ color: colors.text.secondary }}
+          >
+            Manual review
+          </p>
+        </div>
+        <ToggleDot on={false} />
+      </div>
+      <div
+        className="h-px w-full"
+        style={{ background: colors.surface[200] }}
+      />
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[9px] font-bold" style={{ color: colors.brand }}>
+            99.7%
+          </p>
+          <p
+            className="text-[11.5px] font-semibold"
+            style={{ color: colors.text.primary }}
+          >
+            With TypeTrace
+          </p>
+        </div>
+        <ToggleDot on={true} />
+      </div>
+    </div>
+  );
+}
+
+/** Right widget — mirrors the reference's "Secure Proxy Protection" badge card. */
+function SealBadgeWidget() {
+  return (
+    <div className="flex w-[180px] flex-col items-center gap-2.5 p-4 text-center">
+      <p
+        className="text-[10px] font-bold uppercase tracking-widest"
+        style={{ color: colors.text.secondary }}
+      >
+        Tamper-proof sealing
+      </p>
+      <div
+        className="flex h-11 w-11 items-center justify-center rounded-full"
+        style={{ background: brand.humanBg, color: brand.humanText }}
+      >
+        <Icon name="shieldCheck" size={20} strokeWidth={1.8} />
+      </div>
+    </div>
+  );
+}
+
+/** Avatar-stack trust line, using actual images */
+function HeroTrustRow() {
+  return (
+    <div className="mb-7 flex flex-col items-center gap-3 sm:flex-row">
+      <div className="flex -space-x-2">
+        {TRUST_AVATARS.map((src, i) => (
+          <img
+            key={i}
+            src={src}
+            alt="Trusted user"
+            className="h-7 w-7 rounded-full border-2 object-cover"
+            style={{ borderColor: colors.surface[50] }}
+          />
+        ))}
+      </div>
+      <span
+        className="text-[13px] font-medium"
+        style={{ color: colors.text.secondary }}
+      >
+        Trusted by, teachers &amp; academic reviewers
+      </span>
+    </div>
+  );
+}
+
+/** Small icon node used inside the flow connector. */
+function FlowNode({ icon }: { icon: Parameters<typeof Icon>[0]["name"] }) {
+  return (
+    <div
+      className="flex h-9 w-9 items-center justify-center rounded-lg border"
+      style={{
+        background: colors.surface[50],
+        borderColor: colors.surface[200],
+        color: colors.brand,
+        boxShadow: `0 6px 16px -8px ${colors.shadow}`,
+      }}
+    >
+      <Icon name={icon} size={16} strokeWidth={1.8} />
+    </div>
+  );
+}
+
+/** Animated connecting line with a pulse traveling toward the logo pill. */
+function FlowLine({ reverse = false }: { reverse?: boolean }) {
+  const reduced = useReducedMotion();
+  return (
+    <div
+      className="relative hidden h-px w-10 shrink-0 sm:block md:w-14"
+      style={{ background: colors.surface[200] }}
+    >
+      {!reduced && (
+        <motion.div
+          className="absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full"
+          style={{ background: colors.brand }}
+          animate={{ left: reverse ? ["100%", "0%"] : ["0%", "100%"] }}
+          transition={{ duration: 1.6, repeat: Infinity, ease: "linear" }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Left card content — now uses student images instead of initials */
+function TypingDots() {
+  const reduced = useReducedMotion();
+
+  return (
+    <div className="mt-1.5 flex h-2 items-center justify-center gap-0.5">
+      {[0, 1, 2].map((dot) => (
+        <motion.span
+          key={dot}
+          className="h-1 w-1 rounded-full"
+          style={{ background: colors.brand }}
+          animate={
+            reduced ? undefined : { opacity: [0.35, 1, 0.35], y: [0, -2, 0] }
+          }
+          transition={
+            reduced
+              ? undefined
+              : {
+                  duration: 0.85,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                  delay: dot * 0.14,
+                }
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Left card content — now uses student images with live typing indicators */
+function WritingSessionsCardBody() {
+  return (
+    <div className="w-[250px] p-3.5">
+      <p
+        className="mb-3 text-[10px] font-bold uppercase tracking-widest"
+        style={{ color: colors.text.secondary }}
+      >
+        Student Live writing sessions
+      </p>
+      <div className="grid grid-cols-3 place-items-center gap-2">
+        {STUDENT_AVATARS.map((src, i) => (
+          <div key={i} className="flex flex-col items-center">
+            <img
+              src={src}
+              alt="Student"
+              className="h-9 w-9 rounded-full object-cover"
+            />
+            <TypingDots />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Right card content — Amara K. progress bar now red */
+function CertifiedSessionsCardBody() {
+  const rows = [
+    {
+      name: "Amara K.",
+      pct: 96,
+      label: "Human",
+      avatar: STUDENT_AVATARS[0],
+      color: brand.humanText,
+      bg: brand.humanBg,
+    },
+    {
+      name: "Devon R.",
+      pct: 64,
+      label: "Review Required",
+      avatar: STUDENT_AVATARS[1],
+      color: brand.suspiciousText,
+      bg: brand.suspiciousBg,
+    },
+    {
+      name: "Priya S.",
+      pct: 18,
+      label: "Synthetic behavior",
+      avatar: STUDENT_AVATARS[2],
+      color: colors.red,
+      bg: withAlpha(colors.red, "12"),
+    },
+  ];
+
+  return (
+    <div className="w-[250px] p-3.5">
+      <p
+        className="mb-3 text-[10px] font-bold uppercase tracking-widest"
+        style={{ color: colors.text.secondary }}
+      >
+        Certified sessions
+      </p>
+      <div className="flex flex-col gap-3">
+        {rows.map((row) => (
+          <div key={row.name} className="flex items-center gap-2.5">
+            <img
+              src={row.avatar}
+              alt={row.name}
+              className="h-9 w-9 shrink-0 rounded-full object-cover"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <p
+                  className="truncate text-[11.5px] font-semibold"
+                  style={{ color: colors.text.primary }}
+                >
+                  {row.name}
+                </p>
+                <span
+                  className="shrink-0 text-[10px] font-bold"
+                  style={{ color: row.color }}
+                >
+                  {row.pct}%
+                </span>
+              </div>
+              <div
+                className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full"
+                style={{ background: colors.surface[200] }}
+              >
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${row.pct}%`,
+                    background: row.color,
+                  }}
+                />
+              </div>
+              <div
+                className="mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[8.5px] font-bold uppercase tracking-[0.04em]"
+                style={{ background: row.bg, color: row.color }}
+              >
+                {row.label}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The center product-flow composition: two content cards flanking a
+ * connector that feeds into the TypeTrace logo pill — the direct analog of
+ * the reference's "social profiles → SuperCRM → enriched contacts" diagram.
+ */
+function ProductFlowRow() {
+  const cardStyle: CSSProperties = {
+    background: colors.surface[50],
+    border: `1px solid ${colors.surface[200]}`,
+    borderRadius: 16,
+    boxShadow: `0 18px 44px -20px ${colors.shadow}`,
+  };
+
+  return (
+    <Reveal
+      delay={0.4}
+      className="relative z-20 mx-auto mt-14 flex w-full max-w-[900px] flex-col items-center gap-5 px-4 sm:flex-row sm:justify-center sm:gap-0"
+    >
+      <div style={cardStyle}>
+        <WritingSessionsCardBody />
+      </div>
+
+      <div className="flex items-center gap-3 px-3 py-4 sm:py-0">
+        <div className="flex flex-col gap-3">
+          <FlowNode icon="keyboard" />
+          <FlowNode icon="pulse" />
+        </div>
+        <FlowLine />
+        <div
+          className="flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2.5 text-[12.5px] font-bold shadow-sm"
+          style={{ background: colors.brand, color: colors.text.light }}
+        >
+          <Icon name="shieldCheck" size={14} />
+          TypeTrace
+        </div>
+        <FlowLine />
+        <div className="flex flex-col gap-3">
+          <FlowNode icon="hash" />
+          <FlowNode icon="certificate" />
+        </div>
+      </div>
+
+      <div style={cardStyle}>
+        <CertifiedSessionsCardBody />
+      </div>
+    </Reveal>
   );
 }
 
@@ -639,43 +711,29 @@ function HeroSection() {
   const delay = (n: number) => (reduced ? 0 : n);
 
   return (
-    <section className="relative flex min-h-screen flex-col items-center overflow-hidden px-6 pb-28 pt-[min(10vh,96px)] text-center">
-      <HeroGridBackground />
-      <FloatingCard
-        positionClass="left-[1%] top-[15%] xl:left-[5%] xl:top-[19%]"
-        rotate={-4}
-        delay={delay(0.7)}
-        floatAmp={9}
-      >
-        <StudentConcernCard />
-      </FloatingCard>
-      <FloatingCard
-        positionClass="right-[1%] top-[13%] xl:right-[5%] xl:top-[17%]"
-        rotate={3.5}
-        delay={delay(0.85)}
-        floatAmp={11}
-      >
-        <TeacherReviewCard />
-      </FloatingCard>
+    <section className="relative flex min-h-screen flex-col items-center overflow-hidden px-6 pb-24 pt-[100px] text-center">
+      <HeroBackground />
 
-      <div className="relative z-10 flex w-full max-w-[920px] flex-col items-center">
+      <HeroWidget
+        positionClass="left-[3%] top-[24%] xl:left-[7%]"
+        delay={delay(0.7)}
+      >
+        <AccuracyToggleWidget />
+      </HeroWidget>
+      <HeroWidget
+        positionClass="right-[3%] top-[10%] xl:right-[8%]"
+        delay={delay(0.85)}
+      >
+        <SealBadgeWidget />
+      </HeroWidget>
+
+      <div className="relative z-10 flex w-full max-w-[880px] flex-col items-center">
         <motion.div
-          initial={{ opacity: 0, y: 14 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{
-            duration: 0.58,
-            delay: delay(0.05),
-            ease: [0.22, 1, 0.36, 1],
-          }}
-          className="mb-6 inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[11.5px] font-bold uppercase tracking-[0.12em]"
-          style={{
-            borderColor: colors.surface[200],
-            background: colors.surface[50],
-            color: colors.brand,
-          }}
+          transition={{ duration: 0.55, delay: delay(0.05) }}
         >
-          <PublicIcon name="shield" size={14} />
-          Behavioral authorship evidence
+          <HeroTrustRow />
         </motion.div>
 
         <motion.h1
@@ -686,68 +744,50 @@ function HeroSection() {
             delay: delay(0.14),
             ease: [0.22, 1, 0.36, 1],
           }}
-          className="mb-7 max-w-[940px] text-[3.55rem] font-bold leading-[0.95] tracking-[-0.065em] sm:text-[5rem] lg:text-[5.8rem]"
+          className="mb-6 max-w-[820px] text-[2.9rem] font-bold leading-[1.05] tracking-[-0.045em] sm:text-[4rem] lg:text-[4rem]"
         >
           <span style={{ color: colors.text.primary }}>
-            Authorship evidence,
-          </span>
+            Prove You Wrote It with{" "}
+          </span>{" "}
+          <span style={{ color: colors.brand }}>Behavioral</span>
           <br />
-          <span style={{ color: colors.brand }}>built as you write.</span>
+          <span style={{ color: colors.brand }}>Authorship </span>{" "}
+          <span style={{ color: colors.text.primary }}>Evidence.</span>
         </motion.h1>
 
         <motion.p
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.62, delay: delay(0.24) }}
-          className="mb-11 max-w-[620px] text-[17px] leading-[1.75]"
+          transition={{ duration: 0.6, delay: delay(0.24) }}
+          className="mb-9 max-w-[560px] text-[16.5px] leading-[1.7]"
           style={{ color: colors.text.secondary }}
         >
-          TypeTrace captures keystroke dynamics, pauses, revisions, and timing
-          signals to create reviewable writing evidence before academic work is
-          questioned.
+          TypeTrace records keystroke rhythm, pauses, and revisions as you
+          write, then seals it into a certificate you share.
         </motion.p>
 
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.58, delay: delay(0.32) }}
-          className="mb-9 flex flex-col items-center gap-3 sm:flex-row"
+          transition={{ duration: 0.55, delay: delay(0.32) }}
+          className="mb-4 flex flex-col items-center gap-3 sm:flex-row"
         >
-          <PrimaryLink to={ROUTES.REGISTER}>
-            Start a writing session
-          </PrimaryLink>
-          <SecondaryLink to={ROUTES.VERIFY_LOOKUP}>
-            <PublicIcon name="search" size={15} />
-            Verify a certificate
-          </SecondaryLink>
+          <PrimaryLink to={ROUTES.REGISTER}>Start writing for free</PrimaryLink>
+          <SecondaryLink to={ROUTES.VERIFY_LOOKUP}>Learn more</SecondaryLink>
         </motion.div>
 
-        <motion.div
+        <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: delay(0.48) }}
-          className="flex flex-wrap justify-center gap-x-6 gap-y-2"
+          transition={{ duration: 0.5, delay: delay(0.42) }}
+          className="text-[12.5px]"
+          style={{ color: colors.text.muted }}
         >
-          {[
-            "No setup required",
-            "Works inside any browser editor",
-            "Results in under a minute",
-          ].map((t) => (
-            <span
-              key={t}
-              className="flex items-center gap-1.5 text-[12.5px]"
-              style={{ color: colors.text.secondary }}
-            >
-              <Icon name="check" size={13} strokeWidth={2.6} />
-              {t}
-            </span>
-          ))}
-        </motion.div>
+          Free for · No credit card required
+        </motion.p>
       </div>
 
-      <div className="relative z-10 mt-16 w-full">
-        <HeroDashboardPreview />
-      </div>
+      <ProductFlowRow />
     </section>
   );
 }
@@ -1599,7 +1639,7 @@ function StudentTeacherSection() {
         <Reveal className="mx-auto mb-12 max-w-2xl text-center">
           <SectionEyebrow>Two-sided workflow</SectionEyebrow>
           <SectionHeading
-            title="Built for students who need proof and teachers who need context."
+            title="Built for who need proof and teachers who need context."
             align="center"
           />
         </Reveal>
@@ -1607,7 +1647,7 @@ function StudentTeacherSection() {
           <Reveal>
             <RoleCard
               icon="keyboard"
-              title="For students"
+              title="For"
               body="Create authorship evidence while writing, before your work is ever questioned."
               points={[
                 "Write inside a focused, distraction-free editor.",
@@ -1635,7 +1675,7 @@ function StudentTeacherSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TRUST SECTION - REDESIGNED: Horizontal tabs + visual evidence chain
+// TRUST SECTION - Horizontal tabs + visual evidence chain
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TRUST_TABS = [
@@ -1940,8 +1980,8 @@ function FinalCtaSection() {
             className="max-w-lg text-[16px] leading-relaxed"
             style={{ color: colors.text.secondary }}
           >
-            Join thousands of students and educators who've moved beyond AI
-            detection drama. Create evidence that speaks for itself.
+            Join thousands of and educators who've moved beyond AI detection
+            drama. Create evidence that speaks for itself.
           </p>
         </Reveal>
         <Reveal delay={0.14}>
@@ -2006,7 +2046,7 @@ function FinalCtaSection() {
                 className="text-[11px] font-medium"
                 style={{ color: colors.text.secondary }}
               >
-                Trusted by students at 50+ universities
+                Trusted by at 50+ universities
               </p>
             </div>
           </div>

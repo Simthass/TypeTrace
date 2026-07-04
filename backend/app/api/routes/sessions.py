@@ -383,9 +383,13 @@ async def analyze_session(
 
     model_version = (
         advanced_stats.get("model_version")
-        or getattr(inference_engine, "artifacts", None) and getattr(inference_engine.artifacts, "metadata", {}).get("model_version")
+        or (
+            getattr(inference_engine, "artifacts", None)
+            and getattr(inference_engine.artifacts, "metadata", {}).get("model_version")
+        )
         or "fallback-rules"
     )
+    model_score = _clamp_score(advanced_stats.get("model_score", risk_score))
 
     certificate_id = await _create_unique_certificate_id(db)
 
@@ -407,7 +411,7 @@ async def analyze_session(
         document_hash=canonical.document_hash,
         evidence_hash=canonical.evidence_hash,
         model_version=str(model_version),
-        model_score=risk_score,
+        model_score=model_score,
         canonical_stats_json=canonical.canonical_stats_json,
         evidence_metadata={
             **canonical.evidence_metadata,
@@ -454,6 +458,8 @@ async def analyze_session(
                 "risk_level": risk_level,
                 "evidence_hash": canonical.evidence_hash,
                 "draft_id": payload.draft_id,
+                "model_version": str(model_version),
+                "model_score": model_score,
             },
         )
     )
@@ -496,3 +502,4 @@ async def analyze_session(
         evidence_hash=canonical.evidence_hash,
         canonical_stats=canonical.canonical_stats_json,
     )
+
