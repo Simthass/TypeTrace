@@ -8,6 +8,7 @@ python-multipart==0.0.9
 
 # ── Authentication ─────────────────────────────────────────────────────────
 python-jose[cryptography]==3.3.0
+cryptography==43.0.1
 bcrypt==4.2.0
 passlib[bcrypt]==1.7.4
 
@@ -54,3 +55,5 @@ pydantic-settings==2.5.2
 
 # ── QR generation for certificate verification ─────────────────────────────
 qrcode[pil]==7.4.2
+
+

@@ -18,6 +18,7 @@ from app.models.session import TypingSession
 from app.models.user import User
 from app.services.audit_log import create_audit_log
 from app.services.canonical_evidence import compute_canonical_evidence, normalize_title
+from app.services.certificate_signing import sign_certificate_for_session
 
 
 router = APIRouter()
@@ -431,10 +432,13 @@ async def analyze_session(
         certificate_id=certificate_id,
         document_hash=canonical.document_hash,
         evidence_hash=canonical.evidence_hash,
-        verification_notes="Generated from backend-canonical TypeTrace writing-session evidence.",
-        signature_algorithm="UNSIGNED_LEGACY",
+        verification_notes=(
+            "Generated from backend-canonical TypeTrace writing-session evidence "
+            "and signed into the TypeTrace certificate ledger."
+        ),
         verification_status=_certificate_status_for(classification, risk_level),
     )
+    signature_bundle = sign_certificate_for_session(session, certificate)
     db.add(certificate)
 
     await _mark_draft_submitted(
@@ -476,6 +480,9 @@ async def analyze_session(
                 "document_hash": canonical.document_hash,
                 "evidence_hash": canonical.evidence_hash,
                 "verification_status": certificate.verification_status,
+                "signature_algorithm": signature_bundle.algorithm,
+                "signing_key_id": signature_bundle.signing_key_id,
+                "signed_payload_hash": signature_bundle.payload_hash,
             },
         )
     )
@@ -502,4 +509,6 @@ async def analyze_session(
         evidence_hash=canonical.evidence_hash,
         canonical_stats=canonical.canonical_stats_json,
     )
+
+
 

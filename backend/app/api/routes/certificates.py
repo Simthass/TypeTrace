@@ -1,5 +1,6 @@
 
 import io
+import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -7,6 +8,7 @@ from typing import Any, Dict, Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse
 from reportlab.lib import colors as pdf_colors
 from reportlab.lib.pagesizes import A4
@@ -22,11 +24,16 @@ from app.api.deps import get_current_user
 from app.core.config import PROJECT_ROOT, settings
 from app.models.user import User
 from app.core.privacy import safe_public_certificate_identity
+from app.services.certificate_signing import verify_certificate_record
 
 
 router = APIRouter()
 
 sync_engine = create_engine(settings.sync_database_url, pool_pre_ping=True)
+
+
+class CertificateRevocationRequest(BaseModel):
+    reason: str = Field(min_length=8, max_length=500)
 
 
 CERT_ID_PATTERN = re.compile(r"^[A-Za-z0-9\-_]{8,80}$")
@@ -97,16 +104,28 @@ def _classification_label(value: Optional[str]) -> str:
     return "Unknown"
 
 
-def _certificate_status(classification: Optional[str]) -> str:
+def _certificate_status(classification: Optional[str], risk_level: Optional[str] = None) -> str:
     normalized = str(classification or "UNKNOWN").upper()
+    risk = str(risk_level or "LOW").upper()
 
-    if normalized == "HUMAN":
+    if normalized == "HUMAN" and risk == "LOW":
         return "VALID"
 
-    if normalized == "SUSPICIOUS":
+    if normalized == "SUSPICIOUS" or risk == "MEDIUM":
         return "REVIEW_REQUIRED"
 
     return "HIGH_RISK"
+
+
+def _ledger_display_status(*, ledger_status: Optional[str], classification: Optional[str], risk_level: Optional[str], revoked_at: Any) -> str:
+    if revoked_at is not None:
+        return "REVOKED"
+
+    normalized = str(ledger_status or "").upper()
+    if normalized in {"VALID", "VALID_LEGACY", "REVIEW_REQUIRED", "HIGH_RISK", "INVALID_SIGNATURE"}:
+        return normalized
+
+    return _certificate_status(classification, risk_level)
 
 
 def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
@@ -133,6 +152,10 @@ def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
                     ts.risk_level AS risk_level,
                     ts.review_status AS review_status,
                     ts.created_at AS created_at,
+                    ts.evidence_hash AS session_evidence_hash,
+                    ts.model_version AS model_version,
+                    ts.model_score AS model_score,
+                    ts.course_id AS course_id,
 
                     u.id AS user_id,
                     u.first_name AS first_name,
@@ -147,7 +170,16 @@ def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
 
                     cert.id AS ledger_id,
                     cert.generated_at AS ledger_generated_at,
-                    cert.verification_notes AS verification_notes
+                    cert.verification_notes AS verification_notes,
+                    cert.evidence_hash AS certificate_evidence_hash,
+                    cert.signed_payload_hash AS signed_payload_hash,
+                    cert.signature AS signature,
+                    cert.signature_algorithm AS signature_algorithm,
+                    cert.signing_key_id AS signing_key_id,
+                    cert.signed_at AS signed_at,
+                    cert.verification_status AS verification_status,
+                    cert.revoked_at AS revoked_at,
+                    cert.revocation_reason AS revocation_reason
                 FROM typing_sessions ts
                 JOIN users u ON u.id = ts.user_id
                 LEFT JOIN courses c ON c.id = ts.course_id
@@ -164,10 +196,18 @@ def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
 
     word_count = len((row["text_content"] or "").split())
 
+    ledger_status = _ledger_display_status(
+        ledger_status=row["verification_status"],
+        classification=row["classification_result"],
+        risk_level=row["risk_level"],
+        revoked_at=row["revoked_at"],
+    )
+
     return {
         "session_id": row["session_id"],
         "user_id": row["user_id"],
         "teacher_id": row["teacher_id"],
+        "course_id": row["course_id"],
         "title": row["title"] or "Untitled Document",
         "student_name": f"{row['first_name']} {row['last_name'] or ''}".strip(),
         "student_id": row["student_id"] or "",
@@ -176,6 +216,7 @@ def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
         "course_name": row["course_name"],
         "course_code": row["course_code"],
         "word_count": word_count,
+        # Display-rounded values for the public API/UI.
         "wpm": round(float(row["wpm"] or 0), 1),
         "total_keystrokes": int(row["total_keystrokes"] or 0),
         "deletions": int(row["deletions"] or 0),
@@ -189,12 +230,34 @@ def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
         "review_status": row["review_status"] or "PENDING",
         "certificate_id": row["certificate_id"],
         "document_hash": row["document_hash"],
+        "evidence_hash": row["certificate_evidence_hash"] or row["session_evidence_hash"],
+        "model_version": row["model_version"],
+        "model_score": round(float(row["model_score"] or 0), 4),
+        # Raw evidence values used only for signature verification. These are
+        # not exposed by the public payload, but they stop UI rounding from
+        # changing the signed payload hash.
+        "wpm_raw": row["wpm"],
+        "avg_iki_raw": row["avg_iki"],
+        "duration_seconds_raw": row["duration_seconds"],
+        "confidence_raw": row["ml_confidence_score"],
+        "model_score_raw": row["model_score"],
         "created_at": _format_datetime(row["created_at"]),
         "generated_at": _format_datetime(row["ledger_generated_at"] or row["created_at"]),
+        "ledger_generated_at_raw": row["ledger_generated_at"],
         "ledger_id": row["ledger_id"],
-        "ledger_status": "LEDGER_RECORDED" if row["ledger_id"] else "SESSION_RECORDED",
+        "ledger_status": ledger_status,
         "verification_notes": row["verification_notes"] or "",
-        "status": _certificate_status(row["classification_result"]),
+        "signed_payload_hash": row["signed_payload_hash"],
+        "signature": row["signature"],
+        "signature_algorithm": row["signature_algorithm"] or "UNSIGNED_LEGACY",
+        "signing_key_id": row["signing_key_id"],
+        "signed_at": _format_datetime(row["signed_at"]),
+        "signed_at_raw": row["signed_at"],
+        "verification_status": row["verification_status"],
+        "revoked_at": _format_datetime(row["revoked_at"]) if row["revoked_at"] else None,
+        "revoked_at_raw": row["revoked_at"],
+        "revocation_reason": row["revocation_reason"],
+        "status": ledger_status,
     }
 
 
@@ -235,6 +298,7 @@ def _frontend_verify_url(cert_id: str) -> str:
 
 def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dict[str, Any]:
     verify_url = _frontend_verify_url(record["certificate_id"])
+    signature_result = verify_certificate_record(record)
 
     identity = safe_public_certificate_identity(
         student_name=record["student_name"],
@@ -243,9 +307,15 @@ def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dic
         show_student_id=settings.PUBLIC_CERTIFICATE_SHOW_STUDENT_ID,
     )
 
+    public_status = record["status"]
+    if record.get("revoked_at"):
+        public_status = "REVOKED"
+    elif not signature_result.valid and signature_result.status != "VALID_LEGACY":
+        public_status = "INVALID_SIGNATURE"
+
     return {
         "valid": True,
-        "status": record["status"],
+        "status": public_status,
         "certificate_id": record["certificate_id"],
         "verify_url": verify_url,
         "title": record["title"],
@@ -263,9 +333,21 @@ def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dic
         "risk_level": record["risk_level"],
         "review_status": record["review_status"],
         "document_hash": record["document_hash"],
+        "evidence_hash": record.get("evidence_hash"),
         "created_at": record["created_at"],
         "generated_at": record["generated_at"],
         "ledger_status": record["ledger_status"],
+        "signature_algorithm": record.get("signature_algorithm"),
+        "signing_key_id": record.get("signing_key_id"),
+        "signed_at": record.get("signed_at"),
+        "signed_payload_hash": record.get("signed_payload_hash"),
+        "signature_status": signature_result.status,
+        "signature_valid": signature_result.signature_valid,
+        "payload_hash_matches": signature_result.payload_hash_matches,
+        "ledger_verified": signature_result.valid,
+        "ledger_reason": signature_result.reason,
+        "revoked_at": record.get("revoked_at"),
+        "revocation_reason": record.get("revocation_reason"),
         "privacy_notice": (
             "Public verification does not expose essay text or raw keystroke evidence."
         ),
@@ -408,6 +490,83 @@ async def get_certificate_audit(
     )
 
     return payload
+
+
+@router.post("/certificates/{cert_id}/revoke")
+async def revoke_certificate(
+    cert_id: str,
+    payload: CertificateRevocationRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Revoke a certificate without deleting its signed evidence record.
+
+    The original signature remains verifiable, while the public verification
+    state changes to REVOKED. This mirrors real ledger behaviour: records are
+    appended/invalidated, not silently erased.
+    """
+    record = _fetch_certificate_record(cert_id)
+
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Certificate not found.",
+        )
+
+    _authorize_certificate_audit(record, current_user)
+
+    reason = " ".join(payload.reason.split())
+    with sync_engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE certificates
+                SET verification_status = 'REVOKED',
+                    revoked_at = NOW(),
+                    revocation_reason = :reason
+                WHERE certificate_id = :cert_id
+                """
+            ),
+            {"cert_id": record["certificate_id"], "reason": reason},
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO audit_logs (
+                    actor_user_id, target_user_id, event_type, entity_type, entity_id,
+                    request_id, ip_address, user_agent, metadata
+                )
+                VALUES (
+                    :actor_user_id, :target_user_id, 'CERTIFICATE_REVOKED',
+                    'certificate', :entity_id, :request_id, :ip_address, :user_agent,
+                    CAST(:metadata AS JSONB)
+                )
+                """
+            ),
+            {
+                "actor_user_id": str(current_user.id),
+                "target_user_id": str(record.get("user_id")),
+                "entity_id": str(record["certificate_id"]),
+                "request_id": request.headers.get("x-request-id"),
+                "ip_address": request.client.host if request.client else None,
+                "user_agent": request.headers.get("user-agent"),
+                "metadata": json.dumps(
+                    {
+                        "reason": reason,
+                        "session_id": int(record["session_id"]),
+                        "signed_payload_hash": record.get("signed_payload_hash"),
+                    }
+                ),
+            },
+        )
+
+    updated = _fetch_certificate_record(record["certificate_id"])
+    return {
+        "status": "success",
+        "message": "Certificate revoked.",
+        "certificate": _public_certificate_payload(updated, request) if updated else None,
+    }
 
 
 @router.get("/sessions/{session_id}/certificate-data")
@@ -673,7 +832,7 @@ def _draw_brand_logo(pdf: canvas.Canvas, x: float, y: float, max_width: float = 
 
 def _status_color(status: str) -> str:
     normalized = str(status or "").upper()
-    if normalized == "VALID":
+    if normalized in {"VALID", "VALID_LEGACY"}:
         return PDF_SUCCESS
     if normalized == "REVIEW_REQUIRED":
         return PDF_WARNING
@@ -785,6 +944,7 @@ def _build_certificate_pdf(record: Dict[str, Any], verify_url: str) -> bytes:
         ("Risk level", record.get("risk_level") or "Unknown"),
         ("Review", record.get("review_status") or "PENDING"),
         ("Ledger", record.get("ledger_status") or "SESSION_RECORDED"),
+        ("Signature", record.get("signature_algorithm") or "UNSIGNED_LEGACY"),
     ]
 
     for label, value in left_details:
@@ -963,4 +1123,6 @@ async def download_certificate_pdf(
             "Cache-Control": "no-store",
         },
     )
+
+
 

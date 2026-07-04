@@ -1,4 +1,3 @@
-# backend/app/core/config.py
 
 from functools import lru_cache
 from pathlib import Path
@@ -68,7 +67,24 @@ class Settings(BaseSettings):
     PUBLIC_CERTIFICATE_PDF_SHOW_STUDENT_ID: bool = False
     DATA_EXPORT_INCLUDE_SENSITIVE_BY_DEFAULT: bool = False
 
-    @field_validator("ENVIRONMENT", "LOG_LEVEL", "SECRET_KEY", "ALLOWED_ORIGINS")
+    # Part 4: signed certificate ledger. Production should use Ed25519 keys.
+    # Development can use HMAC fallback through SECRET_KEY for local demos.
+    CERTIFICATE_SIGNING_KEY_ID: str = Field(default="typetrace-local-v1")
+    CERTIFICATE_SIGNING_PRIVATE_KEY: str = Field(default="")
+    CERTIFICATE_SIGNING_PUBLIC_KEY: str = Field(default="")
+    CERTIFICATE_SIGNING_HMAC_SECRET: str = Field(default="")
+    CERTIFICATE_ALLOW_HMAC_FALLBACK: bool = True
+
+    @field_validator(
+        "ENVIRONMENT",
+        "LOG_LEVEL",
+        "SECRET_KEY",
+        "ALLOWED_ORIGINS",
+        "CERTIFICATE_SIGNING_KEY_ID",
+        "CERTIFICATE_SIGNING_PRIVATE_KEY",
+        "CERTIFICATE_SIGNING_PUBLIC_KEY",
+        "CERTIFICATE_SIGNING_HMAC_SECRET",
+    )
     @classmethod
     def strip_string_fields(cls, value: str) -> str:
         return value.strip()
@@ -125,6 +141,15 @@ class Settings(BaseSettings):
             if not self.ALLOWED_ORIGINS.strip():
                 raise ValueError("Production ALLOWED_ORIGINS must be configured.")
 
+            if (
+                not self.CERTIFICATE_SIGNING_PRIVATE_KEY
+                and not self.CERTIFICATE_ALLOW_HMAC_FALLBACK
+            ):
+                raise ValueError(
+                    "Production certificate signing requires CERTIFICATE_SIGNING_PRIVATE_KEY "
+                    "or explicit HMAC fallback."
+                )
+
         return self
 
     @property
@@ -165,3 +190,4 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
