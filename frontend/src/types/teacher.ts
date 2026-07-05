@@ -1,11 +1,13 @@
-// frontend/src/types/teacher.ts
-
 export type TeacherClassificationBucket =
   | "HUMAN"
   | "SUSPICIOUS"
   | "SYNTHETIC"
   | "UNKNOWN";
-export type TeacherReviewStatus = "PENDING" | "APPROVED" | "FLAGGED";
+export type TeacherReviewStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "FLAGGED"
+  | "NEEDS_DISCUSSION";
 
 export interface TeacherProfile {
   id: string;
@@ -78,6 +80,7 @@ export interface TeacherSubmission {
   risk_level: string;
   review_status: TeacherReviewStatus | string;
   review_notes: string;
+  review_saved_at?: string;
   wpm: number;
   duration_seconds: number;
   total_keystrokes: number;

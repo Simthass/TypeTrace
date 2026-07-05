@@ -34,6 +34,13 @@ export const PAGE_METADATA_ROUTES: PageMetadataRoute[] = [
     description:
       "Learn why TypeTrace focuses on writing-process evidence instead of final-text guessing for academic integrity review.",
   },
+
+  {
+    path: ROUTES.PRIVACY,
+    title: "Privacy and Evidence Handling",
+    description:
+      "Understand what TypeTrace captures, what public verification exposes, and how behavioral evidence is handled for academic review.",
+  },
   {
     path: ROUTES.HELP_DOCS,
     title: "Help Documentation",
@@ -189,6 +196,13 @@ export const PAGE_METADATA_ROUTES: PageMetadataRoute[] = [
       sessionId ? `Review Session ${shortId(sessionId)}` : "Review Session",
     description:
       "Review a TypeTrace writing session with behavioral metrics, replay evidence, classification output, and certificate metadata.",
+  },
+
+  {
+    path: ROUTES.TEACHER_MODEL_STATUS,
+    title: "Model Status",
+    description:
+      "Review the active TypeTrace Isolation Forest model status, metrics, feature schema, and operational readiness.",
   },
   {
     path: ROUTES.NOT_FOUND,

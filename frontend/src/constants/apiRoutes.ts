@@ -78,6 +78,8 @@ export const API_ROUTES = {
 
   model: {
     status: "/model/status",
+    metrics: "/model/metrics",
+    features: "/model/features",
     reload: "/model/reload",
   },
 } as const;

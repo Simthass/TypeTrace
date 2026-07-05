@@ -26,6 +26,7 @@ interface CertificateItem {
   document_hash: string;
   risk_level: string;
   review_status: string;
+  review_outcome?: string;
   course_name?: string | null;
   course_code?: string | null;
   verify_url: string;
@@ -44,7 +45,12 @@ type SortMode =
   | "COURSE";
 
 type ClassificationFilter = "ALL" | "HUMAN" | "SUSPICIOUS" | "SYNTHETIC";
-type ReviewFilter = "ALL" | "PENDING" | "APPROVED" | "FLAGGED";
+type ReviewFilter =
+  | "ALL"
+  | "PENDING"
+  | "APPROVED"
+  | "FLAGGED"
+  | "NEEDS_DISCUSSION";
 
 const PAGE_SIZE = 16;
 
@@ -59,6 +65,7 @@ const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
   { value: "ALL", label: "All review states" },
   { value: "PENDING", label: "Pending" },
   { value: "APPROVED", label: "Approved" },
+  { value: "NEEDS_DISCUSSION", label: "Needs discussion" },
   { value: "FLAGGED", label: "Flagged" },
 ];
 
@@ -222,11 +229,12 @@ function classificationBucket(
 
 function reviewBucket(
   value?: string,
-): "PENDING" | "APPROVED" | "FLAGGED" | "OTHER" {
+): "PENDING" | "APPROVED" | "FLAGGED" | "NEEDS_DISCUSSION" | "OTHER" {
   const normalized = String(value || "PENDING").toUpperCase();
 
   if (normalized === "APPROVED") return "APPROVED";
   if (normalized === "FLAGGED") return "FLAGGED";
+  if (normalized === "NEEDS_DISCUSSION") return "NEEDS_DISCUSSION";
   if (normalized === "PENDING" || normalized === "REVIEW_REQUIRED")
     return "PENDING";
   return "OTHER";
@@ -1417,6 +1425,14 @@ export default function CertificatesPage() {
                     <StatusBadge
                       value={selectedCertificate.review_status || "PENDING"}
                     />
+                    {selectedCertificate.review_outcome && (
+                      <p
+                        className="mt-2 text-[12px] leading-5"
+                        style={{ color: colors.text.secondary }}
+                      >
+                        {selectedCertificate.review_outcome}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

@@ -1,5 +1,3 @@
-// frontend/src/lib/api.ts
-
 import axios, { AxiosError, type AxiosRequestConfig } from "axios";
 
 import { useAuthStore } from "../store/authStore";
@@ -47,7 +45,9 @@ function isPublicRoute(url?: string): boolean {
   return (
     clean.startsWith("/verify/") ||
     clean.includes("/health") ||
-    clean.includes("/model/status")
+    clean.includes("/model/status") ||
+    clean.includes("/model/metrics") ||
+    clean.includes("/model/features")
   );
 }
 

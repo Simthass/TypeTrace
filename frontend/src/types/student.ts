@@ -1,5 +1,3 @@
-// frontend/src/types/student.ts
-
 export type ClassificationBucket =
   | "HUMAN"
   | "SUSPICIOUS"
@@ -40,6 +38,7 @@ export interface StudentSessionItem {
   confidence: number;
   risk_level: string;
   review_status: string;
+  review_outcome?: string;
   review_notes: string;
   wpm: number;
   duration_seconds: number;

@@ -137,7 +137,7 @@ async def get_teacher_dashboard(
                     COUNT(DISTINCT c.id) AS total_courses,
                     COUNT(DISTINCT cs.student_id) AS total_students,
                     COUNT(ts.id) AS total_submissions,
-                    COUNT(CASE WHEN COALESCE(ts.review_status, 'PENDING') = 'PENDING' THEN 1 END) AS pending_reviews,
+                    COUNT(CASE WHEN COALESCE(ts.review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_reviews,
                     COUNT(CASE WHEN ts.review_status = 'APPROVED' THEN 1 END) AS approved_reviews,
                     COUNT(CASE WHEN ts.review_status = 'FLAGGED' THEN 1 END) AS flagged_reviews,
                     COUNT(CASE WHEN ts.classification_result = 'HUMAN' THEN 1 END) AS human_submissions,
@@ -175,6 +175,7 @@ async def get_teacher_dashboard(
                     ts.certificate_id,
                     ts.document_hash,
                     ts.created_at,
+                    ts.updated_at AS review_saved_at,
                     c.course_name,
                     c.course_code,
                     u.first_name,
@@ -207,7 +208,7 @@ async def get_teacher_dashboard(
                     c.created_at,
                     COUNT(DISTINCT cs.student_id) AS student_count,
                     COUNT(ts.id) AS submission_count,
-                    COUNT(CASE WHEN COALESCE(ts.review_status, 'PENDING') = 'PENDING' THEN 1 END) AS pending_count,
+                    COUNT(CASE WHEN COALESCE(ts.review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
                     COUNT(CASE WHEN ts.review_status = 'APPROVED' THEN 1 END) AS approved_count,
                     COUNT(CASE WHEN ts.review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
                     COALESCE(ROUND(AVG(ts.ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
@@ -342,7 +343,7 @@ async def list_teacher_courses(
                     c.created_at,
                     COUNT(DISTINCT cs.student_id) AS student_count,
                     COUNT(ts.id) AS submission_count,
-                    COUNT(CASE WHEN COALESCE(ts.review_status, 'PENDING') = 'PENDING' THEN 1 END) AS pending_count,
+                    COUNT(CASE WHEN COALESCE(ts.review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
                     COUNT(CASE WHEN ts.review_status = 'APPROVED' THEN 1 END) AS approved_count,
                     COUNT(CASE WHEN ts.review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
                     COALESCE(ROUND(AVG(ts.ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
@@ -383,7 +384,7 @@ async def get_teacher_course_detail(
                     c.created_at,
                     COUNT(DISTINCT cs.student_id) AS student_count,
                     COUNT(ts.id) AS submission_count,
-                    COUNT(CASE WHEN COALESCE(ts.review_status, 'PENDING') = 'PENDING' THEN 1 END) AS pending_count,
+                    COUNT(CASE WHEN COALESCE(ts.review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
                     COUNT(CASE WHEN ts.review_status = 'APPROVED' THEN 1 END) AS approved_count,
                     COUNT(CASE WHEN ts.review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
                     COALESCE(ROUND(AVG(ts.ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
@@ -455,6 +456,7 @@ async def get_teacher_course_detail(
                     ts.certificate_id,
                     ts.document_hash,
                     ts.created_at,
+                    ts.updated_at AS review_saved_at,
                     c.course_name,
                     c.course_code,
                     u.first_name,
@@ -525,7 +527,7 @@ async def list_teacher_students(
                     COUNT(ts.id) AS submission_count,
                     COALESCE(ROUND(AVG(ts.ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
                     COALESCE(ROUND(AVG(ts.wpm)::numeric, 1), 0) AS avg_wpm,
-                    COUNT(CASE WHEN COALESCE(ts.review_status, 'PENDING') = 'PENDING' THEN 1 END) AS pending_count,
+                    COUNT(CASE WHEN COALESCE(ts.review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
                     COUNT(CASE WHEN ts.review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
                     MAX(ts.created_at) AS last_submission_at
                 FROM course_students cs
@@ -650,6 +652,7 @@ async def list_teacher_submissions(
                     ts.certificate_id,
                     ts.document_hash,
                     ts.created_at,
+                    ts.updated_at AS review_saved_at,
                     c.course_name,
                     c.course_code,
                     u.first_name,
@@ -711,6 +714,7 @@ async def get_teacher_submission_detail(
                     ts.certificate_id,
                     ts.document_hash,
                     ts.created_at,
+                    ts.updated_at AS review_saved_at,
                     c.course_name,
                     c.course_code,
                     u.first_name,
@@ -752,6 +756,7 @@ async def get_teacher_submission_detail(
         row["raw_keystroke_data"]
     )
     payload["raw_keystroke_data"] = None
+    payload["review_saved_at"] = _format_datetime(row["review_saved_at"])
 
     return {
         "status": "success",
@@ -771,10 +776,10 @@ async def review_teacher_submission(
     teacher_id = str(current_user.id)
     review_status = payload.status.strip().upper()
 
-    if review_status not in {"PENDING", "APPROVED", "FLAGGED"}:
+    if review_status not in {"PENDING", "APPROVED", "FLAGGED", "NEEDS_DISCUSSION"}:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Review status must be PENDING, APPROVED, or FLAGGED.",
+            detail="Review status must be PENDING, APPROVED, FLAGGED, or NEEDS_DISCUSSION.",
         )
 
     notes = (payload.notes or "").strip()
@@ -803,7 +808,7 @@ async def review_teacher_submission(
                 detail="Submission not found.",
             )
 
-        conn.execute(
+        updated = conn.execute(
             text(
                 """
                 UPDATE typing_sessions
@@ -813,6 +818,7 @@ async def review_teacher_submission(
                     reviewed_by = :teacher_id,
                     updated_at = NOW()
                 WHERE id = :session_id
+                RETURNING updated_at
                 """
             ),
             {
@@ -821,11 +827,12 @@ async def review_teacher_submission(
                 "teacher_id": teacher_id,
                 "session_id": session_id,
             },
-        )
+        ).mappings().fetchone()
 
     return {
         "status": "success",
         "message": "Submission review updated successfully.",
         "review_status": review_status,
         "review_notes": notes,
+        "review_saved_at": _format_datetime(updated["updated_at"] if updated else None),
     }

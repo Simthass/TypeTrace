@@ -5,8 +5,6 @@ import {
   motion,
   useInView,
   useReducedMotion,
-  useScroll,
-  useTransform,
 } from "framer-motion";
 
 import { ROUTES } from "../constants/routes";

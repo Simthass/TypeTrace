@@ -36,6 +36,13 @@ const reviewOptions: ReviewOption[] = [
     tone: "human",
   },
   {
+    status: "NEEDS_DISCUSSION",
+    title: "Needs student discussion",
+    description:
+      "The record should be discussed with the student before a final decision.",
+    tone: "brand",
+  },
+  {
     status: "FLAGGED",
     title: "Flag for academic review",
     description: "The evidence should be escalated for formal review.",
@@ -236,6 +243,7 @@ function reviewTone(status: string | undefined): BadgeTone {
   const normalized = String(status || "PENDING").toUpperCase();
   if (normalized === "APPROVED") return "human";
   if (normalized === "FLAGGED") return "risk";
+  if (normalized === "NEEDS_DISCUSSION") return "brand";
   return "review";
 }
 
@@ -402,6 +410,10 @@ export default function TeacherReviewPage() {
   const [reviewStatus, setReviewStatus] =
     useState<TeacherReviewStatus>("PENDING");
   const [reviewNotes, setReviewNotes] = useState("");
+  const [savedReviewStatus, setSavedReviewStatus] =
+    useState<TeacherReviewStatus>("PENDING");
+  const [savedReviewNotes, setSavedReviewNotes] = useState("");
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -431,6 +443,12 @@ export default function TeacherReviewPage() {
             "PENDING") as TeacherReviewStatus,
         );
         setReviewNotes(response.data.session.review_notes || "");
+        setSavedReviewStatus(
+          (response.data.session.review_status ||
+            "PENDING") as TeacherReviewStatus,
+        );
+        setSavedReviewNotes(response.data.session.review_notes || "");
+        setLastSavedAt(response.data.session.review_saved_at || null);
       } catch (error) {
         if (!mounted) return;
         const message = getApiErrorMessage(error);
@@ -472,6 +490,11 @@ export default function TeacherReviewPage() {
 
       setReviewStatus(nextStatus as TeacherReviewStatus);
       setReviewNotes(nextNotes);
+      setSavedReviewStatus(nextStatus as TeacherReviewStatus);
+      setSavedReviewNotes(nextNotes);
+      setLastSavedAt(
+        response.data?.review_saved_at || new Date().toISOString(),
+      );
 
       setSubmission((current) =>
         current
@@ -499,6 +522,18 @@ export default function TeacherReviewPage() {
       setIsSaving(false);
     }
   };
+
+  const hasUnsavedReviewChanges =
+    reviewStatus !== savedReviewStatus ||
+    reviewNotes.trim() !== savedReviewNotes.trim();
+
+  const reviewSaveStateLabel = isSaving
+    ? "Saving decision..."
+    : hasUnsavedReviewChanges
+      ? "Unsaved changes"
+      : lastSavedAt
+        ? `Saved ${formatDate(lastSavedAt)}`
+        : "No saved decision yet";
 
   const evidenceSummary = useMemo(() => {
     if (!submission) return [];
@@ -1008,6 +1043,22 @@ export default function TeacherReviewPage() {
                 </div>
                 <Badge tone={selectedReviewOption.tone}>{reviewStatus}</Badge>
               </div>
+              <p
+                className="mt-3 rounded-md border px-3 py-2 text-[11px] font-semibold"
+                style={{
+                  borderColor: hasUnsavedReviewChanges
+                    ? colors.amber
+                    : colors.surface[200],
+                  background: hasUnsavedReviewChanges
+                    ? `${colors.amber}12`
+                    : colors.surface[100],
+                  color: hasUnsavedReviewChanges
+                    ? colors.amber
+                    : colors.text.muted,
+                }}
+              >
+                {reviewSaveStateLabel}
+              </p>
             </div>
 
             <div className="p-5">
@@ -1051,7 +1102,11 @@ export default function TeacherReviewPage() {
                 style={{ background: colors.brand, color: colors.text.light }}
               >
                 <Icon type="save" size={14} />
-                {isSaving ? "Saving decision..." : "Save teacher decision"}
+                {isSaving
+                  ? "Saving decision..."
+                  : hasUnsavedReviewChanges
+                    ? "Save teacher decision"
+                    : "Decision saved"}
               </button>
             </div>
           </Card>

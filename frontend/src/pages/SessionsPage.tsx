@@ -17,6 +17,8 @@ interface SessionItem {
   confidence: number;
   risk_level: string;
   review_status: string;
+  review_outcome?: string;
+  review_notes?: string;
   wpm: number;
   duration_seconds: number;
   word_count: number;
@@ -33,7 +35,12 @@ interface SessionsResponse {
 }
 
 type ClassificationFilter = "ALL" | "HUMAN" | "SUSPICIOUS" | "SYNTHETIC";
-type ReviewFilter = "ALL" | "PENDING" | "APPROVED" | "FLAGGED";
+type ReviewFilter =
+  | "ALL"
+  | "PENDING"
+  | "APPROVED"
+  | "FLAGGED"
+  | "NEEDS_DISCUSSION";
 type SortValue =
   | "newest"
   | "oldest"
@@ -58,6 +65,7 @@ const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
   { value: "ALL", label: "All review states" },
   { value: "PENDING", label: "Pending" },
   { value: "APPROVED", label: "Approved" },
+  { value: "NEEDS_DISCUSSION", label: "Needs discussion" },
   { value: "FLAGGED", label: "Flagged" },
 ];
 
@@ -255,6 +263,7 @@ function normalizeReviewStatus(value?: string): ReviewFilter | "UNKNOWN" {
   const normalized = String(value || "PENDING").toUpperCase();
   if (normalized === "APPROVED") return "APPROVED";
   if (normalized === "FLAGGED") return "FLAGGED";
+  if (normalized === "NEEDS_DISCUSSION") return "NEEDS_DISCUSSION";
   if (normalized === "PENDING" || normalized === "REVIEW_REQUIRED") {
     return "PENDING";
   }
@@ -288,6 +297,7 @@ function statusStyle(value?: string) {
     normalized === "SUSPICIOUS" ||
     normalized === "PENDING" ||
     normalized === "MEDIUM" ||
+    normalized === "NEEDS_DISCUSSION" ||
     normalized === "REVIEW_REQUIRED"
   ) {
     return {
@@ -1046,9 +1056,19 @@ export default function SessionsPage() {
                         </td>
 
                         <td className="px-4 py-3 align-middle">
-                          <StatusBadge
-                            value={session.review_status || "PENDING"}
-                          />
+                          <div className="space-y-1">
+                            <StatusBadge
+                              value={session.review_status || "PENDING"}
+                            />
+                            {session.review_outcome && (
+                              <p
+                                className="max-w-[150px] text-[11px] leading-4"
+                                style={{ color: colors.text.muted }}
+                              >
+                                {session.review_outcome}
+                              </p>
+                            )}
+                          </div>
                         </td>
 
                         <td className="px-4 py-3 align-middle">

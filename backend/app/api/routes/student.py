@@ -1,4 +1,3 @@
-# backend/app/api/routes/student.py
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -51,6 +50,18 @@ def _classification_bucket(classification: Optional[str]) -> str:
     return "UNKNOWN"
 
 
+def _review_outcome(status: Optional[str]) -> str:
+    normalized = str(status or "PENDING").upper()
+
+    if normalized == "APPROVED":
+        return "Accepted by teacher"
+    if normalized == "FLAGGED":
+        return "Flagged for academic review"
+    if normalized == "NEEDS_DISCUSSION":
+        return "Discussion requested"
+    return "Awaiting teacher review"
+
+
 def _risk_level(classification: Optional[str], fallback: Optional[str]) -> str:
     if fallback:
         return str(fallback).upper()
@@ -77,6 +88,7 @@ def _session_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "confidence": round(float(row.get("confidence") or 0), 2),
         "risk_level": _risk_level(classification, row.get("risk_level")),
         "review_status": row.get("review_status") or "PENDING",
+        "review_outcome": _review_outcome(row.get("review_status")),
         "review_notes": row.get("review_notes") or "",
         "wpm": round(float(row.get("wpm") or 0), 1),
         "duration_seconds": round(float(row.get("duration_seconds") or 0), 1),
@@ -126,7 +138,7 @@ async def get_student_dashboard(
                     COUNT(CASE WHEN certificate_id IS NOT NULL THEN 1 END) AS certificate_count,
                     COUNT(CASE WHEN review_status = 'APPROVED' THEN 1 END) AS approved_count,
                     COUNT(CASE WHEN review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
-                    COUNT(CASE WHEN review_status = 'PENDING' OR review_status IS NULL THEN 1 END) AS pending_count
+                    COUNT(CASE WHEN review_status IN ('PENDING', 'NEEDS_DISCUSSION') OR review_status IS NULL THEN 1 END) AS pending_count
                 FROM typing_sessions
                 WHERE user_id = :user_id
                 """

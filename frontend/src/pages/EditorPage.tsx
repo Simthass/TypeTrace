@@ -19,6 +19,8 @@ import {
   truncateTitle,
 } from "../lib/edgeCases";
 
+const EDITOR_CONSENT_STORAGE_KEY = "typetrace.editorEvidenceConsent.v1";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface EnrolledCourse {
@@ -613,6 +615,133 @@ function DraftRecoveryModal({
   );
 }
 
+function EditorConsentModal({
+  onAccept,
+  onLeave,
+}: {
+  onAccept: () => void;
+  onLeave: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center px-4">
+      <div
+        className="absolute inset-0"
+        style={{ background: "rgba(15, 23, 42, 0.64)" }}
+      />
+      <div
+        className="relative z-10 w-full max-w-[620px] overflow-hidden rounded-md border bg-white"
+        style={{
+          borderColor: colors.surface[200],
+          boxShadow: "0 34px 100px rgba(15,23,42,0.34)",
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="TypeTrace writing evidence consent"
+      >
+        <div className="px-6 pb-5 pt-6">
+          <div
+            className="mb-5 inline-flex items-center gap-2 rounded-md border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em]"
+            style={{
+              borderColor: colors.brand,
+              background: colors.brandSoft,
+              color: colors.brand,
+            }}
+          >
+            First writing session notice
+          </div>
+          <h2
+            className="text-[26px] font-extrabold leading-tight tracking-[-0.045em]"
+            style={{ color: colors.text.primary }}
+          >
+            TypeTrace captures writing-process evidence while you type.
+          </h2>
+          <p
+            className="mt-3 text-[14px] leading-7"
+            style={{ color: colors.text.secondary }}
+          >
+            To create a verifiable authorship certificate, the editor records
+            behavioral signals such as keystroke timing, pauses, deletions,
+            paste/cut activity, revision pressure, active writing time, and
+            session metadata. This evidence supports academic review; it is not
+            automatic proof of misconduct.
+          </p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            {[
+              [
+                "Captured",
+                "Timing, edits, pauses, paste/cut, revision metrics",
+              ],
+              [
+                "Private",
+                "Raw essay text and raw keystrokes are not exposed publicly",
+              ],
+              [
+                "Public",
+                "Certificates show integrity hashes, status, and review-safe metadata",
+              ],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="rounded-md border p-3"
+                style={{
+                  borderColor: colors.surface[200],
+                  background: colors.surface[50],
+                }}
+              >
+                <p
+                  className="text-[10px] font-bold uppercase tracking-[0.14em]"
+                  style={{ color: colors.text.muted }}
+                >
+                  {label}
+                </p>
+                <p
+                  className="mt-2 text-[12px] leading-5"
+                  style={{ color: colors.text.secondary }}
+                >
+                  {value}
+                </p>
+              </div>
+            ))}
+          </div>
+          <p
+            className="mt-4 text-[12px] leading-6"
+            style={{ color: colors.text.muted }}
+          >
+            You can save a draft and leave at any time. Continuing means you
+            understand this editor captures behavioral evidence for your
+            TypeTrace session.
+          </p>
+        </div>
+        <div
+          className="flex flex-col-reverse gap-2 border-t px-6 py-4 sm:flex-row sm:justify-end"
+          style={{ borderColor: colors.surface[200] }}
+        >
+          <button
+            type="button"
+            onClick={onLeave}
+            className="rounded-md border px-4 py-[10px] text-[13px] font-semibold transition hover:brightness-95"
+            style={{
+              borderColor: colors.surface[200],
+              background: colors.surface[50],
+              color: colors.text.secondary,
+            }}
+          >
+            Back to dashboard
+          </button>
+          <button
+            type="button"
+            onClick={onAccept}
+            className="rounded-md px-5 py-[10px] text-[13px] font-bold text-white transition hover:brightness-110"
+            style={{ background: colors.brand }}
+          >
+            I understand, start capturing
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Full-screen SaaS-style result modal shown after analysis */
 function AnalysisResultModal({
   result,
@@ -1023,6 +1152,11 @@ export default function EditorPage() {
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [showResultModal, setShowResultModal] = useState(false);
   const [showDraftRecoveryModal, setShowDraftRecoveryModal] = useState(false);
+  const [showConsentModal, setShowConsentModal] = useState(() =>
+    typeof window === "undefined"
+      ? false
+      : window.localStorage.getItem(EDITOR_CONSENT_STORAGE_KEY) !== "accepted",
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved">(
     "saved",
@@ -1441,6 +1575,21 @@ export default function EditorPage() {
           "The browser could not persist this draft. Copy your text before leaving this page.",
       });
     }
+  };
+
+  const acceptEditorConsent = () => {
+    window.localStorage.setItem(EDITOR_CONSENT_STORAGE_KEY, "accepted");
+    setShowConsentModal(false);
+    showToast({
+      type: "success",
+      title: "Evidence capture enabled",
+      message:
+        "TypeTrace will now capture writing-process signals for this editor session.",
+    });
+  };
+
+  const leaveEditorConsent = () => {
+    navigate(ROUTES.DASHBOARD, { replace: true });
   };
 
   const openAnalyzeModal = () => {
@@ -2218,6 +2367,13 @@ export default function EditorPage() {
           onCancel={() => setShowCourseModal(false)}
           onConfirm={confirmSubmit}
           isSubmitting={isSubmitting}
+        />
+      )}
+
+      {showConsentModal && (
+        <EditorConsentModal
+          onAccept={acceptEditorConsent}
+          onLeave={leaveEditorConsent}
         />
       )}
 

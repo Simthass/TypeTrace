@@ -1,4 +1,3 @@
-
 import io
 import json
 import re
@@ -116,6 +115,17 @@ def _certificate_status(classification: Optional[str], risk_level: Optional[str]
 
     return "HIGH_RISK"
 
+
+
+def _review_outcome(status: Optional[str]) -> str:
+    normalized = str(status or "PENDING").upper()
+    if normalized == "APPROVED":
+        return "Accepted by teacher"
+    if normalized == "FLAGGED":
+        return "Flagged for academic review"
+    if normalized == "NEEDS_DISCUSSION":
+        return "Discussion requested"
+    return "Awaiting teacher review"
 
 def _ledger_display_status(*, ledger_status: Optional[str], classification: Optional[str], risk_level: Optional[str], revoked_at: Any) -> str:
     if revoked_at is not None:
@@ -296,6 +306,86 @@ def _frontend_verify_url(cert_id: str) -> str:
     return f"{base_url}/verify/{quote(str(cert_id).strip(), safe='')}"
 
 
+
+def _certificate_audit_timeline(record: Dict[str, Any], signature_result: Any) -> list[Dict[str, Any]]:
+    """
+    Public-safe audit timeline for certificate verification.
+
+    This deliberately exposes only high-level ledger events. It does not expose
+    essay text, raw keystroke events, IP addresses, user agents, or private
+    teacher notes.
+    """
+    timeline: list[Dict[str, Any]] = []
+
+    timeline.append(
+        {
+            "label": "Writing session recorded",
+            "status": "complete",
+            "timestamp": record.get("created_at"),
+            "description": "A TypeTrace writing session was submitted and converted into a canonical evidence record.",
+        }
+    )
+
+    if record.get("document_hash"):
+        timeline.append(
+            {
+                "label": "Document hash sealed",
+                "status": "complete",
+                "timestamp": record.get("created_at"),
+                "description": "A SHA-256 document integrity hash was attached to the certificate record.",
+            }
+        )
+
+    if record.get("signed_payload_hash"):
+        timeline.append(
+            {
+                "label": "Certificate ledger signed",
+                "status": "complete" if signature_result.valid else "warning",
+                "timestamp": record.get("signed_at"),
+                "description": f"Signed with {record.get('signature_algorithm') or 'the configured signing algorithm'} using key {record.get('signing_key_id') or 'unknown'}.",
+            }
+        )
+    else:
+        timeline.append(
+            {
+                "label": "Legacy unsigned certificate",
+                "status": "legacy",
+                "timestamp": record.get("generated_at"),
+                "description": "This certificate was generated before signed ledger enforcement was enabled.",
+            }
+        )
+
+    timeline.append(
+        {
+            "label": "Public verification checked",
+            "status": "complete" if signature_result.valid else "warning",
+            "timestamp": _format_datetime(datetime.now(timezone.utc)),
+            "description": signature_result.reason,
+        }
+    )
+
+    if str(record.get("review_status") or "PENDING").upper() != "PENDING":
+        timeline.append(
+            {
+                "label": "Teacher review outcome recorded",
+                "status": "complete",
+                "timestamp": record.get("generated_at"),
+                "description": f"Review outcome: {str(record.get('review_status')).replace('_', ' ')}.",
+            }
+        )
+
+    if record.get("revoked_at"):
+        timeline.append(
+            {
+                "label": "Certificate revoked",
+                "status": "warning",
+                "timestamp": record.get("revoked_at"),
+                "description": record.get("revocation_reason") or "This certificate was revoked without exposing private evidence.",
+            }
+        )
+
+    return timeline
+
 def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dict[str, Any]:
     verify_url = _frontend_verify_url(record["certificate_id"])
     signature_result = verify_certificate_record(record)
@@ -332,6 +422,7 @@ def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dic
         "confidence": record["confidence"],
         "risk_level": record["risk_level"],
         "review_status": record["review_status"],
+        "review_outcome": _review_outcome(record.get("review_status")),
         "document_hash": record["document_hash"],
         "evidence_hash": record.get("evidence_hash"),
         "created_at": record["created_at"],
@@ -348,6 +439,12 @@ def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dic
         "ledger_reason": signature_result.reason,
         "revoked_at": record.get("revoked_at"),
         "revocation_reason": record.get("revocation_reason"),
+        "audit_timeline": _certificate_audit_timeline(record, signature_result),
+        "public_exposure": {
+            "essay_text_exposed": False,
+            "raw_keystrokes_exposed": False,
+            "student_private_notes_exposed": False,
+        },
         "privacy_notice": (
             "Public verification does not expose essay text or raw keystroke evidence."
         ),
@@ -442,6 +539,7 @@ async def list_my_certificates(
                 "document_hash": row["document_hash"],
                 "risk_level": row["risk_level"] or "LOW",
                 "review_status": row["review_status"] or "PENDING",
+                "review_outcome": _review_outcome(row["review_status"]),
                 "course_name": row["course_name"],
                 "course_code": row["course_code"],
                 "verify_url": f"/verify/{row['certificate_id']}",
@@ -1123,6 +1221,3 @@ async def download_certificate_pdf(
             "Cache-Control": "no-store",
         },
     )
-
-
-

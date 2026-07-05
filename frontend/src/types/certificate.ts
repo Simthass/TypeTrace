@@ -19,6 +19,7 @@ export interface CertificateListItem {
   document_hash: string;
   risk_level: string;
   review_status: string;
+  review_outcome?: string;
   course_name: string | null;
   course_code: string | null;
   verify_url: string;
@@ -27,6 +28,13 @@ export interface CertificateListItem {
 export interface CertificateListResponse {
   status: string;
   certificates: CertificateListItem[];
+}
+
+export interface CertificateAuditTimelineItem {
+  label: string;
+  status: "complete" | "warning" | "legacy" | string;
+  timestamp?: string;
+  description: string;
 }
 
 export interface PublicCertificateVerification {
@@ -50,6 +58,7 @@ export interface PublicCertificateVerification {
   confidence?: number;
   risk_level?: string;
   review_status?: string;
+  review_outcome?: string;
   document_hash?: string;
   evidence_hash?: string;
   signed_payload_hash?: string;
@@ -66,5 +75,11 @@ export interface PublicCertificateVerification {
   created_at?: string;
   generated_at?: string;
   ledger_status?: string;
+  audit_timeline?: CertificateAuditTimelineItem[];
+  public_exposure?: {
+    essay_text_exposed: boolean;
+    raw_keystrokes_exposed: boolean;
+    student_private_notes_exposed: boolean;
+  };
   privacy_notice?: string;
 }

@@ -875,6 +875,80 @@ export default function VerifyCertificatePage() {
               </div>
             </div>
 
+            {result.audit_timeline && result.audit_timeline.length > 0 && (
+              <div
+                className="rounded-2xl border p-6"
+                style={{
+                  borderColor: colors.surface[200],
+                  background: colors.surface[50],
+                }}
+              >
+                <h2
+                  className="mb-5 text-[11px] font-bold uppercase tracking-[0.16em]"
+                  style={{ color: colors.text.muted }}
+                >
+                  Certificate audit timeline
+                </h2>
+                <div className="space-y-4">
+                  {result.audit_timeline.map((event, index) => {
+                    const tone = String(
+                      event.status || "complete",
+                    ).toLowerCase();
+                    const markerColor =
+                      tone === "warning"
+                        ? colors.amber
+                        : tone === "legacy"
+                          ? colors.text.muted
+                          : colors.green;
+
+                    return (
+                      <div
+                        key={`${event.label}-${index}`}
+                        className="flex gap-3"
+                      >
+                        <div className="flex flex-col items-center">
+                          <span
+                            className="mt-1 h-2.5 w-2.5 rounded-md"
+                            style={{ background: markerColor }}
+                          />
+                          {index < (result.audit_timeline?.length || 0) - 1 && (
+                            <span
+                              className="mt-2 h-full min-h-[28px] w-px"
+                              style={{ background: colors.surface[200] }}
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0 pb-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p
+                              className="text-[13px] font-bold"
+                              style={{ color: colors.text.primary }}
+                            >
+                              {event.label}
+                            </p>
+                            {event.timestamp && (
+                              <span
+                                className="text-[11px]"
+                                style={{ color: colors.text.muted }}
+                              >
+                                {formatDate(event.timestamp)}
+                              </span>
+                            )}
+                          </div>
+                          <p
+                            className="mt-1 text-[12px] leading-5"
+                            style={{ color: colors.text.secondary }}
+                          >
+                            {event.description}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Session metrics */}
             <div className="grid grid-cols-3 gap-4">
               {[

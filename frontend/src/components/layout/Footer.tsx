@@ -1,5 +1,3 @@
-// frontend/src/components/layout/Footer.tsx
-
 import { Link } from "react-router-dom";
 import { brand, colors } from "../../styles/colors";
 import { ROUTES } from "../../constants/routes";
@@ -101,7 +99,7 @@ const FOOTER_COLUMNS = [
     links: [
       { label: "About TypeTrace", path: ROUTES.ABOUT },
       { label: "Help & Docs", path: ROUTES.HELP_DOCS },
-      { label: "Privacy & GDPR", path: ROUTES.SETTINGS },
+      { label: "Privacy & GDPR", path: ROUTES.PRIVACY },
       { label: "Academic Research", path: ROUTES.ABOUT },
     ],
   },

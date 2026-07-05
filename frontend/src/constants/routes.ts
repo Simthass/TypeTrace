@@ -6,6 +6,7 @@ export const ROUTES = {
   ABOUT: "/about",
   SETTINGS: "/settings",
   HELP_DOCS: "/help",
+  PRIVACY: "/privacy",
 
   // Auth
   LOGIN: "/login",
@@ -37,6 +38,7 @@ export const ROUTES = {
   TEACHER_SUBMISSIONS: "/teacher/submissions",
   TEACHER_STUDENTS: "/teacher/students",
   TEACHER_REVIEW: "/teacher/review/:sessionId",
+  TEACHER_MODEL_STATUS: "/teacher/model-status",
 
   // Fallback
   NOT_FOUND: "*",
@@ -49,6 +51,7 @@ export const PUBLIC_NAV = [
   { label: "How It Works", path: ROUTES.HOW_IT_WORKS },
   { label: "Features", path: ROUTES.FEATURES },
   { label: "About", path: ROUTES.ABOUT },
+  { label: "Privacy", path: ROUTES.PRIVACY },
   { label: "Verify", path: ROUTES.VERIFY_LOOKUP },
 ] as const;
 

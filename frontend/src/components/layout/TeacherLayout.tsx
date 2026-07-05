@@ -48,6 +48,13 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
         <path d="m9 15 2 2 4-5" />
       </>
     ),
+    model: (
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+        <path d="M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
+      </>
+    ),
     settings: (
       <>
         <circle cx="12" cy="12" r="3" />
@@ -163,6 +170,11 @@ const navSections: TeacherNavSection[] = [
         path: ROUTES.TEACHER_SUBMISSIONS,
         icon: "submissions",
       },
+      {
+        label: "Model Status",
+        path: ROUTES.TEACHER_MODEL_STATUS,
+        icon: "model",
+      },
     ],
   },
   {
@@ -216,6 +228,7 @@ function getPageTitle(pathname: string) {
   }
   if (pathname.startsWith(ROUTES.TEACHER_SUBMISSIONS)) return "Submissions";
   if (pathname.startsWith(ROUTES.TEACHER_STUDENTS)) return "Students";
+  if (pathname.startsWith(ROUTES.TEACHER_MODEL_STATUS)) return "Model Status";
   if (pathname.startsWith(ROUTES.TEACHER_REVIEW.replace(":sessionId", ""))) {
     return "Review Session";
   }

@@ -30,6 +30,7 @@ import HomePage from "./pages/HomePage";
 import HowItWorksPage from "./pages/HowItWorksPage";
 import LoginPage from "./pages/LoginPage";
 import NotFoundPage from "./pages/NotFoundPage";
+import PrivacyPage from "./pages/PrivacyPage";
 import RegisterPage from "./pages/RegisterPage";
 import ReplayPage from "./pages/ReplayPage";
 import SessionsPage from "./pages/SessionsPage";
@@ -43,6 +44,7 @@ import JoinCoursePage from "./pages/student/JoinCoursePage";
 import TeacherCourseDetailPage from "./pages/teacher/TeacherCourseDetailPage";
 import TeacherCoursesPage from "./pages/teacher/TeacherCoursesPage";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
+import TeacherModelStatusPage from "./pages/teacher/TeacherModelStatusPage";
 import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
 import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage";
 import TeacherSubmissionsPage from "./pages/teacher/TeacherSubmissionsPage";
@@ -66,6 +68,7 @@ export default function App() {
                 />
                 <Route path={ROUTES.FEATURES} element={<FeaturesPage />} />
                 <Route path={ROUTES.ABOUT} element={<AboutPage />} />
+                <Route path={ROUTES.PRIVACY} element={<PrivacyPage />} />
                 <Route path={ROUTES.HELP_DOCS} element={<HelpDocsPage />} />
                 <Route
                   path={ROUTES.VERIFY_LOOKUP}
@@ -155,6 +158,10 @@ export default function App() {
                   <Route
                     path={ROUTES.TEACHER_STUDENTS}
                     element={<TeacherStudentsPage />}
+                  />
+                  <Route
+                    path={ROUTES.TEACHER_MODEL_STATUS}
+                    element={<TeacherModelStatusPage />}
                   />
                   <Route
                     path={ROUTES.TEACHER_REVIEW}
