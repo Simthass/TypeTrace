@@ -25,8 +25,6 @@ interface CertificateItem {
   certificate_id: string;
   document_hash: string;
   risk_level: string;
-  review_status: string;
-  review_outcome?: string;
   course_name?: string | null;
   course_code?: string | null;
   verify_url: string;
@@ -45,13 +43,6 @@ type SortMode =
   | "COURSE";
 
 type ClassificationFilter = "ALL" | "HUMAN" | "SUSPICIOUS" | "SYNTHETIC";
-type ReviewFilter =
-  | "ALL"
-  | "PENDING"
-  | "APPROVED"
-  | "FLAGGED"
-  | "NEEDS_DISCUSSION"
-  | "NOT_APPLICABLE";
 
 const PAGE_SIZE = 16;
 
@@ -60,15 +51,6 @@ const filters: Array<{ value: ClassificationFilter; label: string }> = [
   { value: "HUMAN", label: "Human" },
   { value: "SUSPICIOUS", label: "Needs review" },
   { value: "SYNTHETIC", label: "High risk" },
-];
-
-const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
-  { value: "ALL", label: "All review states" },
-  { value: "PENDING", label: "Pending" },
-  { value: "APPROVED", label: "Approved" },
-  { value: "NEEDS_DISCUSSION", label: "Needs discussion" },
-  { value: "FLAGGED", label: "Flagged" },
-  { value: "NOT_APPLICABLE", label: "Personal" },
 ];
 
 const sortOptions: Array<{ value: SortMode; label: string }> = [
@@ -229,26 +211,6 @@ function classificationBucket(
   return "UNKNOWN";
 }
 
-function reviewBucket(
-  value?: string,
-):
-  | "PENDING"
-  | "APPROVED"
-  | "FLAGGED"
-  | "NEEDS_DISCUSSION"
-  | "NOT_APPLICABLE"
-  | "OTHER" {
-  const normalized = String(value || "PENDING").toUpperCase();
-
-  if (normalized === "APPROVED") return "APPROVED";
-  if (normalized === "FLAGGED") return "FLAGGED";
-  if (normalized === "NEEDS_DISCUSSION") return "NEEDS_DISCUSSION";
-  if (normalized === "NOT_APPLICABLE") return "NOT_APPLICABLE";
-  if (normalized === "PENDING" || normalized === "REVIEW_REQUIRED")
-    return "PENDING";
-  return "OTHER";
-}
-
 function countByFilter(
   certificates: CertificateItem[],
   filter: ClassificationFilter,
@@ -324,12 +286,7 @@ function statusStyle(value?: string) {
     };
   }
 
-  if (
-    normalized === "SUSPICIOUS" ||
-    normalized === "MEDIUM" ||
-    normalized === "PENDING" ||
-    normalized === "REVIEW_REQUIRED"
-  ) {
+  if (normalized === "SUSPICIOUS" || normalized === "MEDIUM") {
     return {
       background: colors.amberTint,
       color: brand.suspiciousText,
@@ -348,15 +305,6 @@ function statusStyle(value?: string) {
       color: brand.aiText,
       borderColor: colors.roseTint,
       label: isHighRisk(normalized) ? "High risk" : normalized,
-    };
-  }
-
-  if (normalized === "NOT_APPLICABLE") {
-    return {
-      background: colors.surface[100],
-      color: colors.text.secondary,
-      borderColor: colors.surface[200],
-      label: "Personal",
     };
   }
 
@@ -521,7 +469,6 @@ export default function CertificatesPage() {
   const [certificates, setCertificates] = useState<CertificateItem[]>([]);
   const [selectedFilter, setSelectedFilter] =
     useState<ClassificationFilter>("ALL");
-  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("ALL");
   const [sortBy, setSortBy] = useState<SortMode>("NEWEST");
   const [search, setSearch] = useState("");
   const [apiError, setApiError] = useState<string | null>(null);
@@ -571,32 +518,9 @@ export default function CertificatesPage() {
     const human = certificates.filter(
       (item) => classificationBucket(item.classification) === "HUMAN",
     ).length;
-    const review = certificates.filter(
-      (item) => classificationBucket(item.classification) === "SUSPICIOUS",
-    ).length;
-    const highRisk = certificates.filter(
-      (item) => classificationBucket(item.classification) === "HIGH_RISK",
-    ).length;
     const hashes = certificates.filter((item) =>
       Boolean(item.document_hash),
     ).length;
-    const approved = certificates.filter(
-      (item) => reviewBucket(item.review_status) === "APPROVED",
-    ).length;
-    const pending = certificates.filter(
-      (item) => reviewBucket(item.review_status) === "PENDING",
-    ).length;
-    const flagged = certificates.filter(
-      (item) => reviewBucket(item.review_status) === "FLAGGED",
-    ).length;
-    const publicUrls = certificates.filter((item) =>
-      Boolean(item.verify_url),
-    ).length;
-    const courseCount = new Set(
-      certificates
-        .map((item) => item.course_code || item.course_name)
-        .filter(Boolean),
-    ).size;
     const avgConfidence = total
       ? Math.round(
           certificates.reduce(
@@ -609,16 +533,8 @@ export default function CertificatesPage() {
     return {
       total,
       human,
-      review,
-      highRisk,
       hashes,
       hashCoverage: pct(hashes, total),
-      approved,
-      pending,
-      flagged,
-      publicUrls,
-      publicUrlCoverage: pct(publicUrls, total),
-      courseCount,
       avgConfidence,
     };
   }, [certificates]);
@@ -629,13 +545,11 @@ export default function CertificatesPage() {
     return certificates
       .filter((item) => {
         const classification = classificationBucket(item.classification);
-        const review = reviewBucket(item.review_status);
         const matchesClassification =
           selectedFilter === "ALL" ||
           (selectedFilter === "SYNTHETIC"
             ? classification === "HIGH_RISK"
             : classification === selectedFilter);
-        const matchesReview = reviewFilter === "ALL" || review === reviewFilter;
         const matchesSearch =
           !query ||
           String(item.title || "")
@@ -654,7 +568,7 @@ export default function CertificatesPage() {
             .toLowerCase()
             .includes(query);
 
-        return matchesClassification && matchesReview && matchesSearch;
+        return matchesClassification && matchesSearch;
       })
       .sort((a, b) => {
         if (sortBy === "OLDEST")
@@ -670,7 +584,7 @@ export default function CertificatesPage() {
         }
         return parseTime(b.created_at) - parseTime(a.created_at);
       });
-  }, [certificates, reviewFilter, search, selectedFilter, sortBy]);
+  }, [certificates, search, selectedFilter, sortBy]);
 
   const totalPages = Math.max(
     1,
@@ -882,34 +796,6 @@ export default function CertificatesPage() {
 
               <div className="relative">
                 <select
-                  value={reviewFilter}
-                  onChange={(event) => {
-                    setReviewFilter(event.target.value as ReviewFilter);
-                    setPage(0);
-                  }}
-                  className="h-9 appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none"
-                  style={{
-                    background: colors.surface[50],
-                    borderColor: colors.surface[200],
-                    color: colors.text.secondary,
-                  }}
-                >
-                  {reviewFilters.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-                <span
-                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
-                  style={{ color: colors.text.muted }}
-                >
-                  <Icon type="chevron" size={13} />
-                </span>
-              </div>
-
-              <div className="relative">
-                <select
                   value={sortBy}
                   onChange={(event) => {
                     setSortBy(event.target.value as SortMode);
@@ -971,14 +857,13 @@ export default function CertificatesPage() {
         ) : !filteredCertificates.length ? (
           <EmptyTable
             title="No certificates match this filter"
-            subtitle="Try another classification filter, review state, sort order, or search query."
+            subtitle="Try another classification filter, sort order, or search query."
             action={
               <button
                 type="button"
                 onClick={() => {
                   setSearch("");
                   setSelectedFilter("ALL");
-                  setReviewFilter("ALL");
                   setSortBy("NEWEST");
                   setPage(0);
                 }}
@@ -996,7 +881,7 @@ export default function CertificatesPage() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1220px] border-collapse text-left">
+              <table className="w-full min-w-[1120px] border-collapse text-left">
                 <thead>
                   <tr
                     className="border-b"
@@ -1012,7 +897,6 @@ export default function CertificatesPage() {
                       "Classification",
                       "Confidence",
                       "Risk",
-                      "Review",
                       "Issued",
                       "Actions",
                     ].map((heading) => (
@@ -1154,12 +1038,6 @@ export default function CertificatesPage() {
                         <td className="px-4 py-3 align-middle">
                           <StatusBadge
                             value={certificate.risk_level || "LOW"}
-                          />
-                        </td>
-
-                        <td className="px-4 py-3 align-middle">
-                          <StatusBadge
-                            value={certificate.review_status || "PENDING"}
                           />
                         </td>
 
@@ -1369,7 +1247,7 @@ export default function CertificatesPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div
                   className="rounded-md border p-3"
                   style={{
@@ -1424,33 +1302,6 @@ export default function CertificatesPage() {
                     <StatusBadge
                       value={selectedCertificate.risk_level || "LOW"}
                     />
-                  </div>
-                </div>
-                <div
-                  className="rounded-md border p-3"
-                  style={{
-                    background: colors.surface[100],
-                    borderColor: colors.surface[200],
-                  }}
-                >
-                  <p
-                    className="text-[11px]"
-                    style={{ color: colors.text.muted }}
-                  >
-                    Review
-                  </p>
-                  <div className="mt-2">
-                    <StatusBadge
-                      value={selectedCertificate.review_status || "PENDING"}
-                    />
-                    {selectedCertificate.review_outcome && (
-                      <p
-                        className="mt-2 text-[12px] leading-5"
-                        style={{ color: colors.text.secondary }}
-                      >
-                        {selectedCertificate.review_outcome}
-                      </p>
-                    )}
                   </div>
                 </div>
               </div>

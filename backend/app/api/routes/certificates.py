@@ -120,7 +120,7 @@ def _certificate_status(classification: Optional[str], risk_level: Optional[str]
 def _review_outcome(status: Optional[str]) -> str:
     normalized = str(status or "PENDING").upper()
     if normalized == "NOT_APPLICABLE":
-        return "Personal session - no review required"
+        return "Personal session — no review required"
     if normalized == "APPROVED":
         return "Accepted by teacher"
     if normalized == "FLAGGED":
@@ -128,6 +128,7 @@ def _review_outcome(status: Optional[str]) -> str:
     if normalized == "NEEDS_DISCUSSION":
         return "Discussion requested"
     return "Awaiting teacher review"
+
 
 def _ledger_display_status(*, ledger_status: Optional[str], classification: Optional[str], risk_level: Optional[str], revoked_at: Any) -> str:
     if revoked_at is not None:
@@ -513,7 +514,6 @@ async def list_my_certificates(
                     ts.certificate_id AS certificate_id,
                     ts.document_hash AS document_hash,
                     ts.risk_level AS risk_level,
-                    ts.review_status AS review_status,
                     c.course_name AS course_name,
                     c.course_code AS course_code
                 FROM typing_sessions ts
@@ -541,8 +541,6 @@ async def list_my_certificates(
                 "certificate_id": row["certificate_id"],
                 "document_hash": row["document_hash"],
                 "risk_level": row["risk_level"] or "LOW",
-                "review_status": row["review_status"] or "PENDING",
-                "review_outcome": _review_outcome(row["review_status"]),
                 "course_name": row["course_name"],
                 "course_code": row["course_code"],
                 "verify_url": f"/verify/{row['certificate_id']}",
