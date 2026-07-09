@@ -259,6 +259,7 @@ function reviewTone(status: string): StatusTone {
   if (normalized === "FLAGGED" || normalized === "REJECTED") return "danger";
   if (normalized === "PENDING" || normalized === "REVIEW_REQUIRED")
     return "warning";
+  if (normalized === "NOT_APPLICABLE") return "neutral";
   return "neutral";
 }
 
@@ -1170,7 +1171,11 @@ function LatestSessionsPanel({ sessions }: { sessions: StudentSession[] }) {
                   </td>
                   <td className="px-3 py-3">
                     <StatusBadge
-                      label={session.review_status || "Pending"}
+                      label={
+                        session.review_status === "NOT_APPLICABLE"
+                          ? "Personal"
+                          : session.review_status || "Pending"
+                      }
                       tone={review}
                     />
                   </td>

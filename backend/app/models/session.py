@@ -118,7 +118,7 @@ class TypingSession(Base):
             name="ck_typing_sessions_classification_valid",
         ),
         CheckConstraint(
-            "review_status IN ('PENDING', 'APPROVED', 'FLAGGED', 'NEEDS_DISCUSSION')",
+            "review_status IN ('PENDING', 'APPROVED', 'FLAGGED', 'NEEDS_DISCUSSION', 'NOT_APPLICABLE')",
             name="ck_typing_sessions_review_status_valid",
         ),
         CheckConstraint(

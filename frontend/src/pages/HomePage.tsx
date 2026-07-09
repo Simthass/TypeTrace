@@ -22,6 +22,9 @@ import {
 
 // ─── Image paths ──────────────────────────────────────────────────────────────
 const HERO_BG_ARROW_SRC = "/bg-arrow.png";
+// Concentric-circle background for the "Why choose us" section.
+// Save the uploaded circles image into your /public folder at this path.
+const WHY_CHOOSE_BG_SRC = "/circles-bg.png";
 
 const IMAGE_PATHS = {
   capture: "/photo-capture-session.png",
@@ -264,6 +267,9 @@ function Icon({
 }
 
 // ─── Reveal-on-scroll wrapper ──────────────────────────────────────────────────
+// NOTE: only use this for content BELOW the fold. Anything inside the hero's
+// first viewport should animate on mount instead (see ProductFlowRow), or it
+// will sit invisible until the user scrolls to it.
 
 function Reveal({
   children,
@@ -293,14 +299,9 @@ function Reveal({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HERO — redesigned to match the supplied reference layout
+// HERO
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Full-bleed background: the supplied BG-Arrow.png (dashed routing lines +
- * arrows) layered under a soft radial brand glow. Drop your saved copy of
- * the uploaded image at /public/bg-arrow.png.
- */
 function HeroBackground() {
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
@@ -470,7 +471,7 @@ function HeroTrustRow() {
         className="text-[13px] font-medium"
         style={{ color: colors.text.secondary }}
       >
-        Trusted by, teachers &amp; academic reviewers
+        Trusted by students, teachers &amp; academic reviewers
       </span>
     </div>
   );
@@ -513,7 +514,6 @@ function FlowLine({ reverse = false }: { reverse?: boolean }) {
   );
 }
 
-/** Left card content — now uses student images instead of initials */
 function TypingDots() {
   const reduced = useReducedMotion();
 
@@ -543,7 +543,7 @@ function TypingDots() {
   );
 }
 
-/** Left card content — now uses student images with live typing indicators */
+/** Left card content — student images with live typing indicators */
 function WritingSessionsCardBody() {
   return (
     <div className="w-[250px] p-3.5">
@@ -551,7 +551,7 @@ function WritingSessionsCardBody() {
         className="mb-3 text-[10px] font-bold uppercase tracking-widest"
         style={{ color: colors.text.secondary }}
       >
-        Student Live writing sessions
+        Student live writing sessions
       </p>
       <div className="grid grid-cols-3 place-items-center gap-2">
         {STUDENT_AVATARS.map((src, i) => (
@@ -569,7 +569,7 @@ function WritingSessionsCardBody() {
   );
 }
 
-/** Right card content — Amara K. progress bar now red */
+/** Right card content */
 function CertifiedSessionsCardBody() {
   const rows = [
     {
@@ -635,10 +635,7 @@ function CertifiedSessionsCardBody() {
               >
                 <div
                   className="h-full rounded-full"
-                  style={{
-                    width: `${row.pct}%`,
-                    background: row.color,
-                  }}
+                  style={{ width: `${row.pct}%`, background: row.color }}
                 />
               </div>
               <div
@@ -656,11 +653,16 @@ function CertifiedSessionsCardBody() {
 }
 
 /**
- * The center product-flow composition: two content cards flanking a
- * connector that feeds into the TypeTrace logo pill — the direct analog of
- * the reference's "social profiles → SuperCRM → enriched contacts" diagram.
+ * The center product-flow composition — two content cards flanking a
+ * connector that feeds into the TypeTrace logo pill.
+ *
+ * IMPORTANT: this sits in the hero's first viewport, so it animates on
+ * MOUNT (plain motion.div with initial/animate), not on scroll-into-view.
+ * Using the `Reveal` (useInView) wrapper here was why it previously stayed
+ * invisible until the user scrolled.
  */
 function ProductFlowRow() {
+  const reduced = useReducedMotion();
   const cardStyle: CSSProperties = {
     background: colors.surface[50],
     border: `1px solid ${colors.surface[200]}`,
@@ -669,8 +671,14 @@ function ProductFlowRow() {
   };
 
   return (
-    <Reveal
-      delay={0.4}
+    <motion.div
+      initial={reduced ? false : { opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.62,
+        delay: reduced ? 0 : 0.4,
+        ease: [0.22, 1, 0.36, 1],
+      }}
       className="relative z-20 mx-auto mt-14 flex w-full max-w-[900px] flex-col items-center gap-5 px-4 sm:flex-row sm:justify-center sm:gap-0"
     >
       <div style={cardStyle}>
@@ -700,7 +708,7 @@ function ProductFlowRow() {
       <div style={cardStyle}>
         <CertifiedSessionsCardBody />
       </div>
-    </Reveal>
+    </motion.div>
   );
 }
 
@@ -745,12 +753,12 @@ function HeroSection() {
           className="mb-6 max-w-[820px] text-[2.9rem] font-bold leading-[1.05] tracking-[-0.045em] sm:text-[4rem] lg:text-[4rem]"
         >
           <span style={{ color: colors.text.primary }}>
-            Prove You Wrote It with{" "}
+            Prove you wrote it with{" "}
           </span>{" "}
-          <span style={{ color: colors.brand }}>Behavioral</span>
+          <span style={{ color: colors.brand }}>behavioral</span>
           <br />
-          <span style={{ color: colors.brand }}>Authorship </span>{" "}
-          <span style={{ color: colors.text.primary }}>Evidence.</span>
+          <span style={{ color: colors.brand }}>authorship </span>{" "}
+          <span style={{ color: colors.text.primary }}>evidence.</span>
         </motion.h1>
 
         <motion.p
@@ -781,7 +789,7 @@ function HeroSection() {
           className="text-[12.5px]"
           style={{ color: colors.text.muted }}
         >
-          Free for · No credit card required
+          Free for students · No credit card required
         </motion.p>
       </div>
 
@@ -825,6 +833,112 @@ function TrustStrip() {
             {name}
           </span>
         ))}
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHY CHOOSE US — new section, matches the supplied reference layout
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WHY_CHOOSE_FEATURES = [
+  {
+    icon: "keyboard" as const,
+    title: "Every keystroke matters",
+    body: "TypeTrace captures rhythm, pauses, and revisions as they happen — not a snapshot of the finished text.",
+  },
+  {
+    icon: "shieldCheck" as const,
+    title: "Tamper-proof certificates",
+    body: "Every session is sealed with a SHA-256 hash, so any edit to the record is instantly detectable.",
+  },
+  {
+    icon: "teacher" as const,
+    title: "Built for teacher review",
+    body: "Reviewers see structured behavioral evidence and can verify authenticity in seconds, not guesswork.",
+  },
+  {
+    icon: "lock" as const,
+    title: "Privacy respected by design",
+    body: "No video, no screen recording. Only the writing signals needed to support a fair, human review.",
+  },
+];
+
+function WhyChooseSection() {
+  return (
+    <section
+      className="relative w-screen left-1/2 -translate-x-1/2 overflow-hidden py-16 md:py-20"
+      style={{ background: colors.surface[50] }}
+    >
+      {/* Background image ... */}
+      <img
+        src={WHY_CHOOSE_BG_SRC}
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 w-full h-full object-cover opacity-80"
+        // maybe remove the w-[1400px] max-w-none and use full cover
+        style={{
+          maskImage:
+            "linear-gradient(180deg, black 0%, black 55%, transparent 92%)",
+          WebkitMaskImage:
+            "linear-gradient(180deg, black 0%, black 55%, transparent 92%)",
+        }}
+      />
+
+      {/* Inner content container with normal horizontal padding */}
+      <div className="relative mx-auto max-w-[900px] px-6 text-center">
+        <Reveal>
+          <SectionEyebrow>Why TypeTrace</SectionEyebrow>
+          <h2
+            className="mx-auto mt-3 max-w-[720px] text-[2.1rem] font-bold leading-[1.18] tracking-[-0.03em] md:text-[2.75rem]"
+            style={{ color: colors.text.primary }}
+          >
+            Students and teachers choose TypeTrace because proof shouldn't be a
+            guess.
+          </h2>
+        </Reveal>
+
+        <div className="mt-16 grid grid-cols-1 gap-x-10 gap-y-10 text-left sm:grid-cols-2">
+          {WHY_CHOOSE_FEATURES.map((feature, i) => (
+            <Reveal key={feature.title} delay={i * 0.06} className="flex gap-4">
+              <div
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
+                style={{ background: colors.brandSoft, color: colors.brand }}
+              >
+                <Icon name={feature.icon} size={20} strokeWidth={1.8} />
+              </div>
+              <div>
+                <h3
+                  className="text-[16px] font-bold"
+                  style={{ color: colors.text.primary }}
+                >
+                  {feature.title}
+                </h3>
+                <p
+                  className="mt-1.5 text-[14px] leading-relaxed"
+                  style={{ color: colors.text.secondary }}
+                >
+                  {feature.body}
+                </p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+
+        <Reveal delay={0.3} className="mt-16">
+          <Link
+            to={ROUTES.REGISTER}
+            className="inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-[14px] font-bold transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
+            style={{
+              background: colors.brand,
+              color: colors.text.light,
+              boxShadow: `0 10px 30px ${withAlpha(colors.brand, "35")}`,
+            }}
+          >
+            See how it works
+          </Link>
+        </Reveal>
       </div>
     </section>
   );
@@ -1637,7 +1751,7 @@ function StudentTeacherSection() {
         <Reveal className="mx-auto mb-12 max-w-2xl text-center">
           <SectionEyebrow>Two-sided workflow</SectionEyebrow>
           <SectionHeading
-            title="Built for who need proof and teachers who need context."
+            title="Built for students who need proof and teachers who need context."
             align="center"
           />
         </Reveal>
@@ -1645,7 +1759,7 @@ function StudentTeacherSection() {
           <Reveal>
             <RoleCard
               icon="keyboard"
-              title="For"
+              title="For students"
               body="Create authorship evidence while writing, before your work is ever questioned."
               points={[
                 "Write inside a focused, distraction-free editor.",
@@ -1719,7 +1833,6 @@ function TrustSection() {
       className="relative overflow-hidden px-6 py-20 md:px-12 md:py-28"
       style={{ background: colors.text.primary }}
     >
-      {/* Background texture */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.04]"
         style={{
@@ -1769,7 +1882,6 @@ function TrustSection() {
           </p>
         </Reveal>
 
-        {/* Tab navigation */}
         <Reveal delay={0.05}>
           <div className="mb-8 flex justify-center">
             <div
@@ -1805,7 +1917,6 @@ function TrustSection() {
           </div>
         </Reveal>
 
-        {/* Active tab content */}
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -1859,7 +1970,6 @@ function TrustSection() {
                 </div>
               </div>
 
-              {/* Stat card */}
               <div
                 className="rounded-2xl border p-6 text-center"
                 style={{
@@ -1898,7 +2008,6 @@ function TrustSection() {
           </motion.div>
         </AnimatePresence>
 
-        {/* Trust indicators */}
         <Reveal delay={0.1}>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-6">
             {[
@@ -1978,8 +2087,8 @@ function FinalCtaSection() {
             className="max-w-lg text-[16px] leading-relaxed"
             style={{ color: colors.text.secondary }}
           >
-            Join thousands of and educators who've moved beyond AI detection
-            drama. Create evidence that speaks for itself.
+            Join thousands of students and educators who've moved beyond AI
+            detection drama. Create evidence that speaks for itself.
           </p>
         </Reveal>
         <Reveal delay={0.14}>
@@ -2044,7 +2153,7 @@ function FinalCtaSection() {
                 className="text-[11px] font-medium"
                 style={{ color: colors.text.secondary }}
               >
-                Trusted by at 50+ universities
+                Trusted by students at 50+ universities
               </p>
             </div>
           </div>
@@ -2063,6 +2172,7 @@ export default function HomePage() {
     <PublicShell>
       <HeroSection />
       <TrustStrip />
+      <WhyChooseSection />
       <ShowcaseSection />
       <CapabilityMapSection />
       <DifferentiatorSection />

@@ -40,7 +40,8 @@ type ReviewFilter =
   | "PENDING"
   | "APPROVED"
   | "FLAGGED"
-  | "NEEDS_DISCUSSION";
+  | "NEEDS_DISCUSSION"
+  | "NOT_APPLICABLE";
 type SortValue =
   | "newest"
   | "oldest"
@@ -67,6 +68,7 @@ const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
   { value: "APPROVED", label: "Approved" },
   { value: "NEEDS_DISCUSSION", label: "Needs discussion" },
   { value: "FLAGGED", label: "Flagged" },
+  { value: "NOT_APPLICABLE", label: "Personal" },
 ];
 
 const sortOptions: Array<{ value: SortValue; label: string }> = [
@@ -264,6 +266,7 @@ function normalizeReviewStatus(value?: string): ReviewFilter | "UNKNOWN" {
   if (normalized === "APPROVED") return "APPROVED";
   if (normalized === "FLAGGED") return "FLAGGED";
   if (normalized === "NEEDS_DISCUSSION") return "NEEDS_DISCUSSION";
+  if (normalized === "NOT_APPLICABLE") return "NOT_APPLICABLE";
   if (normalized === "PENDING" || normalized === "REVIEW_REQUIRED") {
     return "PENDING";
   }
@@ -318,6 +321,15 @@ function statusStyle(value?: string) {
       color: brand.aiText,
       borderColor: colors.roseTint,
       label: isHighRisk(normalized) ? "High risk" : normalized,
+    };
+  }
+
+  if (normalized === "NOT_APPLICABLE") {
+    return {
+      background: colors.surface[100],
+      color: colors.text.secondary,
+      borderColor: colors.surface[200],
+      label: "Personal",
     };
   }
 
@@ -1185,7 +1197,7 @@ export default function SessionsPage() {
                     color: colors.text.primary,
                   }}
                 >
-                  Next
+                  NextCertificate vault
                 </button>
               </div>
             </div>

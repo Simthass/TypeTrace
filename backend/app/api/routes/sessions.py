@@ -1,3 +1,4 @@
+# backend/app/api/routes/sessions.py
 
 import secrets
 import string
@@ -49,9 +50,6 @@ class KeystrokeSessionAnalyzeRequest(BaseModel):
     stats: SessionStats
     course_id: Optional[int] = None
 
-    # Part 2: draft/canonical evidence integration. The backend still recomputes
-    # canonical stats from raw events; these fields let it verify the frontend
-    # active-duration clock and retire the submitted draft safely.
     active_duration_ms: Optional[int] = Field(default=None, ge=0)
     draft_id: Optional[str] = Field(default=None, max_length=120)
     client_metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -126,7 +124,6 @@ def _apply_paste_dominant_override(
     risk_score: float,
     risk_level: str,
 ) -> Dict[str, Any]:
-    """Make paste-heavy sessions deterministic and review-safe."""
 
     text_length = len(text_content or "")
     paste_count = event_counts.get("paste_count", 0)
@@ -311,15 +308,6 @@ async def analyze_session(
     current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Analyze a student writing session and persist backend-canonical evidence.
-
-    Part 2 guarantee: raw event evidence is the source of truth. The frontend may
-    send live stats for responsiveness, but the backend recomputes persisted
-    metrics, hashes the evidence, stores canonical stats, and retires the draft
-    after successful submission.
-    """
-
     title = normalize_title(payload.title)
     canonical = compute_canonical_evidence(
         title=title,
@@ -421,7 +409,7 @@ async def analyze_session(
         active_duration_ms=canonical.active_duration_ms,
         idle_breaks_json=canonical.idle_breaks,
         risk_level=risk_level,
-        review_status="PENDING",
+        review_status="PENDING" if payload.course_id is not None else "NOT_APPLICABLE",
     )
 
     db.add(session)
@@ -509,6 +497,3 @@ async def analyze_session(
         evidence_hash=canonical.evidence_hash,
         canonical_stats=canonical.canonical_stats_json,
     )
-
-
-

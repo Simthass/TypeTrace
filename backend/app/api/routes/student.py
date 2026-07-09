@@ -53,6 +53,8 @@ def _classification_bucket(classification: Optional[str]) -> str:
 def _review_outcome(status: Optional[str]) -> str:
     normalized = str(status or "PENDING").upper()
 
+    if normalized == "NOT_APPLICABLE":
+        return "Personal session - no review required"
     if normalized == "APPROVED":
         return "Accepted by teacher"
     if normalized == "FLAGGED":

@@ -119,6 +119,8 @@ def _certificate_status(classification: Optional[str], risk_level: Optional[str]
 
 def _review_outcome(status: Optional[str]) -> str:
     normalized = str(status or "PENDING").upper()
+    if normalized == "NOT_APPLICABLE":
+        return "Personal session - no review required"
     if normalized == "APPROVED":
         return "Accepted by teacher"
     if normalized == "FLAGGED":
@@ -364,13 +366,14 @@ def _certificate_audit_timeline(record: Dict[str, Any], signature_result: Any) -
         }
     )
 
-    if str(record.get("review_status") or "PENDING").upper() != "PENDING":
+    review_status_normalized = str(record.get("review_status") or "PENDING").upper()
+    if review_status_normalized not in {"PENDING", "NOT_APPLICABLE"}:
         timeline.append(
             {
                 "label": "Teacher review outcome recorded",
                 "status": "complete",
                 "timestamp": record.get("generated_at"),
-                "description": f"Review outcome: {str(record.get('review_status')).replace('_', ' ')}.",
+                "description": f"Review outcome: {review_status_normalized.replace('_', ' ')}.",
             }
         )
 
