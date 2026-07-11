@@ -5,7 +5,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { ROUTES } from "../../constants/routes";
 import { brand, colors } from "../../styles/colors";
 
-type PublicIconName =
+export type PublicIconName =
   | "keyboard"
   | "shield"
   | "timeline"
@@ -22,9 +22,11 @@ type PublicIconName =
 export function PublicIcon({
   name,
   size = 20,
+  className = "",
 }: {
   name: PublicIconName;
   size?: number;
+  className?: string;
 }) {
   const common = {
     width: size,
@@ -32,23 +34,24 @@ export function PublicIcon({
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",
-    strokeWidth: 1.8,
+    strokeWidth: 1.5, // Thinner, sharper stroke for a premium feel
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
     "aria-hidden": true,
+    className,
   };
 
   const paths: Record<PublicIconName, ReactNode> = {
     keyboard: (
       <>
-        <rect x="3" y="5" width="18" height="14" rx="3" />
+        <rect x="3" y="5" width="18" height="14" rx="2" />
         <path d="M7 9h.01M10 9h.01M13 9h.01M16 9h.01M7 13h.01M10 13h4M17 13h.01" />
       </>
     ),
     shield: (
       <>
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-        <path d="m9 12 2 2 4-5" />
+        <path d="m9 12 2 2 4-4" />
       </>
     ),
     timeline: (
@@ -129,16 +132,26 @@ export function PublicIcon({
 export function PublicShell({ children }: { children: ReactNode }) {
   return (
     <div
-      className="relative overflow-hidden"
+      className="relative min-h-screen overflow-hidden"
       style={{ background: colors.surface[50] }}
     >
+      {/* Precision Dot Grid Overlay */}
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-[520px]"
+        className="pointer-events-none absolute inset-0 opacity-[0.03]"
         style={{
-          background: `linear-gradient(180deg, ${colors.brandSoft}, ${colors.surface[50]})`,
+          backgroundImage: `radial-gradient(${colors.text.primary} 1px, transparent 1px)`,
+          backgroundSize: "24px 24px",
         }}
       />
-      <div className="relative">{children}</div>
+      {/* Subtle brand glow at the top */}
+      <div
+        className="pointer-events-none absolute left-1/2 top-0 h-[600px] w-[800px] -translate-x-1/2 -translate-y-1/2"
+        style={{
+          background: `radial-gradient(ellipse at center, ${colors.brandSoft} 0%, transparent 70%)`,
+          filter: "blur(60px)",
+        }}
+      />
+      <div className="relative z-10">{children}</div>
     </div>
   );
 }
@@ -154,7 +167,7 @@ export function PublicSection({
 }) {
   return (
     <section
-      className={`mx-auto max-w-7xl px-5 py-20 sm:px-6 lg:px-8 ${className}`}
+      className={`mx-auto max-w-7xl px-6 py-24 lg:px-8 ${className}`}
       style={style}
     >
       {children}
@@ -164,12 +177,20 @@ export function PublicSection({
 
 export function SectionEyebrow({ children }: { children: ReactNode }) {
   return (
-    <p
-      className="text-[12px] font-bold uppercase tracking-[0.18em]"
-      style={{ color: colors.brand }}
+    <div
+      className="inline-flex items-center rounded-md border px-3 py-1.5"
+      style={{
+        borderColor: colors.surface[200],
+        background: colors.surface[50],
+      }}
     >
-      {children}
-    </p>
+      <span
+        className="text-[11px] font-bold uppercase tracking-[0.15em]"
+        style={{ color: colors.brand }}
+      >
+        {children}
+      </span>
+    </div>
   );
 }
 
@@ -187,19 +208,23 @@ export function SectionHeading({
   return (
     <div
       className={
-        align === "center" ? "mx-auto max-w-3xl text-center" : "max-w-3xl"
+        align === "center" ? "mx-auto max-w-3xl text-center" : "max-w-2xl"
       }
     >
-      {eyebrow && <SectionEyebrow>{eyebrow}</SectionEyebrow>}
+      {eyebrow && (
+        <div className={align === "center" ? "mb-5" : "mb-5"}>
+          <SectionEyebrow>{eyebrow}</SectionEyebrow>
+        </div>
+      )}
       <h2
-        className="mt-4 text-3xl font-semibold tracking-[-0.04em] sm:text-4xl lg:text-5xl"
+        className="text-3xl font-bold tracking-[-0.02em] sm:text-4xl lg:text-[2.75rem] lg:leading-[1.1]"
         style={{ color: colors.text.primary }}
       >
         {title}
       </h2>
       {description && (
         <p
-          className="mt-5 text-base leading-8 sm:text-lg"
+          className="mt-5 text-[16px] leading-relaxed"
           style={{ color: colors.text.secondary }}
         >
           {description}
@@ -212,16 +237,19 @@ export function SectionHeading({
 export function PublicCard({
   children,
   className = "",
+  style,
 }: {
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
 }) {
   return (
     <div
       className={`rounded-md border bg-white ${className}`}
       style={{
         borderColor: colors.surface[200],
-        boxShadow: `0 24px 70px ${colors.shadow}`,
+        boxShadow: `0 12px 32px -8px ${colors.shadow}`,
+        ...style,
       }}
     >
       {children}
@@ -239,24 +267,25 @@ export function IconTile({
   description: string;
 }) {
   return (
-    <PublicCard className="p-6 transition duration-200 hover:-translate-y-1">
+    <PublicCard className="group p-6 transition-all duration-300 hover:shadow-lg">
       <div
-        className="flex h-11 w-11 items-center justify-center rounded-md"
+        className="flex h-10 w-10 items-center justify-center rounded-md border transition-colors duration-300"
         style={{
-          background: colors.brandSoft,
+          background: colors.surface[50],
+          borderColor: colors.surface[200],
           color: colors.brand,
         }}
       >
-        <PublicIcon name={icon} />
+        <PublicIcon name={icon} size={18} />
       </div>
       <h3
-        className="mt-5 text-[16px] font-semibold"
+        className="mt-5 text-[15px] font-bold tracking-tight"
         style={{ color: colors.text.primary }}
       >
         {title}
       </h3>
       <p
-        className="mt-3 text-[14px] leading-7"
+        className="mt-2.5 text-[14px] leading-relaxed"
         style={{ color: colors.text.secondary }}
       >
         {description}
@@ -268,21 +297,37 @@ export function IconTile({
 export function PrimaryLink({
   to,
   children,
+  className = "",
 }: {
   to: string;
   children: ReactNode;
+  className?: string;
 }) {
   return (
     <Link
       to={to}
-      className="inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 text-[14px] font-bold transition hover:opacity-90"
+      className={`group inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 text-[14px] font-bold transition-all active:scale-[0.98] ${className}`}
       style={{
         background: colors.brand,
         color: colors.text.light,
+        boxShadow: `0 4px 14px ${colors.shadowStrong}`,
       }}
     >
       {children}
-      <span aria-hidden>→</span>
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="transition-transform duration-200 group-hover:translate-x-0.5"
+      >
+        <path d="M5 12h14" />
+        <path d="m12 5 7 7-7 7" />
+      </svg>
     </Link>
   );
 }
@@ -290,14 +335,16 @@ export function PrimaryLink({
 export function SecondaryLink({
   to,
   children,
+  className = "",
 }: {
   to: string;
   children: ReactNode;
+  className?: string;
 }) {
   return (
     <Link
       to={to}
-      className="inline-flex items-center justify-center gap-2 rounded-md border px-5 py-3 text-[14px] font-bold transition hover:opacity-80"
+      className={`inline-flex items-center justify-center gap-2 rounded-md border px-5 py-3 text-[14px] font-bold transition-all hover:bg-surface-100 active:scale-[0.98] ${className}`}
       style={{
         borderColor: colors.surface[200],
         background: colors.surface[50],
@@ -313,116 +360,151 @@ export function EvidenceBoard() {
   const shouldReduceMotion = useReducedMotion();
 
   const events = [
-    { label: "Keystroke rhythm", value: "Captured", icon: "keyboard" as const },
-    { label: "Paste activity", value: "Flagged", icon: "timeline" as const },
-    { label: "Document hash", value: "Locked", icon: "hash" as const },
+    {
+      label: "Keystroke rhythm",
+      status: "Captured",
+      color: colors.brand,
+      mono: "184 EVTS",
+    },
+    {
+      label: "Paste activity",
+      status: "Flagged",
+      color: colors.amber,
+      mono: "CLIP_INT",
+    },
+    {
+      label: "Document hash",
+      status: "Locked",
+      color: colors.green,
+      mono: "SHA-256",
+    },
   ];
 
   return (
-    <PublicCard className="relative overflow-hidden p-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <p
-            className="text-[12px] font-bold uppercase tracking-[0.16em]"
-            style={{ color: colors.text.secondary }}
+    <PublicCard className="relative overflow-hidden p-0">
+      {/* Dashboard Header */}
+      <div
+        className="border-b px-5 py-4"
+        style={{
+          borderColor: colors.surface[200],
+          background: colors.surface[50],
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1.5">
+              <div
+                className="h-2.5 w-2.5 rounded-md"
+                style={{ background: colors.surface[300] }}
+              />
+              <div
+                className="h-2.5 w-2.5 rounded-md"
+                style={{ background: colors.surface[300] }}
+              />
+            </div>
+            <p
+              className="font-mono text-[11px] font-bold uppercase tracking-[0.1em]"
+              style={{ color: colors.text.muted }}
+            >
+              Live Evidence Trail
+            </p>
+          </div>
+          <div
+            className="rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
+            style={{
+              borderColor: brand.humanAccent,
+              background: brand.humanBg,
+              color: brand.humanText,
+            }}
           >
-            Live evidence trail
-          </p>
-          <h3
-            className="mt-2 text-xl font-semibold tracking-[-0.03em]"
-            style={{ color: colors.text.primary }}
-          >
-            Writing process, not just final text
-          </h3>
-        </div>
-
-        <div
-          className="rounded-md px-3 py-1.5 text-[12px] font-bold"
-          style={{
-            background: brand.humanBg,
-            color: brand.humanText,
-          }}
-        >
-          Review-ready
+            Review-ready
+          </div>
         </div>
       </div>
 
-      <div
-        className="mt-6 rounded-md border p-4"
-        style={{ borderColor: colors.surface[200] }}
-      >
+      <div className="p-5">
+        <h3
+          className="mb-5 text-[15px] font-bold tracking-tight"
+          style={{ color: colors.text.primary }}
+        >
+          Behavioral capture active
+        </h3>
+
         <div className="space-y-3">
           {events.map((event, index) => (
             <motion.div
               key={event.label}
-              initial={shouldReduceMotion ? false : { opacity: 0, x: -10 }}
+              initial={shouldReduceMotion ? false : { opacity: 0, x: -8 }}
               whileInView={
                 shouldReduceMotion ? undefined : { opacity: 1, x: 0 }
               }
               viewport={{ once: true }}
-              transition={{ delay: index * 0.08 }}
-              className="flex items-center justify-between rounded-md border p-3"
+              transition={{ delay: index * 0.1 }}
+              className="flex items-center justify-between rounded-md border p-3.5 transition-colors hover:bg-surface-50"
               style={{
                 borderColor: colors.surface[200],
-                background: index === 1 ? colors.amberTint : colors.surface[50],
+                background: colors.surface[50],
               }}
             >
               <div className="flex items-center gap-3">
                 <span
-                  className="flex h-9 w-9 items-center justify-center rounded-md"
-                  style={{
-                    background: colors.brandSoft,
-                    color: colors.brand,
-                  }}
-                >
-                  <PublicIcon name={event.icon} size={17} />
-                </span>
+                  className="h-2 w-2 rounded-md"
+                  style={{ background: event.color }}
+                />
                 <span
-                  className="text-[14px] font-semibold"
+                  className="text-[13px] font-semibold"
                   style={{ color: colors.text.primary }}
                 >
                   {event.label}
                 </span>
               </div>
-              <span
-                className="text-[13px] font-bold"
-                style={{ color: colors.text.secondary }}
-              >
-                {event.value}
-              </span>
+              <div className="flex items-center gap-4">
+                <span
+                  className="font-mono text-[11px] font-medium"
+                  style={{ color: colors.text.muted }}
+                >
+                  {event.mono}
+                </span>
+                <span
+                  className="text-[12px] font-bold"
+                  style={{ color: event.color }}
+                >
+                  {event.status}
+                </span>
+              </div>
             </motion.div>
           ))}
         </div>
-      </div>
 
-      <div className="mt-5 grid grid-cols-3 gap-3">
-        {[
-          ["184", "events"],
-          ["38s", "pauses"],
-          ["SHA", "hash"],
-        ].map(([value, label]) => (
-          <div
-            key={label}
-            className="rounded-md border p-3 text-center"
-            style={{
-              borderColor: colors.surface[200],
-              background: colors.surface[100],
-            }}
-          >
-            <p
-              className="text-lg font-bold"
-              style={{ color: colors.text.primary }}
+        <div className="mt-5 grid grid-cols-3 gap-3">
+          {[
+            { value: "38s", label: "total pauses" },
+            { value: "12", label: "revisions" },
+            { value: "98%", label: "confidence" },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="rounded-md border p-3"
+              style={{
+                borderColor: colors.surface[200],
+                background: colors.surface[50],
+              }}
             >
-              {value}
-            </p>
-            <p
-              className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em]"
-              style={{ color: colors.text.secondary }}
-            >
-              {label}
-            </p>
-          </div>
-        ))}
+              <p
+                className="font-mono text-[16px] font-bold tracking-tight"
+                style={{ color: colors.text.primary }}
+              >
+                {stat.value}
+              </p>
+              <p
+                className="mt-1 text-[10px] font-bold uppercase tracking-wider"
+                style={{ color: colors.text.secondary }}
+              >
+                {stat.label}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
     </PublicCard>
   );
@@ -430,71 +512,87 @@ export function EvidenceBoard() {
 
 export function CertificateGraphic() {
   return (
-    <PublicCard className="overflow-hidden p-5">
+    <PublicCard className="overflow-hidden p-0">
       <div
-        className="rounded-md p-5"
+        className="border-b p-6"
         style={{
-          background: `linear-gradient(135deg, ${colors.surface[50]}, ${colors.brandSoft})`,
+          borderColor: colors.surface[200],
+          background: colors.surface[50],
         }}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-8">
           <div
-            className="flex h-11 w-11 items-center justify-center rounded-md"
-            style={{ background: colors.brand, color: colors.text.light }}
+            className="flex h-10 w-10 items-center justify-center rounded-md border"
+            style={{
+              background: colors.surface[50],
+              borderColor: colors.surface[200],
+              color: colors.brand,
+            }}
           >
-            <PublicIcon name="certificate" />
+            <PublicIcon name="certificate" size={18} />
           </div>
           <span
-            className="rounded-md px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em]"
+            className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
             style={{
               background: brand.humanBg,
+              borderColor: brand.humanAccent,
               color: brand.humanText,
             }}
           >
+            <span
+              className="h-1.5 w-1.5 rounded-md"
+              style={{ background: brand.humanText }}
+            />
             Ledger recorded
           </span>
         </div>
 
         <h3
-          className="mt-8 text-2xl font-semibold tracking-[-0.04em]"
+          className="text-[18px] font-bold tracking-tight"
           style={{ color: colors.text.primary }}
         >
           Writing Evidence Certificate
         </h3>
-
         <p
-          className="mt-3 text-[14px] leading-7"
+          className="mt-1.5 text-[13px] leading-relaxed"
           style={{ color: colors.text.secondary }}
         >
-          A review-safe certificate linked to the writing session, behavioral
-          evidence, and document integrity hash.
+          Cryptographic proof of human authorship mapped to behavioral session
+          data.
         </p>
+      </div>
 
-        <div className="mt-6 space-y-3">
+      <div className="p-6">
+        <div className="space-y-3">
           {[
-            ["Certificate ID", "TT-8Q4Z2M9A1P0K"],
-            ["Document hash", "SHA-256 locked"],
-            ["Review status", "Supporting evidence"],
-          ].map(([label, value]) => (
+            { label: "Certificate ID", value: "TT-8Q4Z2M9A", mono: true },
+            { label: "Document hash", value: "SHA256:a3f5b8", mono: true },
+            { label: "Status", value: "Verified Human", mono: false },
+          ].map((row) => (
             <div
-              key={label}
-              className="flex items-center justify-between rounded-md border px-3 py-2"
+              key={row.label}
+              className="flex items-center justify-between rounded-md border px-3.5 py-2.5"
               style={{
                 borderColor: colors.surface[200],
                 background: colors.surface[50],
               }}
             >
               <span
-                className="text-[12px]"
+                className="text-[12px] font-medium"
                 style={{ color: colors.text.secondary }}
               >
-                {label}
+                {row.label}
               </span>
               <span
-                className="text-[12px] font-bold"
-                style={{ color: colors.text.primary }}
+                className={`text-[12px] font-bold ${row.mono ? "font-mono tracking-tight" : ""}`}
+                style={{
+                  color:
+                    row.label === "Status"
+                      ? brand.humanText
+                      : colors.text.primary,
+                }}
               >
-                {value}
+                {row.value}
               </span>
             </div>
           ))}
@@ -506,44 +604,47 @@ export function CertificateGraphic() {
 
 export function WorkflowGraphic() {
   const steps = [
-    { icon: "document" as const, label: "Write" },
-    { icon: "keyboard" as const, label: "Capture" },
-    { icon: "model" as const, label: "Analyze" },
-    { icon: "certificate" as const, label: "Verify" },
+    { icon: "document" as const, label: "Write", active: true },
+    { icon: "keyboard" as const, label: "Capture", active: true },
+    { icon: "model" as const, label: "Analyze", active: true },
+    { icon: "certificate" as const, label: "Verify", active: false },
   ];
 
   return (
-    <PublicCard className="p-6">
-      <div className="grid gap-4 sm:grid-cols-4">
+    <PublicCard className="p-8">
+      <div className="grid gap-6 sm:grid-cols-4">
         {steps.map((step, index) => (
-          <div key={step.label} className="relative">
+          <div key={step.label} className="relative flex flex-col items-center">
             <div
-              className="rounded-md border p-4"
+              className="relative z-10 flex h-12 w-12 items-center justify-center rounded-md border transition-all duration-300"
               style={{
-                borderColor: colors.surface[200],
-                background: index === 2 ? colors.brandSoft : colors.surface[50],
+                borderColor: step.active ? colors.brand : colors.surface[200],
+                background: step.active ? colors.brand : colors.surface[50],
+                color: step.active ? colors.text.light : colors.text.muted,
+                boxShadow: step.active
+                  ? `0 4px 12px ${colors.shadowStrong}`
+                  : "none",
               }}
             >
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-md"
-                style={{
-                  background: index === 2 ? colors.brand : colors.surface[100],
-                  color: index === 2 ? colors.text.light : colors.brand,
-                }}
-              >
-                <PublicIcon name={step.icon} size={18} />
-              </div>
-              <p
-                className="mt-4 text-[14px] font-bold"
-                style={{ color: colors.text.primary }}
-              >
-                {step.label}
-              </p>
+              <PublicIcon name={step.icon} size={18} />
             </div>
+            <p
+              className="mt-4 text-[13px] font-bold"
+              style={{
+                color: step.active ? colors.text.primary : colors.text.muted,
+              }}
+            >
+              {step.label}
+            </p>
             {index < steps.length - 1 && (
               <div
-                className="hidden sm:block absolute left-[calc(100%-4px)] top-1/2 h-px w-4"
-                style={{ background: colors.surface[300] }}
+                className="absolute left-[calc(50%+24px)] top-6 hidden h-px w-[calc(100%-48px)] sm:block"
+                style={{
+                  background: steps[index + 1].active
+                    ? colors.brand
+                    : colors.surface[200],
+                  opacity: steps[index + 1].active ? 0.3 : 1,
+                }}
               />
             )}
           </div>
@@ -555,58 +656,71 @@ export function WorkflowGraphic() {
 
 export function PublicCtaBand() {
   return (
-    <PublicSection className="pt-8">
+    <PublicSection className="pt-12 pb-24">
       <div
-        className="rounded-md border p-8 sm:p-10 lg:p-12"
+        className="relative overflow-hidden rounded-md border p-10 md:p-14"
         style={{
-          borderColor: colors.surface[200],
+          borderColor: colors.text.primary,
           background: colors.text.primary,
-          boxShadow: `0 30px 90px ${colors.shadowStrong}`,
+          boxShadow: `0 24px 60px ${colors.shadowStrong}`,
         }}
       >
-        <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
+        {/* Subtle interior glow */}
+        <div
+          className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-md"
+          style={{
+            background: `radial-gradient(circle, ${colors.brand} 0%, transparent 70%)`,
+            opacity: 0.15,
+            filter: "blur(40px)",
+          }}
+        />
+
+        <div className="relative z-10 grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
-            <p
-              className="text-[12px] font-bold uppercase tracking-[0.18em]"
-              style={{ color: colors.surface[300] }}
+            <span
+              className="inline-flex rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest mb-5"
+              style={{
+                borderColor: colors.surface[300],
+                color: colors.surface[300],
+              }}
             >
               Ready for academic review
-            </p>
+            </span>
             <h2
-              className="mt-4 text-3xl font-semibold tracking-[-0.04em] sm:text-4xl"
+              className="text-3xl font-bold tracking-tight sm:text-4xl"
               style={{ color: colors.text.light }}
             >
               Capture the writing process before doubt begins.
             </h2>
             <p
-              className="mt-4 max-w-2xl text-[15px] leading-7"
+              className="mt-4 max-w-2xl text-[16px] leading-relaxed"
               style={{ color: colors.surface[300] }}
             >
               TypeTrace provides structured behavioral evidence for review. It
-              does not replace academic judgment or institutional procedure.
+              documents how you write, securing your authorship with hard data.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-3">
             <Link
               to={ROUTES.REGISTER}
-              className="rounded-md px-5 py-3 text-[14px] font-bold transition hover:opacity-90"
+              className="inline-flex items-center justify-center rounded-md px-6 py-3.5 text-[14px] font-bold transition-all hover:opacity-90 active:scale-[0.98]"
               style={{
                 background: colors.brand,
                 color: colors.text.light,
               }}
             >
-              Start writing session
+              Start session
             </Link>
             <Link
               to={ROUTES.VERIFY_LOOKUP}
-              className="rounded-md border px-5 py-3 text-[14px] font-bold transition hover:opacity-80"
+              className="inline-flex items-center justify-center rounded-md border px-6 py-3.5 text-[14px] font-bold transition-all hover:bg-surface-50/10 active:scale-[0.98]"
               style={{
                 borderColor: colors.surface[300],
                 color: colors.text.light,
               }}
             >
-              Verify certificate
+              Verify a certificate
             </Link>
           </div>
         </div>

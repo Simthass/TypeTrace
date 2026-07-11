@@ -3,7 +3,8 @@ export type KeystrokeEventType =
   | "keyup"
   | "paste"
   | "cut"
-  | "input";
+  | "input"
+  | "cursor";
 
 export type DeletionMethod =
   | "single"
@@ -42,6 +43,15 @@ export interface KeystrokeEvent {
   selection_length_before?: number;
   deltaLength?: number;
   insertedCharacters?: number;
+  /**
+   * Literal text for a confirmed edit: a spellcheck correction, autocorrect,
+   * IME candidate commit, keyboard replace-over-selection, or a clipboard
+   * paste. Replay needs this to show the student's actual writing (and, for
+   * paste, the actual pasted content so a reviewer can judge it) rather than
+   * a placeholder. Deleted text is still never captured — only what was
+   * added.
+   */
+  insertedText?: string;
   deletedCharacters?: number;
   chars_deleted?: number;
   deletion_method?: DeletionMethod;

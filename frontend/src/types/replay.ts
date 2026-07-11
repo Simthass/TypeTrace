@@ -86,6 +86,12 @@ export interface ReplayEvent {
   documentLengthAfter: number;
   deltaLength: number;
   insertedCharacters: number;
+  /**
+   * Literal text for this event: typed/corrected content, or the actual
+   * pasted text for a paste event. Null/absent for legacy events recorded
+   * before this field existed.
+   */
+  inserted_text?: string | null;
   is_paste: boolean;
   is_deletion: boolean;
   is_enter: boolean;

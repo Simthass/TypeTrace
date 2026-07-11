@@ -1182,6 +1182,7 @@ export default function EditorPage() {
     handleCut: baseHandleCut,
     handleBeforeInput,
     recordTextChange,
+    handleSelectionChange,
     getStats,
     resetCapture,
     hydrateCapture,
@@ -2002,6 +2003,7 @@ export default function EditorPage() {
               onKeyUp={handleKeyUp}
               onPaste={handlePaste}
               onCut={handleCut}
+              onSelect={handleSelectionChange}
               placeholder="Start writing here. TypeTrace quietly captures your behavioral evidence in the background - timing, pauses, deletions, and rhythm that only a human writer produces."
               className="h-full min-h-[480px] w-full resize-none border-none bg-transparent text-[16px] leading-[1.85] outline-none placeholder:text-[15px]"
               style={{

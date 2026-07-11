@@ -75,6 +75,51 @@ interface CaptureSnapshotOptions {
 const INTENT_TTL_MS = 3000;
 const BULK_DELETE_THRESHOLD = 2;
 
+// Keys that never mutate a plain textarea's content by themselves. Anything
+// NOT in this set is treated as a potential text-mutating candidate — this
+// deliberately errs on the side of tracking too much rather than too little,
+// since an untracked candidate is exactly how mobile/IME edits silently
+// disappeared from replay before.
+const NON_MUTATING_KEYS = new Set([
+  "Shift",
+  "Control",
+  "Alt",
+  "Meta",
+  "CapsLock",
+  "Escape",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown",
+  "Insert",
+  "ScrollLock",
+  "NumLock",
+  "Pause",
+  "ContextMenu",
+  "PrintScreen",
+  "F1",
+  "F2",
+  "F3",
+  "F4",
+  "F5",
+  "F6",
+  "F7",
+  "F8",
+  "F9",
+  "F10",
+  "F11",
+  "F12",
+]);
+
+// Minimum gap between logged cursor-move events. Mouse drag-selection and
+// rapid arrow-key repeats can fire selection-change many times per second;
+// this keeps the event stream proportional to actual navigation, not noise.
+const CURSOR_EVENT_THROTTLE_MS = 80;
+
 // Long gaps are breaks, not active writing time. Short pauses still remain
 // behavioral evidence; long idle/sleep/draft gaps are excluded from duration,
 // WPM, and normal flight-time rhythm.
@@ -591,6 +636,9 @@ export function useKeystrokeCapture({
   const logRef = useRef<KeystrokeEvent[]>([]);
   const activeKeysRef = useRef<Record<string, ActiveKey>>({});
   const lastKeyDownTimestampRef = useRef<number | null>(null);
+  const lastCursorPositionRef = useRef<number>(0);
+  const lastCursorEventAtRef = useRef<number>(0);
+  const lastTextMutationAtRef = useRef<number>(0);
   const pendingIntentRef = useRef<PendingInputIntent | null>(null);
   const activeDurationMsRef = useRef(0);
   const lastActivityAtRef = useRef<number | null>(null);
@@ -748,7 +796,58 @@ export function useKeystrokeCapture({
         snapshot.end,
       );
       const isDeletionKey = event.key === "Backspace" || event.key === "Delete";
-      const revisionId = isDeletionKey ? createRevisionId(wallNow) : undefined;
+
+      // FIX (replace-over-selection correlation bug): typing a printable
+      // character while text is selected replaces that selection in one
+      // atomic user action (e.g. select a wrong letter, retype the correct
+      // one). Previously only Backspace/Delete were treated as "revision"
+      // keys, so this case produced TWO disconnected log entries: a plain
+      // keydown with the new character but no deletion info, and a separate,
+      // uncorrelated "__TEXT_REVISION__" event from recordTextChange holding
+      // the real deleted/inserted counts but no literal character. Replay
+      // reconstruction only reads keydown events, so the old character was
+      // never removed and the new character got misplaced. Treating an
+      // active selection the same way as an explicit delete key means this
+      // single keydown event carries both the literal character AND gets
+      // patched later with the confirmed delete/insert counts.
+      // Only a printable character, Enter, or Tab actually replaces a live
+      // selection with new content in a plain textarea.
+      const isMutatingKeyPress =
+        event.key.length === 1 || event.key === "Enter" || event.key === "Tab";
+      const hasActiveSelection =
+        snapshot.selectionLength > 0 && isMutatingKeyPress;
+      const willActuallyDelete = isDeletionKey || hasActiveSelection;
+
+      // FIX (severe capture gaps on mobile/virtual-keyboard/IME typing):
+      // many software keyboards, predictive-text engines, and IME
+      // composition flows fire keydown with `key === "Unidentified"` (or
+      // "Process"/"Dead") instead of the real character — the real text
+      // only ever shows up in the resulting onChange. Previously, a
+      // revision candidate was only registered for Backspace/Delete/an
+      // active selection, so these keydowns were logged with a
+      // meaningless key value and recordTextChange had no tracked intent to
+      // patch with the confirmed text, silently dropping the edit. Any key
+      // that isn't clearly non-mutating (navigation, modifiers, or a
+      // Ctrl/Meta/Alt shortcut combo) is now tracked as a candidate, so
+      // recordTextChange can always find a primary event to patch with the
+      // real, confirmed content — regardless of what the raw key name was.
+      const isKnownNonMutatingKey = NON_MUTATING_KEYS.has(event.key);
+      // Only Ctrl/Cmd WITHOUT Alt is treated as a shortcut (copy, select-all,
+      // undo, etc.). AltGr on many international keyboard layouts reports
+      // ctrlKey+altKey together while typing a real character (e.g. "@",
+      // "€", accented letters) — excluding it here would leave that
+      // character with no tracked candidate, and since every confirmed
+      // delta is now always logged (see recordTextChange), it would get
+      // inserted a second time as an unmatched standalone event.
+      const isShortcutCombo =
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        event.key.length === 1 &&
+        !isDeletionKey;
+      const capturesRevision = !isKnownNonMutatingKey && !isShortcutCombo;
+      const revisionId = capturesRevision
+        ? createRevisionId(wallNow)
+        : undefined;
 
       const entry: KeystrokeEvent = {
         key: event.key,
@@ -769,33 +868,40 @@ export function useKeystrokeCapture({
               selectionStartBefore: snapshot.start,
               selectionEndBefore: snapshot.end,
               selection_length_before: snapshot.selectionLength,
-              chars_deleted:
-                deletionIntent.predictedDeletedCharacters > 0
-                  ? deletionIntent.predictedDeletedCharacters
-                  : undefined,
-              deletedCharacters:
-                deletionIntent.predictedDeletedCharacters > 0
-                  ? deletionIntent.predictedDeletedCharacters
-                  : undefined,
-              deletion_method: deletionIntent.deletionMethod,
-              isBulkDeletion:
-                deletionIntent.predictedDeletedCharacters >=
-                  BULK_DELETE_THRESHOLD ||
-                snapshot.selectionLength >= BULK_DELETE_THRESHOLD ||
-                deletionIntent.deletionMethod !== "single",
-              bulk_deletion:
-                deletionIntent.predictedDeletedCharacters >=
-                  BULK_DELETE_THRESHOLD ||
-                snapshot.selectionLength >= BULK_DELETE_THRESHOLD ||
-                deletionIntent.deletionMethod !== "single",
+              ...(willActuallyDelete
+                ? {
+                    chars_deleted:
+                      deletionIntent.predictedDeletedCharacters > 0
+                        ? deletionIntent.predictedDeletedCharacters
+                        : snapshot.selectionLength,
+                    deletedCharacters:
+                      deletionIntent.predictedDeletedCharacters > 0
+                        ? deletionIntent.predictedDeletedCharacters
+                        : snapshot.selectionLength,
+                    deletion_method: isDeletionKey
+                      ? deletionIntent.deletionMethod
+                      : "replacement",
+                    isBulkDeletion:
+                      deletionIntent.predictedDeletedCharacters >=
+                        BULK_DELETE_THRESHOLD ||
+                      snapshot.selectionLength >= BULK_DELETE_THRESHOLD ||
+                      deletionIntent.deletionMethod !== "single",
+                    bulk_deletion:
+                      deletionIntent.predictedDeletedCharacters >=
+                        BULK_DELETE_THRESHOLD ||
+                      snapshot.selectionLength >= BULK_DELETE_THRESHOLD ||
+                      deletionIntent.deletionMethod !== "single",
+                  }
+                : {}),
             }
           : {}),
       };
 
       logRef.current.push(entry);
       const eventIndex = logRef.current.length - 1;
+      lastCursorPositionRef.current = snapshot.start;
 
-      if (isDeletionKey) {
+      if (capturesRevision) {
         setPendingIntent({
           id: revisionId ?? createRevisionId(wallNow),
           source: "keydown",
@@ -806,9 +912,21 @@ export function useKeystrokeCapture({
           selectionEndBefore: snapshot.end,
           selectionLengthBefore: snapshot.selectionLength,
           documentLengthBefore: snapshot.documentLength,
-          predictedDeletedCharacters: deletionIntent.predictedDeletedCharacters,
-          predictedInsertedCharacters: 0,
-          deletionMethod: deletionIntent.deletionMethod,
+          predictedDeletedCharacters: isDeletionKey
+            ? deletionIntent.predictedDeletedCharacters
+            : snapshot.selectionLength,
+          predictedInsertedCharacters: isDeletionKey
+            ? 0
+            : event.key === "Tab"
+              ? 4
+              : event.key === "Enter" || event.key.length === 1
+                ? 1
+                : 0,
+          deletionMethod: willActuallyDelete
+            ? isDeletionKey
+              ? deletionIntent.deletionMethod
+              : "replacement"
+            : "unknown",
         });
       }
 
@@ -834,8 +952,21 @@ export function useKeystrokeCapture({
         inputType.startsWith("insert") &&
         (event.currentTarget.selectionEnd ?? 0) >
           (event.currentTarget.selectionStart ?? 0);
+      // Browser/OS spellcheck corrections (right-click "Correct spelling",
+      // mobile autocorrect, IME candidate replacement) fire this exact
+      // inputType. Relying only on `hasReplacementSelection` is fragile —
+      // some browsers don't reliably expose the replaced range as
+      // selectionStart/selectionEnd at the moment this event fires — so the
+      // inputType itself is treated as sufficient signal on its own.
+      const isReplacementInput = inputType === "insertReplacementText";
 
-      if (!isDeletionInput && !isPasteInput && !hasReplacementSelection) return;
+      if (
+        !isDeletionInput &&
+        !isPasteInput &&
+        !hasReplacementSelection &&
+        !isReplacementInput
+      )
+        return;
 
       const wallNow = Date.now();
       const snapshot = getSelectionSnapshot(
@@ -844,7 +975,7 @@ export function useKeystrokeCapture({
       );
       const fallbackMethod: DeletionMethod = isPasteInput
         ? "unknown"
-        : hasReplacementSelection
+        : hasReplacementSelection || isReplacementInput
           ? "replacement"
           : snapshot.selectionLength > 0
             ? "selection"
@@ -953,6 +1084,12 @@ export function useKeystrokeCapture({
         documentLength: snapshot.documentLength,
         cursorPosition: snapshot.start,
         pastedLength: pastedText.length,
+        // FIX: previously only the length was ever recorded; the placeholder
+        // "[pasted N characters]" was all replay could ever show. A reviewer
+        // assessing a flagged session needs to see what was actually pasted
+        // (e.g. to judge whether it looks AI-generated), so the literal
+        // pasted text is captured here.
+        insertedText: pastedText,
         revision_id: revisionId,
         inputType: "insertFromPaste",
         documentLengthBefore: snapshot.documentLength,
@@ -992,6 +1129,8 @@ export function useKeystrokeCapture({
       });
 
       lastKeyDownTimestampRef.current = null;
+      lastCursorPositionRef.current = snapshot.start + pastedText.length;
+      lastTextMutationAtRef.current = wallNow;
       setLastActivityAt(wallNow);
     },
     [registerActivity, setPendingIntent],
@@ -1061,6 +1200,8 @@ export function useKeystrokeCapture({
         deletionMethod: method,
       });
 
+      lastCursorPositionRef.current = snapshot.start;
+      lastTextMutationAtRef.current = wallNow;
       setLastActivityAt(wallNow);
     },
     [registerActivity, setPendingIntent],
@@ -1095,7 +1236,7 @@ export function useKeystrokeCapture({
               documentLengthBefore,
               insertedCharacters,
             })
-          : intent?.deletionMethod;
+          : undefined;
       const isBulkDeletion =
         deletedCharacters >= BULK_DELETE_THRESHOLD ||
         selectionLengthBefore >= BULK_DELETE_THRESHOLD ||
@@ -1106,67 +1247,99 @@ export function useKeystrokeCapture({
         deletionMethod === "cut" ||
         deletionMethod === "all";
 
-      if (deletedCharacters > 0 || intent?.source === "paste") {
-        const patch: Partial<KeystrokeEvent> = {
-          revision_id: revisionId,
-          inputType,
-          documentLengthBefore,
-          documentLengthAfter: nextText.length,
-          selectionStartBefore: intent?.selectionStartBefore,
-          selectionEndBefore: intent?.selectionEndBefore,
-          selection_length_before: selectionLengthBefore,
-          deltaLength: delta.deltaLength,
-          insertedCharacters,
-          deletedCharacters,
-          chars_deleted: deletedCharacters > 0 ? deletedCharacters : undefined,
-          deletion_method: deletionMethod,
-          isBulkDeletion,
-          bulk_deletion: isBulkDeletion,
-        };
+      // FIX (severe capture gaps / spellcheck corrections silently dropped):
+      // `previousText !== nextText` (checked above) already guarantees this
+      // delta deletes and/or inserts something, so there is never a reason
+      // to skip logging it — the old guard here (`deletedCharacters > 0 ||
+      // ...`) is what silently dropped pure insertions with zero deletions,
+      // e.g. a spellcheck correction like "cmputer" -> "computer" (a single
+      // inserted "o", nothing removed), and — far more consequentially —
+      // entire runs of mobile/IME-typed text whose keydown events carry a
+      // meaningless `key` value. Every confirmed delta is now captured.
+      // Captures the literal text for this delta — including paste content,
+      // per an explicit product decision to show reviewers what was
+      // actually pasted rather than only a character count.
+      const insertedText = nextText.slice(
+        delta.start,
+        delta.start + delta.insertedTextLength,
+      );
 
-        const hasPrimaryEvent =
-          typeof intent?.eventIndex === "number" && intent.eventIndex >= 0;
+      const patch: Partial<KeystrokeEvent> = {
+        revision_id: revisionId,
+        inputType,
+        documentLengthBefore,
+        documentLengthAfter: nextText.length,
+        selectionStartBefore: intent?.selectionStartBefore,
+        selectionEndBefore: intent?.selectionEndBefore,
+        selection_length_before: selectionLengthBefore,
+        deltaLength: delta.deltaLength,
+        insertedCharacters,
+        insertedText,
+        deletedCharacters,
+        chars_deleted: deletedCharacters > 0 ? deletedCharacters : undefined,
+        deletion_method: deletionMethod,
+        isBulkDeletion,
+        bulk_deletion: isBulkDeletion,
+      };
 
-        if (hasPrimaryEvent) {
-          // A keyboard/paste/cut event already represents this user action.
-          // Patch that primary event with the confirmed text delta instead of
-          // appending another deletion evidence event. This prevents one
-          // Backspace/Delete action from being counted twice in live stats.
-          patchEventWithRevision(intent.eventIndex, patch);
-        } else {
-          // Some edits do not have a matching keydown event, for example
-          // mobile/IME edits, context-menu delete, or typing over a selection.
-          // In those cases, create exactly one standalone revision event.
-          appendRevisionEvent({
-            key:
-              deletedCharacters > 0
-                ? "__TEXT_REVISION__"
-                : intent?.source === "paste"
-                  ? "__PASTE_COMMIT__"
-                  : "__TEXT_INPUT__",
-            keyCode: 0,
-            code: inputType || "Input",
-            type: "input",
-            timestamp: wallNow,
-            down_time: Math.round(perfNow),
-            up_time: Math.round(perfNow),
-            dwell_time: 0,
-            flight_time:
-              activity.resumedAfterIdle ||
-              lastKeyDownTimestampRef.current === null
-                ? null
-                : sanitizeFlightTime(
-                    Math.round(wallNow - lastKeyDownTimestampRef.current),
-                  ),
-            documentLength: nextText.length,
-            cursorPosition: delta.start + insertedCharacters,
-            pastedLength:
-              intent?.source === "paste" ? insertedCharacters : undefined,
-            ...patch,
-          });
-        }
+      const hasPrimaryEvent =
+        typeof intent?.eventIndex === "number" && intent.eventIndex >= 0;
+
+      if (hasPrimaryEvent) {
+        // A keyboard/paste/cut event already represents this user action.
+        // Patch that primary event with the confirmed text delta instead of
+        // appending another deletion evidence event. This prevents one
+        // Backspace/Delete action from being counted twice in live stats,
+        // and is also what corrects a keydown that was logged with a
+        // meaningless key value (mobile/IME) into an accurate one.
+        patchEventWithRevision(intent.eventIndex, patch);
+      } else {
+        // Some edits do not have a matching keydown event at all, for
+        // example a context-menu spellcheck correction or an IME commit
+        // that never fired a trackable keydown. In those cases, create
+        // exactly one standalone revision event.
+        //
+        // A distinct key is used for pure insertions ("__TEXT_INSERT__")
+        // instead of reusing "__TEXT_REVISION__", because the backend
+        // treats "__TEXT_REVISION__" as always-a-deletion regardless of
+        // the recorded count — reusing it here would make replay delete a
+        // character that was never actually removed.
+        appendRevisionEvent({
+          key:
+            deletedCharacters > 0
+              ? "__TEXT_REVISION__"
+              : intent?.source === "paste"
+                ? "__PASTE_COMMIT__"
+                : "__TEXT_INSERT__",
+          keyCode: 0,
+          code: inputType || "Input",
+          type: "input",
+          timestamp: wallNow,
+          down_time: Math.round(perfNow),
+          up_time: Math.round(perfNow),
+          dwell_time: 0,
+          flight_time:
+            activity.resumedAfterIdle ||
+            lastKeyDownTimestampRef.current === null
+              ? null
+              : sanitizeFlightTime(
+                  Math.round(wallNow - lastKeyDownTimestampRef.current),
+                ),
+          documentLength: nextText.length,
+          // Unified contract: cursorPosition always marks the LEFT EDGE
+          // where the edit begins (matches how a real keydown records
+          // `snapshot.start` before the browser applies the change), not
+          // the position after insertion. Replay relies on this being
+          // consistent across every event type.
+          cursorPosition: delta.start,
+          pastedLength:
+            intent?.source === "paste" ? insertedCharacters : undefined,
+          ...patch,
+        });
       }
 
+      lastCursorPositionRef.current = delta.start + insertedCharacters;
+      lastTextMutationAtRef.current = wallNow;
       textRef.current = nextText;
       setLastActivityAt(wallNow);
       pendingIntentRef.current = null;
@@ -1183,6 +1356,9 @@ export function useKeystrokeCapture({
     logRef.current = [];
     activeKeysRef.current = {};
     lastKeyDownTimestampRef.current = null;
+    lastCursorPositionRef.current = 0;
+    lastCursorEventAtRef.current = 0;
+    lastTextMutationAtRef.current = 0;
     pendingIntentRef.current = null;
     activeDurationMsRef.current = 0;
     lastActivityAtRef.current = null;
@@ -1324,6 +1500,57 @@ export function useKeystrokeCapture({
     return () => window.clearTimeout(timer);
   }, [activeDurationMs, getStats, text]);
 
+  // Cursor-movement tracking: logs a lightweight, non-mutating event when
+  // the caret moves without any text change — clicking elsewhere in the
+  // document, or navigating with arrow/Home/End/Page keys. This is what
+  // lets replay show the student actually jumping back to an earlier
+  // paragraph to make a correction, instead of only ever showing forward
+  // progress. Wire this to the textarea's onSelect (fires on click, drag-
+  // selection, and keyboard navigation alike).
+  const handleSelectionChange = useCallback(
+    (event: React.SyntheticEvent<HTMLTextAreaElement>) => {
+      const target = event.currentTarget;
+      const start = target.selectionStart ?? 0;
+      const end = target.selectionEnd ?? start;
+      const wallNow = Date.now();
+
+      // Skip the position this same instant already recorded via a text
+      // mutation (keydown/paste/cut/recordTextChange) — onSelect fires
+      // again right after those, and would otherwise log a redundant,
+      // duplicate "cursor" event for every single keystroke.
+      if (wallNow - lastTextMutationAtRef.current < 30) {
+        lastCursorPositionRef.current = start;
+        return;
+      }
+
+      if (start === lastCursorPositionRef.current && end === start) return;
+      if (wallNow - lastCursorEventAtRef.current < CURSOR_EVENT_THROTTLE_MS) {
+        return;
+      }
+
+      lastCursorPositionRef.current = start;
+      lastCursorEventAtRef.current = wallNow;
+
+      logRef.current.push({
+        key: "__CURSOR_MOVE__",
+        keyCode: 0,
+        code: "Cursor",
+        type: "cursor",
+        timestamp: wallNow,
+        down_time: null,
+        up_time: null,
+        dwell_time: null,
+        flight_time: null,
+        documentLength: target.value.length,
+        cursorPosition: start,
+        selectionStartBefore: start,
+        selectionEndBefore: end,
+        selection_length_before: Math.max(0, end - start),
+      });
+    },
+    [],
+  );
+
   return {
     keystrokeLogRef: logRef,
     startedAt,
@@ -1334,6 +1561,7 @@ export function useKeystrokeCapture({
     handlePaste,
     handleCut,
     handleBeforeInput,
+    handleSelectionChange,
     recordTextChange,
     getStats,
     resetCapture,

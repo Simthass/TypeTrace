@@ -1,4 +1,3 @@
-
 import json
 from datetime import datetime, timezone
 from statistics import mean
@@ -195,6 +194,7 @@ def _normalize_events(raw_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "documentLengthAfter": _safe_int(event.get("documentLengthAfter")),
             "deltaLength": _safe_int(event.get("deltaLength")),
             "insertedCharacters": _safe_int(event.get("insertedCharacters")),
+            "inserted_text": event.get("insertedText") or event.get("inserted_text"),
             "is_paste": is_paste,
             "is_deletion": is_deletion,
             "is_enter": key == "Enter",
@@ -499,4 +499,6 @@ async def get_session_replay_compatible(
         response=response,
         current_user=current_user,
     )
+
+
 
