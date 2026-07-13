@@ -96,8 +96,8 @@ function getResultStyle(classification: string) {
   const n = classification.toUpperCase();
   if (n === "HUMAN")
     return {
-      label: "Human Writing Pattern",
-      sublabel: "Behavioral markers consistent with human authorship",
+      label: "Human",
+      sublabel: "Strong human writing evidence",
       bg: brand.humanBg,
       text: brand.humanText,
       accent: brand.humanAccent,
@@ -105,16 +105,16 @@ function getResultStyle(classification: string) {
     };
   if (n === "SUSPICIOUS")
     return {
-      label: "Review Recommended",
-      sublabel: "Some behavioral anomalies detected",
+      label: "Review Required",
+      sublabel: "Some behavioral anomalies detected in the writing process",
       bg: brand.suspiciousBg,
       text: brand.suspiciousText,
       accent: brand.suspiciousAccent,
       barColor: colors.amber,
     };
   return {
-    label: "High Risk Pattern",
-    sublabel: "Behavioral markers inconsistent with human authorship",
+    label: "High Risk",
+    sublabel: "Writing behavior does not match typical human patterns",
     bg: brand.aiBg,
     text: brand.aiText,
     accent: brand.aiAccent,
@@ -842,7 +842,7 @@ function AnalysisResultModal({
                     className="text-[10px] font-bold uppercase tracking-[0.18em]"
                     style={{ color: style.text, opacity: 0.72 }}
                   >
-                    Classification
+                    Human Writing Evidence Score
                   </p>
                   <p
                     className="mt-3 text-[42px] font-black leading-none tracking-[-0.055em]"

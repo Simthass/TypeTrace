@@ -1152,7 +1152,7 @@ export default function TeacherDashboard() {
                 color: colors.red,
               },
               {
-                label: "Average confidence",
+                label: "Average human evidence score",
                 value: normalizePercent(summary.avg_confidence),
                 display: `${normalizePercent(summary.avg_confidence)}%`,
                 color: colors.brand,
@@ -1342,7 +1342,7 @@ export default function TeacherDashboard() {
                     "Document",
                     "Student",
                     "Classification",
-                    "Confidence",
+                    "Human Evidence Score",
                     "Review",
                     "Action",
                   ].map((heading) => (
@@ -1491,7 +1491,7 @@ export default function TeacherDashboard() {
                 color: summary.flagged_reviews ? colors.red : colors.green,
               },
               {
-                label: "Avg evidence confidence",
+                label: "Avg human evidence score",
                 value: `${normalizePercent(summary.avg_confidence)}%`,
                 icon: "shield",
                 color: colors.brand,

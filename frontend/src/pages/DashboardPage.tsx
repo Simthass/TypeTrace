@@ -23,6 +23,7 @@ import { useToast } from "../components/ui/ToastProvider";
 import { brand, colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
 import { ErrorState } from "../components/ui/AsyncState";
+import { classificationDisplayLabel } from "../lib/edgeCases";
 
 interface StudentSummary {
   total_sessions: number;
@@ -1165,7 +1166,9 @@ function LatestSessionsPanel({ sessions }: { sessions: StudentSession[] }) {
                   </td>
                   <td className="px-3 py-3">
                     <StatusBadge
-                      label={session.classification_bucket || "Unknown"}
+                      label={classificationDisplayLabel(
+                        session.classification_bucket,
+                      )}
                       tone={classification}
                     />
                   </td>
@@ -1497,7 +1500,7 @@ export default function DashboardPage() {
           icon="certificate"
         />
         <MetricCard
-          title="Avg. confidence"
+          title="Avg. Human Evidence Score"
           value={`${Math.round(summary.avg_confidence)}%`}
           meta="Behavioral model confidence"
           trend={confidenceDelta}

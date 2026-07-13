@@ -1070,7 +1070,7 @@ export default function VerifyCertificatePage() {
               <div className="px-6 pb-2">
                 <div className="flex items-center justify-between text-[11px] mb-1.5">
                   <span style={{ color: colors.text.muted }}>
-                    Confidence score
+                    Human Writing Evidence Score
                   </span>
                 </div>
                 <div

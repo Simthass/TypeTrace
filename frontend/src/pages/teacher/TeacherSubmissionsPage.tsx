@@ -207,7 +207,7 @@ function statusStyle(value?: string) {
       borderColor: brand.suspiciousAccent,
       label:
         normalized === "SUSPICIOUS"
-          ? "Review"
+          ? "Review Required"
           : normalized === "MEDIUM"
             ? "Medium"
             : "Pending",

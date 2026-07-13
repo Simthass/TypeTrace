@@ -1175,12 +1175,14 @@ export default function AnalyticsPage() {
         </Panel>
 
         <Panel
-          title="Confidence trend"
-          description="Average model confidence by day. Kept separate from WPM because percentage and speed use different units."
+          title="Human evidence score trend"
+          description="Average human evidence score by day. Kept separate from WPM because percentage and speed use different units."
           unit="confidence percentage"
           action={
             <LegendRow
-              items={[{ label: "Average confidence", color: colors.green }]}
+              items={[
+                { label: "Average human evidence score", color: colors.green },
+              ]}
             />
           }
         >

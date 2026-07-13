@@ -712,7 +712,7 @@ export default function VerifyCertificatePage() {
             <div className="p-6 md:p-8">
               <div className="grid gap-4 md:grid-cols-4">
                 <MetricCard
-                  label="Confidence"
+                  label="Human Writing Evidence Score"
                   value={`${confidence}%`}
                   sub="Behavioral evidence score"
                 />

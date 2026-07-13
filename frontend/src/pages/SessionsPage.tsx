@@ -58,7 +58,7 @@ const classificationFilters: Array<{
 }> = [
   { value: "ALL", label: "All evidence" },
   { value: "HUMAN", label: "Human" },
-  { value: "SUSPICIOUS", label: "Needs review" },
+  { value: "SUSPICIOUS", label: "Review Required" },
   { value: "SYNTHETIC", label: "High risk" },
 ];
 
@@ -307,7 +307,7 @@ function statusStyle(value?: string) {
       background: colors.amberTint,
       color: brand.suspiciousText,
       borderColor: colors.amberTint,
-      label: normalized === "SUSPICIOUS" ? "Needs review" : normalized,
+      label: normalized === "SUSPICIOUS" ? "Review Required" : normalized,
     };
   }
 
@@ -941,7 +941,7 @@ export default function SessionsPage() {
                       "Document",
                       "Course",
                       "Classification",
-                      "Confidence",
+                      "Human Evidence Score",
                       "Capture stats",
                       "Review",
                       "Certificate",
@@ -1197,7 +1197,7 @@ export default function SessionsPage() {
                     color: colors.text.primary,
                   }}
                 >
-                  NextCertificate vault
+                  Next
                 </button>
               </div>
             </div>

@@ -156,7 +156,7 @@ function classificationStyle(bucket: string) {
 
   if (bucket === "SUSPICIOUS") {
     return {
-      label: "Review",
+      label: "Review Required",
       bg: brand.suspiciousBg,
       text: brand.suspiciousText,
       border: brand.suspiciousAccent,
@@ -1373,7 +1373,7 @@ export default function ReplayPage() {
 
             <div className="mt-4 grid gap-3">
               <MetricCard
-                label="Confidence"
+                label="Human Evidence Score"
                 value={`${replay.session.confidence}%`}
                 sub={replay.session.risk_level}
               />

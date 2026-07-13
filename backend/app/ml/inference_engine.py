@@ -3,6 +3,25 @@
 Part 3 integrates the official Isolation Forest model while keeping the project
 safe if artifacts are missing: model inference is used when available, and the
 existing behavioral fallback/rule layer remains available at all times.
+
+FIX (unified scoring model): Previously `confidence` flipped meaning based on
+classification -- for HUMAN it meant "how human-like" (normality_score), but
+for SUSPICIOUS/SYNTHETIC it meant "how risky" (risk_score). That produced the
+illusion of three separate 100% scales (Human / Suspicious / AI Generated)
+instead of one continuous score, which is confusing and not how anomaly-based
+SaaS products (Vectra, Darktrace, Sift, etc.) present trust scores.
+
+This version computes ONE number -- `human_score` (0-100) -- that always means
+"how strongly this session's writing behavior matches human authorship,"
+regardless of classification. Classification and risk_level are both derived
+FROM that single score using fixed thresholds:
+
+    human_score >= 80   -> HUMAN            (risk_level LOW)
+    human_score 50-79   -> SUSPICIOUS       (risk_level MEDIUM) "Review Required"
+    human_score <  50   -> SYNTHETIC        (risk_level HIGH)   "High Risk"
+
+`confidence_score` returned to the API is now always equal to `human_score`,
+so a caller never has to know which "direction" a percentage points.
 """
 
 from __future__ import annotations
@@ -34,6 +53,11 @@ FEATURE_SCHEMA_PATH = ARTIFACT_DIR / "feature_schema.json"
 METRICS_PATH = ARTIFACT_DIR / "metrics.json"
 MODEL_CARD_PATH = ARTIFACT_DIR / "model_card.json"
 
+# Single-score classification thresholds. Keep these as the ONE source of
+# truth for turning human_score into a label anywhere in the backend.
+HUMAN_SCORE_THRESHOLD = 80.0
+SUSPICIOUS_SCORE_THRESHOLD = 50.0
+
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -50,12 +74,14 @@ def _clamp(value: Any, minimum: float = 0.0, maximum: float = 100.0) -> float:
     return round(max(minimum, min(maximum, safe)), 2)
 
 
-def _risk_level_from_score(score: float) -> str:
-    if score >= 70:
-        return "HIGH"
-    if score >= 40:
-        return "MEDIUM"
-    return "LOW"
+def classify_from_human_score(human_score: float) -> Dict[str, str]:
+    """Single source of truth: derive classification + risk_level from the
+    one unified human_score (0-100, higher = more human-like)."""
+    if human_score >= HUMAN_SCORE_THRESHOLD:
+        return {"classification": "HUMAN", "risk_level": "LOW"}
+    if human_score >= SUSPICIOUS_SCORE_THRESHOLD:
+        return {"classification": "SUSPICIOUS", "risk_level": "MEDIUM"}
+    return {"classification": "SYNTHETIC", "risk_level": "HIGH"}
 
 
 @dataclass
@@ -70,6 +96,7 @@ class InferenceResult:
     decision_source: str
     risk_level: str
     risk_score: float
+    human_score: float
 
 
 def _fallback_result(
@@ -84,15 +111,13 @@ def _fallback_result(
         text_content=text_content,
         model_features={},
     )
-    risk_score = _clamp(behavioral_summary.get("risk_score", 50), 0, 100)
-    risk_level = str(behavioral_summary.get("risk_level") or _risk_level_from_score(risk_score)).upper()
-    if risk_level not in {"LOW", "MEDIUM", "HIGH"}:
-        risk_level = _risk_level_from_score(risk_score)
+    rules_risk_score = _clamp(behavioral_summary.get("risk_score", 50), 0, 100)
+    human_score = _clamp(100.0 - rules_risk_score, 0, 100)
+    labels = classify_from_human_score(human_score)
 
-    classification = "SUSPICIOUS" if risk_score >= 40 else "UNKNOWN"
     return InferenceResult(
-        classification=classification,
-        confidence_score=0.0,
+        classification=labels["classification"],
+        confidence_score=human_score,
         kill_switch_triggered=True,
         kill_switch_reason=reason,
         features={},
@@ -104,8 +129,9 @@ def _fallback_result(
             "model_name": MODEL_NAME,
             "model_version": "fallback-rules",
             "model_error": reason,
-            "risk_score": risk_score,
-            "risk_level": risk_level,
+            "human_score": human_score,
+            "risk_score": rules_risk_score,
+            "risk_level": labels["risk_level"],
             "feature_explanations": build_feature_explanations({}),
             "academic_interpretation": (
                 "This result provides supporting behavioral evidence and should not be "
@@ -113,8 +139,9 @@ def _fallback_result(
             ),
         },
         decision_source="fallback_rules",
-        risk_level=risk_level,
-        risk_score=risk_score,
+        risk_level=labels["risk_level"],
+        risk_score=rules_risk_score,
+        human_score=human_score,
     )
 
 
@@ -210,6 +237,15 @@ class ModelArtifacts:
                 "behavioral_rules": True,
                 "paste_override": True,
             },
+            "scoring_model": {
+                "type": "single_unified_score",
+                "score_name": "human_score",
+                "range": [0, 100],
+                "thresholds": {
+                    "human_min": HUMAN_SCORE_THRESHOLD,
+                    "suspicious_min": SUSPICIOUS_SCORE_THRESHOLD,
+                },
+            },
         }
 
 
@@ -236,24 +272,41 @@ class TypeTraceInferenceEngine:
             **self.artifacts.status(),
         }
 
-    def _score_to_normality(self, decision_score: float) -> float:
-        metrics = self.artifacts.metrics or {}
-        low = _safe_float(metrics.get("train_score_p05"), -0.05)
-        high = _safe_float(metrics.get("train_score_p95"), 0.20)
-        if high <= low:
-            return 50.0
-        return _clamp(((decision_score - low) / (high - low)) * 100.0, 0, 100)
-
     def _decision_threshold(self) -> float:
         metrics = self.artifacts.metrics or {}
         return _safe_float(metrics.get("decision_threshold"), 0.0)
 
-    def _classify_from_risk(self, risk_score: float) -> str:
-        if risk_score >= 70:
-            return "SYNTHETIC"
-        if risk_score >= 40:
-            return "SUSPICIOUS"
-        return "HUMAN"
+    def _model_human_score(self, decision_score: float) -> float:
+        """Map an Isolation Forest decision_function score to a 0-100
+        human-likeness score, anchored at the model's own pass/fail
+        threshold (train_score_p05).
+
+        decision_score >= threshold ("inside the learned human baseline")
+        maps onto a HIGH-confidence band [60, 100]. decision_score < threshold
+        maps onto a LOW-confidence band [0, 60). This guarantees a session
+        the model itself considers "inside the human baseline" can never,
+        by itself, drop below the SUSPICIOUS threshold from the model alone.
+        """
+        metrics = self.artifacts.metrics or {}
+        threshold = self._decision_threshold()
+        low = _safe_float(metrics.get("train_score_p05"), threshold - 0.05)
+        high = _safe_float(metrics.get("train_score_p95"), threshold + 0.20)
+
+        if decision_score >= threshold:
+            if high <= threshold:
+                return 100.0
+            ratio = _clamp(((decision_score - threshold) / (high - threshold)) * 100.0, 0, 100) / 100.0
+            return round(60.0 + ratio * 40.0, 2)
+
+        if threshold <= low:
+            return 0.0
+
+        ratio = _clamp(((decision_score - low) / (threshold - low)) * 100.0, 0, 100) / 100.0
+        score = round(ratio * 60.0, 2)
+
+        # Clearly-outside-baseline sessions should read as decisively
+        # non-human, not borderline.
+        return min(score, 35.0)
 
     def analyze(
         self,
@@ -289,20 +342,25 @@ class TypeTraceInferenceEngine:
             decision_score = float(self.artifacts.model.decision_function(X_scaled)[0])
             raw_score = float(self.artifacts.model.score_samples(X_scaled)[0])
             threshold = self._decision_threshold()
-            normality_score = self._score_to_normality(decision_score)
-            model_risk_score = _clamp(100.0 - normality_score, 0, 100)
 
-            # If the sample falls below the training-human threshold, make sure
-            # it is at least review-worthy even when the score distribution is tight.
-            if decision_score < threshold:
-                model_risk_score = max(model_risk_score, 65.0)
-
+            model_human_score = self._model_human_score(decision_score)
             rules_risk_score = _clamp(behavioral_summary.get("risk_score", 0), 0, 100)
-            risk_score = _clamp(max(model_risk_score, rules_risk_score), 0, 100)
-            risk_level = _risk_level_from_score(risk_score)
-            classification = self._classify_from_risk(risk_score)
+            rules_human_score = _clamp(100.0 - rules_risk_score, 0, 100)
 
-            confidence = _clamp(normality_score if classification == "HUMAN" else risk_score, 0, 100)
+            # Take the more cautious (lower) of the two human-likeness
+            # estimates -- either signal being strongly non-human should
+            # be enough to lower the overall score.
+            human_score = _clamp(min(model_human_score, rules_human_score), 0, 100)
+            risk_score = _clamp(100.0 - human_score, 0, 100)
+
+            labels = classify_from_human_score(human_score)
+            classification = labels["classification"]
+            risk_level = labels["risk_level"]
+
+            # confidence_score now ALWAYS means "how human-like," regardless
+            # of classification -- no more direction-flipping.
+            confidence = human_score
+
             decision_source = "isolation_forest_plus_behavioral_rules"
             risk_signals = list(behavioral_summary.get("risk_signals") or [])
             human_signals = list(behavioral_summary.get("human_signals") or [])
@@ -322,8 +380,9 @@ class TypeTraceInferenceEngine:
                 "model_score": _safe_float(decision_score),
                 "model_raw_score": _safe_float(raw_score),
                 "model_decision_threshold": _safe_float(threshold),
-                "model_normality_score": normality_score,
-                "model_risk_score": model_risk_score,
+                "model_human_score": model_human_score,
+                "rules_human_score": rules_human_score,
+                "human_score": human_score,
                 "risk_score": risk_score,
                 "risk_level": risk_level,
                 "classification": classification,
@@ -339,9 +398,8 @@ class TypeTraceInferenceEngine:
                     "false_negative_rate": self.artifacts.metrics.get("false_negative_rate_synthetic_accepted"),
                 },
                 "academic_interpretation": (
-                    "This result provides probabilistic behavioral evidence from an Isolation Forest "
-                    "liveness model and rule-based safety checks. It should support, not replace, "
-                    "human academic review."
+                    "Human Writing Evidence Score is a single 0-100 behavioral score, not a "
+                    "text-content AI detector. It should support, not replace, human academic review."
                 ),
             }
 
@@ -356,6 +414,7 @@ class TypeTraceInferenceEngine:
                 decision_source=decision_source,
                 risk_level=risk_level,
                 risk_score=risk_score,
+                human_score=human_score,
             )
         except Exception as exc:
             log.exception("ML inference failed completely: %s", exc)

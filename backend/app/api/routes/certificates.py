@@ -90,16 +90,12 @@ def _format_datetime(value: Any) -> str:
 
 def _classification_label(value: Optional[str]) -> str:
     normalized = str(value or "UNKNOWN").upper()
-
     if normalized == "HUMAN":
-        return "Human Writing Pattern"
-
+        return "Human"
     if normalized == "SUSPICIOUS":
-        return "Suspicious Writing Pattern"
-
+        return "Review Required"
     if normalized in {"SYNTHETIC", "AI-GENERATED", "AI"}:
-        return "Synthetic Writing Pattern"
-
+        return "High Risk"
     return "Unknown"
 
 
@@ -424,6 +420,7 @@ def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dic
         "classification": record["classification"],
         "classification_label": record["classification_label"],
         "confidence": record["confidence"],
+        "human_evidence_score": record["confidence"],
         "risk_level": record["risk_level"],
         "review_status": record["review_status"],
         "review_outcome": _review_outcome(record.get("review_status")),
@@ -1065,7 +1062,7 @@ def _build_certificate_pdf(record: Dict[str, Any], verify_url: str) -> bytes:
     card_gap = 10
     card_w = (content_width - card_gap * 3) / 4
     metric_values = [
-        ("Confidence", f"{record.get('confidence', 0)}%"),
+        ("Human Evidence Score", f"{record.get('confidence', 0)}%"),
         ("Words", str(record.get("word_count") or 0)),
         ("WPM", str(record.get("wpm") or 0)),
         ("Duration", _format_duration_pdf(record.get("duration_seconds"))),

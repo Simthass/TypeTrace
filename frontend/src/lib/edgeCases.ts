@@ -52,3 +52,12 @@ export function clampPercentage(value: number): number {
 export function getRoleDashboard(role?: string): string {
   return role === "TEACHER" ? "/teacher/dashboard" : "/dashboard";
 }
+
+export function classificationDisplayLabel(value?: string): string {
+  const normalized = String(value || "").toUpperCase();
+  if (normalized === "HUMAN") return "Human";
+  if (normalized === "SUSPICIOUS") return "Review Required";
+  if (["SYNTHETIC", "AI", "AI-GENERATED", "HIGH_RISK"].includes(normalized))
+    return "High Risk";
+  return normalized || "Unknown";
+}

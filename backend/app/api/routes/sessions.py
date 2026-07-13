@@ -57,6 +57,10 @@ class KeystrokeSessionAnalyzeRequest(BaseModel):
 
 class AnalysisResponse(BaseModel):
     classification: str
+    # NOTE: confidence_score is a single UNIFIED "Human Writing Evidence
+    # Score" (0-100). It always means "how human-like this session is,"
+    # regardless of classification -- it never flips meaning between
+    # HUMAN / SUSPICIOUS / SYNTHETIC. Do not reintroduce per-label scales.
     confidence_score: float
     kill_switch_triggered: bool
     kill_switch_reason: Optional[str]
@@ -168,9 +172,12 @@ def _apply_paste_dominant_override(
         }
     )
 
+    # confidence_score is the unified Human Writing Evidence Score, so a
+    # paste-dominant session should read as a very LOW human score, not an
+    # artificially high "confidence" value pointed at the SYNTHETIC label.
     return {
         "classification": "SYNTHETIC",
-        "confidence_score": max(confidence_score, 98.0),
+        "confidence_score": min(confidence_score, 2.0),
         "risk_score": max(risk_score, 92.0),
         "risk_level": "HIGH",
         "advanced_stats": advanced_stats,
@@ -250,9 +257,12 @@ def _normalize_risk_level(value: Any, risk_score: float) -> str:
     level = str(value or "").strip().upper()
     if level in {"LOW", "MEDIUM", "HIGH"}:
         return level
-    if risk_score >= 70:
+    # Aligned with the unified human_score thresholds in inference_engine.py
+    # (human_score >= 80 -> LOW risk (<=20), 50-79 -> MEDIUM risk (21-50),
+    # <50 -> HIGH risk (>50)). risk_score here is always 100 - human_score.
+    if risk_score >= 50:
         return "HIGH"
-    if risk_score >= 40:
+    if risk_score >= 20:
         return "MEDIUM"
     return "LOW"
 

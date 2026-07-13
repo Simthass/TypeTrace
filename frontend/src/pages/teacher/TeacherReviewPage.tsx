@@ -597,7 +597,7 @@ export default function TeacherReviewPage() {
     submission.classification_bucket === "HUMAN"
       ? "Human pattern"
       : submission.classification_bucket === "SUSPICIOUS"
-        ? "Needs review"
+        ? "Review Required"
         : submission.classification_bucket === "SYNTHETIC"
           ? "High risk"
           : "Unknown";
@@ -655,7 +655,7 @@ export default function TeacherReviewPage() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricTile
-          label="Confidence"
+          label="Human Evidence Score"
           value={`${confidence}%`}
           detail="Model confidence for this evidence record"
           icon="shield"

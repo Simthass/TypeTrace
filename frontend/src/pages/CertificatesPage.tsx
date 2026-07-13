@@ -49,7 +49,7 @@ const PAGE_SIZE = 16;
 const filters: Array<{ value: ClassificationFilter; label: string }> = [
   { value: "ALL", label: "All certificates" },
   { value: "HUMAN", label: "Human" },
-  { value: "SUSPICIOUS", label: "Needs review" },
+  { value: "SUSPICIOUS", label: "Review Required" },
   { value: "SYNTHETIC", label: "High risk" },
 ];
 
@@ -291,7 +291,7 @@ function statusStyle(value?: string) {
       background: colors.amberTint,
       color: brand.suspiciousText,
       borderColor: colors.amberTint,
-      label: normalized === "SUSPICIOUS" ? "Needs review" : normalized,
+      label: normalized === "SUSPICIOUS" ? "Review Required" : normalized,
     };
   }
 
@@ -895,7 +895,7 @@ export default function CertificatesPage() {
                       "Document",
                       "Course",
                       "Classification",
-                      "Confidence",
+                      "Human Evidence Score",
                       "Risk",
                       "Issued",
                       "Actions",

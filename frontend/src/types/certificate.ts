@@ -56,6 +56,7 @@ export interface PublicCertificateVerification {
   classification?: string;
   classification_label?: string;
   confidence?: number;
+  human_evidence_score?: number;
   risk_level?: string;
   review_status?: string;
   review_outcome?: string;
