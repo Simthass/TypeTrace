@@ -155,10 +155,6 @@ function isHighRisk(value?: string): boolean {
   );
 }
 
-function normalizePercent(value: number): number {
-  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
-}
-
 function safeNumber(value: number | string | null | undefined): number {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -207,7 +203,7 @@ function statusStyle(value?: string) {
       borderColor: brand.suspiciousAccent,
       label:
         normalized === "SUSPICIOUS"
-          ? "Review Required"
+          ? "Review"
           : normalized === "MEDIUM"
             ? "Medium"
             : "Pending",
@@ -411,7 +407,7 @@ export default function TeacherSubmissionsPage() {
     searchParams.get("course_id") || "ALL",
   );
   const [search, setSearch] = useState(searchParams.get("search") || "");
-  const [sortKey, setSortKey] = useState<SortKey>("newest");
+  const [sortKey, setSortKey] = useState<SortKey>("oldest");
   const [page, setPage] = useState(0);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -512,11 +508,16 @@ export default function TeacherSubmissionsPage() {
 
   const sortedSubmissions = useMemo(() => {
     const riskRank: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+    const isPending = (item: TeacherSubmission) =>
+      String(item.review_status || "PENDING").toUpperCase() === "PENDING";
     return [...submissions].sort((a, b) => {
-      if (sortKey === "oldest")
+      if (sortKey === "oldest") {
+        const pendingRank = Number(isPending(b)) - Number(isPending(a));
+        if (pendingRank !== 0) return pendingRank;
         return (
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         );
+      }
       if (sortKey === "risk")
         return (
           (riskRank[String(b.risk_level).toUpperCase()] || 0) -
@@ -606,7 +607,7 @@ export default function TeacherSubmissionsPage() {
     setReviewStatus("ALL");
     setRiskLevel("ALL");
     setSearch("");
-    setSortKey("newest");
+    setSortKey("oldest");
   };
 
   if (isLoading && submissions.length === 0) return <InlineLoader />;
@@ -800,8 +801,8 @@ export default function TeacherSubmissionsPage() {
             value={sortKey}
             onChange={(value) => setSortKey(value as SortKey)}
           >
+            <option value="oldest">Needs review first</option>
             <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
             <option value="risk">Highest risk</option>
             <option value="confidenceHigh">Confidence high</option>
             <option value="confidenceLow">Confidence low</option>
@@ -858,8 +859,8 @@ export default function TeacherSubmissionsPage() {
                 className="text-[11px]"
                 style={{ color: colors.text.secondary }}
               >
-                Every row is a course submission with classification, review
-                state, evidence metrics, and audit actions.
+                Pending submissions surface first. Open a row to review
+                evidence, replay, and certificate details.
               </p>
             </div>
             <span
@@ -878,9 +879,9 @@ export default function TeacherSubmissionsPage() {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <div className="min-w-[1180px]">
+                <div className="min-w-[1020px]">
                   <div
-                    className="grid grid-cols-[minmax(250px,1.25fr)_190px_130px_140px_170px_150px_210px] items-center gap-4 border-b px-4 py-2.5"
+                    className="grid grid-cols-[minmax(280px,1.4fr)_190px_170px_170px_140px] items-center gap-4 border-b px-4 py-2.5"
                     style={{
                       background: colors.surface[100],
                       borderColor: colors.surface[200],
@@ -890,10 +891,8 @@ export default function TeacherSubmissionsPage() {
                       "Submission",
                       "Student",
                       "Course",
-                      "Outcome",
-                      "Evidence",
-                      "Review",
-                      "Actions",
+                      "Status",
+                      "Action",
                     ].map((heading) => (
                       <div
                         key={heading}
@@ -906,12 +905,27 @@ export default function TeacherSubmissionsPage() {
                   </div>
 
                   {paginatedSubmissions.map((submission) => {
-                    const confidence = normalizePercent(submission.confidence);
+                    const reviewStatusValue = String(
+                      submission.review_status || "PENDING",
+                    ).toUpperCase();
+                    const isPendingRow = reviewStatusValue === "PENDING";
+                    const bucket = getBucket(submission);
+                    const riskColor = isHighRisk(submission.risk_level)
+                      ? colors.red
+                      : String(submission.risk_level || "").toUpperCase() ===
+                          "MEDIUM"
+                        ? colors.amber
+                        : colors.green;
                     return (
                       <div
                         key={submission.id}
-                        className="grid min-h-[76px] grid-cols-[minmax(250px,1.25fr)_190px_130px_140px_170px_150px_210px] items-center gap-4 border-b px-4 py-3 transition-colors hover:bg-surface-100"
-                        style={{ borderColor: colors.surface[200] }}
+                        className="grid min-h-[72px] grid-cols-[minmax(280px,1.4fr)_190px_170px_170px_140px] items-center gap-4 border-b py-3 pl-3 pr-4 transition-colors hover:bg-surface-100"
+                        style={{
+                          borderColor: colors.surface[200],
+                          borderLeft: `3px solid ${
+                            isPendingRow ? colors.amber : "transparent"
+                          }`,
+                        }}
                       >
                         <div className="min-w-0">
                           <p
@@ -961,70 +975,31 @@ export default function TeacherSubmissionsPage() {
                           </p>
                         </div>
 
-                        <div className="space-y-1.5">
-                          <StatusBadge value={getBucket(submission)} />
-                          <StatusBadge value={submission.risk_level || "LOW"} />
-                        </div>
-
-                        <div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span
-                              className="font-mono text-[12px] font-bold tabular-nums"
-                              style={{ color: colors.text.primary }}
-                            >
-                              {confidence}%
-                            </span>
-                            <span
-                              className="text-[11px] tabular-nums"
-                              style={{ color: colors.text.secondary }}
-                            >
-                              {Math.round(safeNumber(submission.wpm))} WPM
-                            </span>
-                          </div>
-                          <div
-                            className="mt-1.5 h-1.5 rounded-md"
-                            style={{ background: colors.surface[200] }}
+                        <div className="space-y-1">
+                          <StatusBadge value={reviewStatusValue} />
+                          <p
+                            className="flex items-center gap-1.5 text-[11px]"
+                            style={{ color: colors.text.secondary }}
                           >
-                            <div
-                              className="h-1.5 rounded-md"
-                              style={{
-                                background: colors.brand,
-                                width: `${confidence}%`,
-                              }}
+                            <span
+                              className="h-1.5 w-1.5 shrink-0 rounded-md"
+                              style={{ background: riskColor }}
                             />
-                          </div>
-                          <p
-                            className="mt-1 text-[10px]"
-                            style={{ color: colors.text.muted }}
-                          >
-                            {safeNumber(
-                              submission.total_keystrokes,
-                            ).toLocaleString()}{" "}
-                            keys · {submission.pauses || 0} pauses
+                            {bucket === "HUMAN"
+                              ? "Human"
+                              : bucket === "SYNTHETIC"
+                                ? "High risk"
+                                : "Review"}
                           </p>
                         </div>
 
-                        <div className="space-y-1.5">
-                          <StatusBadge
-                            value={submission.review_status || "PENDING"}
-                          />
-                          <p
-                            className="text-[10px]"
-                            style={{ color: colors.text.muted }}
-                          >
-                            {submission.certificate_id
-                              ? "Certificate ready"
-                              : "No certificate"}
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <Link
                             to={ROUTES.TEACHER_REVIEW.replace(
                               ":sessionId",
                               String(submission.id),
                             )}
-                            className="inline-flex h-7 items-center justify-center gap-1 rounded-md px-2.5 text-[11px] font-bold"
+                            className="inline-flex h-8 items-center justify-center gap-1 rounded-md px-3 text-[11px] font-bold"
                             style={{
                               background: colors.brand,
                               color: colors.text.light,
@@ -1032,34 +1007,22 @@ export default function TeacherSubmissionsPage() {
                           >
                             Review
                           </Link>
-                          <Link
-                            to={ROUTES.REPLAY.replace(
-                              ":sessionId",
-                              String(submission.id),
-                            )}
-                            className="inline-flex h-7 items-center justify-center gap-1 rounded-md border px-2.5 text-[11px] font-bold"
-                            style={{
-                              borderColor: colors.surface[200],
-                              color: colors.text.secondary,
-                              background: colors.surface[50],
-                            }}
-                          >
-                            Replay
-                          </Link>
                           {submission.certificate_id && (
                             <Link
                               to={ROUTES.VERIFY.replace(
                                 ":certId",
                                 submission.certificate_id,
                               )}
-                              className="inline-flex h-7 items-center justify-center gap-1 rounded-md border px-2.5 text-[11px] font-bold"
+                              aria-label="Verify certificate"
+                              title="Verify certificate"
+                              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border"
                               style={{
                                 borderColor: colors.surface[200],
                                 color: colors.text.secondary,
                                 background: colors.surface[50],
                               }}
                             >
-                              Verify
+                              <Icon type="certificate" size={13} />
                             </Link>
                           )}
                         </div>

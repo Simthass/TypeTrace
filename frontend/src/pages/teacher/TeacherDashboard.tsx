@@ -634,15 +634,6 @@ export default function TeacherDashboard() {
     [summary],
   );
 
-  const reviewPipeline = useMemo(
-    () => [
-      { label: "Pending", count: summary?.pending_reviews || 0 },
-      { label: "Approved", count: summary?.approved_reviews || 0 },
-      { label: "Flagged", count: summary?.flagged_reviews || 0 },
-    ],
-    [summary],
-  );
-
   const courseWorkload = useMemo(
     () =>
       topCourses(data?.courses || []).map((course) => ({
@@ -707,15 +698,6 @@ export default function TeacherDashboard() {
     summary.human_submissions +
     summary.suspicious_submissions +
     summary.synthetic_submissions;
-  const totalReviewDecisions =
-    summary.pending_reviews +
-    summary.approved_reviews +
-    summary.flagged_reviews;
-  const reviewCompletion = pct(
-    summary.approved_reviews + summary.flagged_reviews,
-    totalReviewDecisions,
-  );
-  const flaggedRate = pct(summary.flagged_reviews, totalReviewDecisions);
   const teacherName = user?.first_name || data.teacher?.first_name || "Teacher";
 
   return (
@@ -983,72 +965,7 @@ export default function TeacherDashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <Card className="p-5">
-          <div>
-            <h2
-              className="text-[14px] font-semibold"
-              style={{ color: colors.text.primary }}
-            >
-              Review decision pipeline
-            </h2>
-            <p
-              className="mt-1 text-[12px]"
-              style={{ color: colors.text.muted }}
-            >
-              Pending, approved, and flagged teacher decisions.
-            </p>
-          </div>
-
-          {totalReviewDecisions ? (
-            <div className="mt-4 h-[190px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={reviewPipeline}
-                  margin={{ top: 10, right: 8, bottom: 0, left: -20 }}
-                >
-                  <CartesianGrid
-                    vertical={false}
-                    strokeDasharray="0"
-                    stroke={colors.surface[200]}
-                  />
-                  <XAxis
-                    dataKey="label"
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: colors.text.muted, fontSize: 11 }}
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: colors.text.muted, fontSize: 11 }}
-                    width={28}
-                  />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Bar
-                    dataKey="count"
-                    name="Submissions"
-                    barSize={26}
-                    radius={[2, 2, 0, 0]}
-                    isAnimationActive
-                    animationDuration={600}
-                  >
-                    <Cell fill={colors.amber} />
-                    <Cell fill={colors.green} />
-                    <Cell fill={colors.red} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <EmptyCard
-              title="No review states"
-              subtitle="Review data appears when submissions enter your courses."
-            />
-          )}
-        </Card>
-
+      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.4fr]">
         <Card className="p-5">
           <div>
             <h2
@@ -1120,81 +1037,6 @@ export default function TeacherDashboard() {
           )}
         </Card>
 
-        <Card className="p-5">
-          <div>
-            <h2
-              className="text-[14px] font-semibold"
-              style={{ color: colors.text.primary }}
-            >
-              Review quality snapshot
-            </h2>
-            <p
-              className="mt-1 text-[12px]"
-              style={{ color: colors.text.muted }}
-            >
-              Decision completion, flagged rate, and average evidence
-              confidence.
-            </p>
-          </div>
-
-          <div className="mt-5 space-y-4">
-            {[
-              {
-                label: "Review completion",
-                value: reviewCompletion,
-                display: `${reviewCompletion}%`,
-                color: colors.green,
-              },
-              {
-                label: "Flagged review rate",
-                value: flaggedRate,
-                display: `${flaggedRate}%`,
-                color: colors.red,
-              },
-              {
-                label: "Average human evidence score",
-                value: normalizePercent(summary.avg_confidence),
-                display: `${normalizePercent(summary.avg_confidence)}%`,
-                color: colors.brand,
-              },
-              {
-                label: "Average WPM",
-                value: Math.min(100, Math.round((summary.avg_wpm / 120) * 100)),
-                display: `${Math.round(summary.avg_wpm)} WPM`,
-                color: colors.amber,
-              },
-            ].map((item) => (
-              <div key={item.label}>
-                <div className="flex items-center justify-between gap-3">
-                  <span
-                    className="text-[12px]"
-                    style={{ color: colors.text.muted }}
-                  >
-                    {item.label}
-                  </span>
-                  <span
-                    className="text-[13px] font-bold tabular-nums"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {item.display}
-                  </span>
-                </div>
-                <div
-                  className="mt-2 h-1.5 rounded-md"
-                  style={{ background: colors.surface[200] }}
-                >
-                  <div
-                    className="h-1.5 rounded-md"
-                    style={{ background: item.color, width: `${item.value}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.4fr]">
         <Card className="p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -1299,230 +1141,164 @@ export default function TeacherDashboard() {
             />
           )}
         </Card>
-
-        <Card className="overflow-hidden">
-          <div
-            className="flex items-start justify-between gap-3 border-b px-5 py-4"
-            style={{ borderColor: colors.surface[200] }}
-          >
-            <div>
-              <h2
-                className="text-[14px] font-semibold"
-                style={{ color: colors.text.primary }}
-              >
-                Recent evidence submissions
-              </h2>
-              <p
-                className="mt-1 text-[12px]"
-                style={{ color: colors.text.muted }}
-              >
-                Latest sessions waiting for review or already decided.
-              </p>
-            </div>
-            <Link
-              to={ROUTES.TEACHER_SUBMISSIONS}
-              className="text-[12px] font-semibold"
-              style={{ color: colors.brand }}
-            >
-              View all
-            </Link>
-          </div>
-
-          {data.recent_submissions.length ? (
-            <div className="overflow-x-auto">
-              <div className="min-w-[900px]">
-                <div
-                  className="grid grid-cols-[minmax(230px,1fr)_150px_120px_100px_110px_96px] items-center gap-4 border-b px-5 py-3"
-                  style={{
-                    background: colors.surface[100],
-                    borderColor: colors.surface[200],
-                  }}
-                >
-                  {[
-                    "Document",
-                    "Student",
-                    "Classification",
-                    "Human Evidence Score",
-                    "Review",
-                    "Action",
-                  ].map((heading) => (
-                    <div
-                      key={heading}
-                      className="text-[10px] font-bold uppercase tracking-[0.14em]"
-                      style={{ color: colors.text.muted }}
-                    >
-                      {heading}
-                    </div>
-                  ))}
-                </div>
-
-                {data.recent_submissions.map((submission) => {
-                  const confidence = normalizePercent(submission.confidence);
-                  return (
-                    <Link
-                      key={submission.id}
-                      to={ROUTES.TEACHER_REVIEW.replace(
-                        ":sessionId",
-                        String(submission.id),
-                      )}
-                      className="grid h-[64px] grid-cols-[minmax(230px,1fr)_150px_120px_100px_110px_96px] items-center gap-4 border-b px-5 transition-colors duration-100 hover:bg-surface-100"
-                      style={{ borderColor: colors.surface[200] }}
-                    >
-                      <div className="min-w-0">
-                        <p
-                          className="truncate text-[13px] font-semibold"
-                          style={{ color: colors.text.primary }}
-                        >
-                          {submission.title || "Untitled Document"}
-                        </p>
-                        <p
-                          className="mt-0.5 truncate text-[11px]"
-                          style={{ color: colors.text.muted }}
-                        >
-                          {submission.course_code || "Course"} ·{" "}
-                          {formatDate(submission.created_at)} ·{" "}
-                          {submission.word_count || 0} words
-                        </p>
-                      </div>
-
-                      <div className="min-w-0">
-                        <p
-                          className="truncate text-[12px] font-semibold"
-                          style={{ color: colors.text.primary }}
-                        >
-                          {submission.student_name || "Student"}
-                        </p>
-                        <p
-                          className="mt-0.5 truncate font-mono text-[10px]"
-                          style={{ color: colors.text.muted }}
-                        >
-                          {submission.student_id || "No ID"}
-                        </p>
-                      </div>
-
-                      <StatusBadge
-                        value={
-                          submission.classification_bucket ||
-                          submission.classification
-                        }
-                      />
-
-                      <div>
-                        <p
-                          className="font-mono text-[13px] font-bold tabular-nums"
-                          style={{ color: colors.text.primary }}
-                        >
-                          {confidence}%
-                        </p>
-                        <div
-                          className="mt-1 h-1 rounded-md"
-                          style={{ background: colors.surface[200] }}
-                        >
-                          <div
-                            className="h-1 rounded-md"
-                            style={{
-                              background: colors.brand,
-                              width: `${confidence}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <StatusBadge
-                        value={submission.review_status}
-                        mode="review"
-                      />
-
-                      <div className="flex items-center justify-end">
-                        <span
-                          className="inline-flex h-7 items-center justify-center rounded-md border px-2 text-[11px] font-semibold"
-                          style={{
-                            background: colors.surface[50],
-                            borderColor: colors.surface[200],
-                            color: colors.text.secondary,
-                          }}
-                        >
-                          Review
-                        </span>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <EmptyCard
-              title="No submissions yet"
-              subtitle="Student writing evidence appears here after they submit sessions to your courses."
-            />
-          )}
-        </Card>
       </div>
 
-      <Card className="p-5">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <Card className="overflow-hidden">
+        <div
+          className="flex items-start justify-between gap-3 border-b px-5 py-4"
+          style={{ borderColor: colors.surface[200] }}
+        >
           <div>
             <h2
               className="text-[14px] font-semibold"
               style={{ color: colors.text.primary }}
             >
-              Teacher workflow summary
+              Recent evidence submissions
             </h2>
             <p
               className="mt-1 text-[12px]"
               style={{ color: colors.text.muted }}
             >
-              Use this dashboard for operational triage. Use submission review
-              pages for full replay and evidence decisions.
+              Latest sessions waiting for review or already decided.
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3 md:min-w-[520px]">
-            {[
-              {
-                label: "Pending queue",
-                value: summary.pending_reviews,
-                icon: "clock",
-                color: summary.pending_reviews ? colors.amber : colors.green,
-              },
-              {
-                label: "High-risk decisions",
-                value: summary.flagged_reviews,
-                icon: "warning",
-                color: summary.flagged_reviews ? colors.red : colors.green,
-              },
-              {
-                label: "Avg human evidence score",
-                value: `${normalizePercent(summary.avg_confidence)}%`,
-                icon: "shield",
-                color: colors.brand,
-              },
-            ].map((item) => (
+          <Link
+            to={ROUTES.TEACHER_SUBMISSIONS}
+            className="text-[12px] font-semibold"
+            style={{ color: colors.brand }}
+          >
+            View all
+          </Link>
+        </div>
+
+        {data.recent_submissions.length ? (
+          <div className="overflow-x-auto">
+            <div className="min-w-[900px]">
               <div
-                key={item.label}
-                className="rounded-md border p-3"
-                style={{ borderColor: colors.surface[200] }}
+                className="grid grid-cols-[minmax(230px,1fr)_150px_120px_100px_110px_96px] items-center gap-4 border-b px-5 py-3"
+                style={{
+                  background: colors.surface[100],
+                  borderColor: colors.surface[200],
+                }}
               >
-                <div className="flex items-center gap-2">
-                  <span style={{ color: item.color }}>
-                    <Icon type={item.icon} size={14} />
-                  </span>
-                  <span
-                    className="text-[11px]"
+                {[
+                  "Document",
+                  "Student",
+                  "Classification",
+                  "Confidence",
+                  "Review",
+                  "Action",
+                ].map((heading) => (
+                  <div
+                    key={heading}
+                    className="text-[10px] font-bold uppercase tracking-[0.14em]"
                     style={{ color: colors.text.muted }}
                   >
-                    {item.label}
-                  </span>
-                </div>
-                <p
-                  className="mt-2 text-[20px] font-bold tabular-nums"
-                  style={{ color: colors.text.primary }}
-                >
-                  {item.value}
-                </p>
+                    {heading}
+                  </div>
+                ))}
               </div>
-            ))}
+
+              {data.recent_submissions.map((submission) => {
+                const confidence = normalizePercent(submission.confidence);
+                return (
+                  <Link
+                    key={submission.id}
+                    to={ROUTES.TEACHER_REVIEW.replace(
+                      ":sessionId",
+                      String(submission.id),
+                    )}
+                    className="grid h-[64px] grid-cols-[minmax(230px,1fr)_150px_120px_100px_110px_96px] items-center gap-4 border-b px-5 transition-colors duration-100 hover:bg-surface-100"
+                    style={{ borderColor: colors.surface[200] }}
+                  >
+                    <div className="min-w-0">
+                      <p
+                        className="truncate text-[13px] font-semibold"
+                        style={{ color: colors.text.primary }}
+                      >
+                        {submission.title || "Untitled Document"}
+                      </p>
+                      <p
+                        className="mt-0.5 truncate text-[11px]"
+                        style={{ color: colors.text.muted }}
+                      >
+                        {submission.course_code || "Course"} ·{" "}
+                        {formatDate(submission.created_at)} ·{" "}
+                        {submission.word_count || 0} words
+                      </p>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p
+                        className="truncate text-[12px] font-semibold"
+                        style={{ color: colors.text.primary }}
+                      >
+                        {submission.student_name || "Student"}
+                      </p>
+                      <p
+                        className="mt-0.5 truncate font-mono text-[10px]"
+                        style={{ color: colors.text.muted }}
+                      >
+                        {submission.student_id || "No ID"}
+                      </p>
+                    </div>
+
+                    <StatusBadge
+                      value={
+                        submission.classification_bucket ||
+                        submission.classification
+                      }
+                    />
+
+                    <div>
+                      <p
+                        className="font-mono text-[13px] font-bold tabular-nums"
+                        style={{ color: colors.text.primary }}
+                      >
+                        {confidence}%
+                      </p>
+                      <div
+                        className="mt-1 h-1 rounded-md"
+                        style={{ background: colors.surface[200] }}
+                      >
+                        <div
+                          className="h-1 rounded-md"
+                          style={{
+                            background: colors.brand,
+                            width: `${confidence}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <StatusBadge
+                      value={submission.review_status}
+                      mode="review"
+                    />
+
+                    <div className="flex items-center justify-end">
+                      <span
+                        className="inline-flex h-7 items-center justify-center rounded-md border px-2 text-[11px] font-semibold"
+                        style={{
+                          background: colors.surface[50],
+                          borderColor: colors.surface[200],
+                          color: colors.text.secondary,
+                        }}
+                      >
+                        Review
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        ) : (
+          <EmptyCard
+            title="No submissions yet"
+            subtitle="Student writing evidence appears here after they submit sessions to your courses."
+          />
+        )}
       </Card>
     </div>
   );

@@ -26,8 +26,7 @@ type SortKey =
   | "submissions"
   | "pending"
   | "flagged"
-  | "recent"
-  | "confidence";
+  | "recent";
 
 function Icon({ type, size = 16 }: { type: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
@@ -152,10 +151,6 @@ function cardShadow() {
 function safeNumber(value: unknown): number {
   const numberValue = Number(value || 0);
   return Number.isFinite(numberValue) ? numberValue : 0;
-}
-
-function normalizePercent(value: unknown): number {
-  return Math.max(0, Math.min(100, Math.round(safeNumber(value))));
 }
 
 function formatShortDate(value?: string | null): string {
@@ -497,8 +492,6 @@ export default function TeacherStudentsPage() {
           return safeNumber(b.pending_count) - safeNumber(a.pending_count);
         if (sortKey === "flagged")
           return safeNumber(b.flagged_count) - safeNumber(a.flagged_count);
-        if (sortKey === "confidence")
-          return safeNumber(b.avg_confidence) - safeNumber(a.avg_confidence);
         if (sortKey === "recent")
           return (
             new Date(b.last_submission_at || 0).getTime() -
@@ -731,7 +724,6 @@ export default function TeacherStudentsPage() {
               <option value="pending">Most pending</option>
               <option value="flagged">Most flagged</option>
               <option value="recent">Recent activity</option>
-              <option value="confidence">Confidence high</option>
             </select>
 
             <button
@@ -772,8 +764,8 @@ export default function TeacherStudentsPage() {
               Student roster
             </h2>
             <p className="text-[11px]" style={{ color: colors.text.secondary }}>
-              LMS-style roster view with enrollment context, evidence history,
-              performance signals, and review workload.
+              Class roster with enrollment, submission activity, and review
+              status for each student.
             </p>
           </div>
           <span
@@ -797,9 +789,9 @@ export default function TeacherStudentsPage() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <div className="min-w-[1180px]">
+              <div className="min-w-[1050px]">
                 <div
-                  className="grid grid-cols-[minmax(250px,1.25fr)_180px_170px_170px_160px_150px_140px_160px] items-center gap-4 border-b px-4 py-2.5"
+                  className="grid grid-cols-[minmax(260px,1.3fr)_190px_140px_200px_220px] items-center gap-4 border-b px-4 py-2.5"
                   style={{
                     background: colors.surface[100],
                     borderColor: colors.surface[200],
@@ -808,12 +800,9 @@ export default function TeacherStudentsPage() {
                   {[
                     "Student",
                     "Course",
-                    "Enrollment",
-                    "Evidence",
-                    "Review workload",
-                    "Performance",
+                    "Submissions",
+                    "Status",
                     "Last activity",
-                    "Actions",
                   ].map((heading) => (
                     <div
                       key={heading}
@@ -826,12 +815,11 @@ export default function TeacherStudentsPage() {
                 </div>
 
                 {paginatedStudents.map((student) => {
-                  const confidence = normalizePercent(student.avg_confidence);
                   const status = studentStatus(student);
                   return (
                     <div
                       key={`${student.id}-${student.course_id}`}
-                      className="grid min-h-[78px] grid-cols-[minmax(250px,1.25fr)_180px_170px_170px_160px_150px_140px_160px] items-center gap-4 border-b px-4 py-3 transition-colors hover:bg-surface-100"
+                      className="grid min-h-[74px] grid-cols-[minmax(260px,1.3fr)_190px_140px_200px_220px] items-center gap-4 border-b px-4 py-3 transition-colors hover:bg-surface-100"
                       style={{ borderColor: colors.surface[200] }}
                     >
                       <div className="min-w-0">
@@ -879,74 +867,38 @@ export default function TeacherStudentsPage() {
                         </p>
                       </div>
 
-                      <div className="min-w-0">
-                        <p
-                          className="font-mono text-[11px] font-bold"
-                          style={{ color: colors.text.primary }}
-                        >
-                          {student.student_id || "No ID"}
-                        </p>
-                        <p
-                          className="mt-0.5 text-[11px]"
-                          style={{ color: colors.text.secondary }}
-                        >
-                          Joined {formatShortDate(student.joined_at)}
-                        </p>
-                      </div>
-
                       <div>
                         <p
                           className="font-mono text-[13px] font-bold tabular-nums"
                           style={{ color: colors.text.primary }}
                         >
-                          {safeNumber(student.submission_count)} submissions
+                          {safeNumber(student.submission_count)}
                         </p>
                         <p
                           className="mt-0.5 text-[11px]"
                           style={{ color: colors.text.secondary }}
                         >
-                          {Math.round(safeNumber(student.avg_wpm))} WPM average
+                          submissions
                         </p>
                       </div>
 
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         <StatusBadge value={status} />
-                        <p
-                          className="text-[10px]"
-                          style={{ color: colors.text.muted }}
-                        >
-                          {safeNumber(student.pending_count)} pending ·{" "}
-                          {safeNumber(student.flagged_count)} flagged
-                        </p>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span
-                            className="font-mono text-[12px] font-bold tabular-nums"
-                            style={{ color: colors.text.primary }}
-                          >
-                            {confidence}%
-                          </span>
-                          <span
+                        {(safeNumber(student.pending_count) > 0 ||
+                          safeNumber(student.flagged_count) > 0) && (
+                          <p
                             className="text-[10px]"
-                            style={{ color: colors.text.secondary }}
+                            style={{ color: colors.text.muted }}
                           >
-                            confidence
-                          </span>
-                        </div>
-                        <div
-                          className="mt-1.5 h-1.5 rounded-md"
-                          style={{ background: colors.surface[200] }}
-                        >
-                          <div
-                            className="h-1.5 rounded-md"
-                            style={{
-                              background: colors.brand,
-                              width: `${confidence}%`,
-                            }}
-                          />
-                        </div>
+                            {safeNumber(student.pending_count) > 0 &&
+                              `${safeNumber(student.pending_count)} pending`}
+                            {safeNumber(student.pending_count) > 0 &&
+                              safeNumber(student.flagged_count) > 0 &&
+                              " · "}
+                            {safeNumber(student.flagged_count) > 0 &&
+                              `${safeNumber(student.flagged_count)} flagged`}
+                          </p>
+                        )}
                       </div>
 
                       <div>
@@ -956,39 +908,32 @@ export default function TeacherStudentsPage() {
                         >
                           {formatShortDate(student.last_submission_at)}
                         </p>
-                        <p
-                          className="mt-0.5 text-[11px]"
-                          style={{ color: colors.text.secondary }}
-                        >
-                          Last submission
-                        </p>
-                      </div>
-
-                      <div className="flex flex-wrap gap-1.5">
-                        <Link
-                          to={ROUTES.TEACHER_COURSE_DETAIL.replace(
-                            ":courseId",
-                            String(student.course_id),
-                          )}
-                          className="inline-flex h-7 items-center justify-center gap-1 rounded-md border px-2.5 text-[11px] font-bold"
-                          style={{
-                            borderColor: colors.surface[200],
-                            color: colors.text.secondary,
-                            background: colors.surface[50],
-                          }}
-                        >
-                          Course
-                        </Link>
-                        <Link
-                          to={ROUTES.TEACHER_SUBMISSIONS}
-                          className="inline-flex h-7 items-center justify-center gap-1 rounded-md px-2.5 text-[11px] font-bold"
-                          style={{
-                            background: colors.brand,
-                            color: colors.text.light,
-                          }}
-                        >
-                          Queue
-                        </Link>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          <Link
+                            to={ROUTES.TEACHER_COURSE_DETAIL.replace(
+                              ":courseId",
+                              String(student.course_id),
+                            )}
+                            className="inline-flex h-7 items-center justify-center gap-1 rounded-md border px-2.5 text-[11px] font-bold"
+                            style={{
+                              borderColor: colors.surface[200],
+                              color: colors.text.secondary,
+                              background: colors.surface[50],
+                            }}
+                          >
+                            Course
+                          </Link>
+                          <Link
+                            to={ROUTES.TEACHER_SUBMISSIONS}
+                            className="inline-flex h-7 items-center justify-center gap-1 rounded-md px-2.5 text-[11px] font-bold"
+                            style={{
+                              background: colors.brand,
+                              color: colors.text.light,
+                            }}
+                          >
+                            Queue
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   );
