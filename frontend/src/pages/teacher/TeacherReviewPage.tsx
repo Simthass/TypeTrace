@@ -50,18 +50,18 @@ const reviewOptions: ReviewOption[] = [
   },
 ];
 
+const reviewTips = [
+  "Check the replay timeline for typing continuity.",
+  "Compare confidence with WPM, pauses, and revision volume.",
+  "Use certificate and hash fields only as integrity evidence.",
+];
+
 function Icon({ type, size = 16 }: { type: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
     arrowLeft: (
       <>
         <path d="M19 12H5" />
         <path d="m12 19-7-7 7-7" />
-      </>
-    ),
-    arrowRight: (
-      <>
-        <path d="M5 12h14" />
-        <path d="m13 6 6 6-6 6" />
       </>
     ),
     document: (
@@ -98,7 +98,6 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
         <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h12" />
       </>
     ),
-    activity: <path d="M3 12h4l2-7 4 14 2-7h6" />,
     hash: (
       <>
         <path d="M4 9h16" />
@@ -140,6 +139,8 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
         <path d="M7 3v5h8" />
       </>
     ),
+    chevronDown: <path d="m6 9 6 6 6-6" />,
+    chevronUp: <path d="m18 15-6-6-6 6" />,
   };
 
   return (
@@ -247,6 +248,29 @@ function reviewTone(status: string | undefined): BadgeTone {
   return "review";
 }
 
+// Maps a classification tone to the actual accent color used for the
+// confidence bar / score, so High risk = red, Review Required = amber,
+// Human = green, instead of a single static brand-blue fill.
+function confidenceColor(tone: BadgeTone): string {
+  if (tone === "human") return colors.green;
+  if (tone === "review") return colors.amber;
+  if (tone === "risk") return colors.red;
+  return colors.steel;
+}
+
+function confidenceHint(tone: BadgeTone): string {
+  if (tone === "human") {
+    return "Behavioral signals are consistent with an authentic human writing process.";
+  }
+  if (tone === "review") {
+    return "Some behavioral signals are inconclusive and warrant a closer look.";
+  }
+  if (tone === "risk") {
+    return "Behavioral signals suggest a high risk of non-human or assisted generation.";
+  }
+  return "Not enough signal yet to classify this submission's writing process.";
+}
+
 function Badge({
   children,
   tone = "neutral",
@@ -285,48 +309,37 @@ function Card({
   );
 }
 
-function MetricTile({
-  label,
-  value,
-  detail,
-  icon,
+function SectionHeading({
+  title,
+  description,
+  action,
 }: {
-  label: string;
-  value: string | number;
-  detail: string;
-  icon: string;
+  title: string;
+  description?: string;
+  action?: ReactNode;
 }) {
   return (
-    <Card className="p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p
-            className="text-[10px] font-bold uppercase tracking-[0.14em]"
-            style={{ color: colors.text.muted }}
-          >
-            {label}
-          </p>
-          <p
-            className="mt-2 truncate text-[23px] font-bold tracking-[-0.04em] tabular-nums"
-            style={{ color: colors.text.primary }}
-          >
-            {value || "-"}
-          </p>
-        </div>
-        <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
-          style={{ background: colors.brandSoft, color: colors.brand }}
+    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div>
+        <h2
+          className="text-[15px] font-bold tracking-[-0.03em]"
+          style={{ color: colors.text.primary }}
         >
-          <Icon type={icon} size={16} />
-        </div>
+          {title}
+        </h2>
+        {description ? (
+          <p
+            className="mt-1 text-[12px] leading-5"
+            style={{ color: colors.text.secondary }}
+          >
+            {description}
+          </p>
+        ) : null}
       </div>
-      <p
-        className="mt-1 text-[11px] leading-5"
-        style={{ color: colors.text.secondary }}
-      >
-        {detail}
-      </p>
-    </Card>
+      {action ? (
+        <div className="flex shrink-0 items-center gap-2">{action}</div>
+      ) : null}
+    </div>
   );
 }
 
@@ -348,6 +361,31 @@ function DataRow({ label, value }: { label: string; value: ReactNode }) {
       >
         {value || "-"}
       </span>
+    </div>
+  );
+}
+
+function StatTile({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div
+      className="rounded-md border p-3"
+      style={{
+        borderColor: colors.surface[200],
+        background: colors.surface[100],
+      }}
+    >
+      <p
+        className="text-[10px] font-bold uppercase tracking-[0.12em]"
+        style={{ color: colors.text.muted }}
+      >
+        {label}
+      </p>
+      <p
+        className="mt-2 text-[16px] font-bold tabular-nums"
+        style={{ color: colors.text.primary }}
+      >
+        {value || "-"}
+      </p>
     </div>
   );
 }
@@ -417,6 +455,7 @@ export default function TeacherReviewPage() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDocumentExpanded, setIsDocumentExpanded] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -606,12 +645,14 @@ export default function TeacherReviewPage() {
     0,
     Math.min(100, Math.round(safeNumber(submission.confidence))),
   );
+  const tone = classificationTone(submission);
+  const accentColor = confidenceColor(tone);
   const selectedReviewOption =
     reviewOptions.find((option) => option.status === reviewStatus) ||
     reviewOptions[0];
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-5">
+    <div className="mx-auto max-w-[1320px] space-y-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <Link
@@ -623,99 +664,175 @@ export default function TeacherReviewPage() {
             Back to submission queue
           </Link>
           <p
-            className="mt-5 text-[11px] font-bold uppercase tracking-[0.16em]"
+            className="mt-4 text-[11px] font-bold uppercase tracking-[0.16em]"
             style={{ color: colors.text.muted }}
           >
             Teacher review dossier
           </p>
           <h1
-            className="mt-1 max-w-4xl text-[26px] font-bold tracking-[-0.04em]"
+            className="mt-1 max-w-4xl text-[24px] font-bold tracking-[-0.04em]"
             style={{ color: colors.text.primary }}
           >
             {submission.title || "Untitled submission"}
           </h1>
-          <p
-            className="mt-1 max-w-3xl text-[13px] leading-6"
-            style={{ color: colors.text.secondary }}
-          >
-            Review the student, course, captured behavior, certificate state,
-            and document content before recording a decision.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone={classificationTone(submission)}>
-            {classificationLabel}
-          </Badge>
           <Badge tone={reviewTone(reviewStatus)}>
             {String(reviewStatus).replace("_", " ")}
           </Badge>
+          <span
+            className="rounded-md border px-2.5 py-1 font-mono text-[11px] font-bold"
+            style={{
+              background: colors.surface[100],
+              borderColor: colors.surface[200],
+              color: colors.text.secondary,
+            }}
+          >
+            Session #{submission.id}
+          </span>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricTile
-          label="Human Evidence Score"
-          value={`${confidence}%`}
-          detail="Model confidence for this evidence record"
-          icon="shield"
-        />
-        <MetricTile
-          label="Risk level"
-          value={submission.risk_level || "Unknown"}
-          detail="Risk category saved with the submission"
-          icon="alert"
-        />
-        <MetricTile
-          label="Writing speed"
-          value={`${Math.round(safeNumber(submission.wpm))} WPM`}
-          detail="Average writing speed during capture"
-          icon="keyboard"
-        />
-        <MetricTile
-          label="Submitted"
-          value={formatDate(submission.created_at)}
-          detail="Time the writing session entered review"
-          icon="clock"
-        />
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_410px]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-5">
+          {/* Evidence overview: the single anchor visual for this page.
+              Confidence is color-coded to the classification, replacing
+              the previous always-blue progress bar. */}
           <Card className="overflow-hidden">
             <div
               className="border-b p-5"
               style={{ borderColor: colors.surface[200] }}
             >
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <h2
-                    className="text-[16px] font-bold tracking-[-0.03em]"
-                    style={{ color: colors.text.primary }}
-                  >
-                    Submission record
-                  </h2>
-                  <p
-                    className="mt-1 text-[12px] leading-5"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    Core LMS metadata for the learner, module, and review state.
-                  </p>
-                </div>
-                <span
-                  className="rounded-md border px-2.5 py-1 font-mono text-[11px] font-bold"
-                  style={{
-                    background: colors.surface[100],
-                    borderColor: colors.surface[200],
-                    color: colors.text.primary,
-                  }}
-                >
-                  Session #{submission.id}
-                </span>
-              </div>
+              <SectionHeading
+                title="Evidence overview"
+                description="Model confidence and capture behavior for this submission."
+                action={<Badge tone={tone}>{classificationLabel}</Badge>}
+              />
             </div>
 
-            <div className="grid gap-0 lg:grid-cols-3">
+            <div className="grid gap-0 lg:grid-cols-[260px_minmax(0,1fr)]">
+              <div
+                className="border-b p-5 lg:border-b-0 lg:border-r"
+                style={{ borderColor: colors.surface[200] }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-[0.14em]"
+                    style={{ color: colors.text.muted }}
+                  >
+                    Human evidence score
+                  </p>
+                  <span style={{ color: accentColor }}>
+                    <Icon type="shield" size={16} />
+                  </span>
+                </div>
+                <p
+                  className="mt-2 text-[34px] font-bold leading-none tracking-[-0.04em] tabular-nums"
+                  style={{ color: accentColor }}
+                >
+                  {confidence}%
+                </p>
+                <div
+                  className="mt-3 h-2.5 overflow-hidden rounded-md"
+                  style={{ background: colors.surface[200] }}
+                >
+                  <div
+                    className="h-full rounded-md transition-all"
+                    style={{ width: `${confidence}%`, background: accentColor }}
+                  />
+                </div>
+                <p
+                  className="mt-3 text-[11px] leading-5"
+                  style={{ color: colors.text.secondary }}
+                >
+                  {confidenceHint(tone)}
+                </p>
+
+                <div
+                  className="mt-4 grid grid-cols-2 gap-3 border-t pt-4"
+                  style={{ borderColor: colors.surface[200] }}
+                >
+                  <div>
+                    <p
+                      className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em]"
+                      style={{ color: colors.text.muted }}
+                    >
+                      <Icon type="alert" size={11} />
+                      Risk level
+                    </p>
+                    <p
+                      className="mt-1 text-[13px] font-bold"
+                      style={{ color: colors.text.primary }}
+                    >
+                      {submission.risk_level || "Unknown"}
+                    </p>
+                  </div>
+                  <div>
+                    <p
+                      className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em]"
+                      style={{ color: colors.text.muted }}
+                    >
+                      <Icon type="keyboard" size={11} />
+                      Writing speed
+                    </p>
+                    <p
+                      className="mt-1 text-[13px] font-bold tabular-nums"
+                      style={{ color: colors.text.primary }}
+                    >
+                      {Math.round(safeNumber(submission.wpm))} WPM
+                    </p>
+                  </div>
+                  <div className="col-span-2">
+                    <p
+                      className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em]"
+                      style={{ color: colors.text.muted }}
+                    >
+                      <Icon type="clock" size={11} />
+                      Submitted
+                    </p>
+                    <p
+                      className="mt-1 text-[13px] font-bold"
+                      style={{ color: colors.text.primary }}
+                    >
+                      {formatDate(submission.created_at)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5">
+                <p
+                  className="text-[10px] font-bold uppercase tracking-[0.14em]"
+                  style={{ color: colors.text.muted }}
+                >
+                  Behavioral capture metrics
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {evidenceSummary.map(([label, value]) => (
+                    <StatTile
+                      key={String(label)}
+                      label={String(label)}
+                      value={value}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <div
+              className="border-b p-5"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <SectionHeading
+                title="Student & course"
+                description="Core LMS metadata for the learner and module."
+              />
+            </div>
+
+            <div className="grid gap-0 lg:grid-cols-2">
               <div
                 className="border-b p-5 lg:border-b-0 lg:border-r"
                 style={{ borderColor: colors.surface[200] }}
@@ -744,10 +861,7 @@ export default function TeacherReviewPage() {
                 </div>
               </div>
 
-              <div
-                className="border-b p-5 lg:border-b-0 lg:border-r"
-                style={{ borderColor: colors.surface[200] }}
-              >
+              <div className="p-5">
                 <div className="flex items-center gap-2">
                   <div
                     className="flex h-8 w-8 items-center justify-center rounded-md"
@@ -772,133 +886,11 @@ export default function TeacherReviewPage() {
                   />
                   <DataRow label="Code" value={submission.course_code || "-"} />
                   <DataRow
-                    label="Course ID"
-                    value={submission.course_id || "-"}
-                  />
-                </div>
-              </div>
-
-              <div className="p-5">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="flex h-8 w-8 items-center justify-center rounded-md"
-                    style={{
-                      background: colors.brandSoft,
-                      color: colors.brand,
-                    }}
-                  >
-                    <Icon type="document" size={15} />
-                  </div>
-                  <h3
-                    className="text-[13px] font-bold"
-                    style={{ color: colors.text.primary }}
-                  >
-                    Evidence state
-                  </h3>
-                </div>
-                <div className="mt-3">
-                  <DataRow
-                    label="Classification"
-                    value={
-                      <Badge tone={classificationTone(submission)}>
-                        {classificationLabel}
-                      </Badge>
-                    }
-                  />
-                  <DataRow
-                    label="Review"
-                    value={
-                      <Badge tone={reviewTone(reviewStatus)}>
-                        {reviewStatus}
-                      </Badge>
-                    }
-                  />
-                  <DataRow
                     label="Certificate"
                     value={submission.certificate_id ? "Issued" : "Not issued"}
                   />
                 </div>
               </div>
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <h2
-                  className="text-[16px] font-bold tracking-[-0.03em]"
-                  style={{ color: colors.text.primary }}
-                >
-                  Behavioral evidence summary
-                </h2>
-                <p
-                  className="mt-1 text-[12px] leading-5"
-                  style={{ color: colors.text.secondary }}
-                >
-                  Capture metrics recorded while the student wrote. These
-                  support review; they do not replace academic judgement.
-                </p>
-              </div>
-              <div
-                className="min-w-[220px] rounded-md border p-3"
-                style={{
-                  borderColor: colors.surface[200],
-                  background: colors.surface[100],
-                }}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span
-                    className="text-[11px] font-bold uppercase tracking-[0.12em]"
-                    style={{ color: colors.text.muted }}
-                  >
-                    Confidence
-                  </span>
-                  <span
-                    className="font-mono text-[13px] font-bold"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {confidence}%
-                  </span>
-                </div>
-                <div
-                  className="mt-2 h-2 overflow-hidden rounded-md"
-                  style={{ background: colors.surface[200] }}
-                >
-                  <div
-                    className="h-full rounded-md"
-                    style={{
-                      width: `${confidence}%`,
-                      background: colors.brand,
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {evidenceSummary.map(([label, value]) => (
-                <div
-                  key={String(label)}
-                  className="rounded-md border p-3"
-                  style={{
-                    borderColor: colors.surface[200],
-                    background: colors.surface[100],
-                  }}
-                >
-                  <p
-                    className="text-[10px] font-bold uppercase tracking-[0.12em]"
-                    style={{ color: colors.text.muted }}
-                  >
-                    {label}
-                  </p>
-                  <p
-                    className="mt-2 text-[16px] font-bold tabular-nums"
-                    style={{ color: colors.text.primary }}
-                  >
-                    {value || "-"}
-                  </p>
-                </div>
-              ))}
             </div>
           </Card>
 
@@ -909,7 +901,7 @@ export default function TeacherReviewPage() {
             >
               <div>
                 <h2
-                  className="text-[16px] font-bold tracking-[-0.03em]"
+                  className="text-[15px] font-bold tracking-[-0.03em]"
                   style={{ color: colors.text.primary }}
                 >
                   Submitted document
@@ -931,89 +923,106 @@ export default function TeacherReviewPage() {
                 {safeNumber(submission.word_count)} words
               </span>
             </div>
-            <div
-              className="max-h-[560px] overflow-auto p-5"
-              style={{ background: colors.surface[100] }}
-            >
-              <pre
-                className="whitespace-pre-wrap rounded-md border p-5 text-[13px] leading-7"
-                style={{
-                  background: colors.surface[50],
-                  borderColor: colors.surface[200],
-                  color: colors.text.primary,
-                  fontFamily: "inherit",
-                }}
-              >
-                {submission.text_content ||
-                  "No text content is available for this submission."}
-              </pre>
-            </div>
-          </Card>
 
-          <Card className="p-5">
-            <div className="flex items-center gap-2">
+            <div className="relative">
               <div
-                className="flex h-8 w-8 items-center justify-center rounded-md"
-                style={{ background: colors.brandSoft, color: colors.brand }}
+                className="overflow-auto p-5"
+                style={{
+                  background: colors.surface[100],
+                  maxHeight: isDocumentExpanded ? "1200px" : "220px",
+                }}
               >
-                <Icon type="hash" size={15} />
-              </div>
-              <div>
-                <h2
-                  className="text-[16px] font-bold tracking-[-0.03em]"
-                  style={{ color: colors.text.primary }}
+                <pre
+                  className="whitespace-pre-wrap rounded-md border p-5 text-[13px] leading-7"
+                  style={{
+                    background: colors.surface[50],
+                    borderColor: colors.surface[200],
+                    color: colors.text.primary,
+                    fontFamily: "inherit",
+                  }}
                 >
-                  Integrity record
-                </h2>
-                <p
-                  className="mt-1 text-[12px] leading-5"
-                  style={{ color: colors.text.secondary }}
-                >
-                  Hash and certificate fields used to verify the submitted
-                  evidence record.
-                </p>
+                  {submission.text_content ||
+                    "No text content is available for this submission."}
+                </pre>
               </div>
+              {!isDocumentExpanded && submission.text_content ? (
+                <div
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-16"
+                  style={{
+                    background: `linear-gradient(to bottom, transparent, ${colors.surface[100]})`,
+                  }}
+                />
+              ) : null}
             </div>
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              <div
-                className="rounded-md border p-3"
+
+            {submission.text_content ? (
+              <button
+                type="button"
+                onClick={() => setIsDocumentExpanded((value) => !value)}
+                className="flex w-full items-center justify-center gap-1.5 border-t py-2.5 text-[12px] font-bold"
                 style={{
                   borderColor: colors.surface[200],
-                  background: colors.surface[100],
+                  color: colors.brand,
+                  background: colors.surface[50],
                 }}
               >
-                <p
-                  className="text-[10px] font-bold uppercase tracking-[0.12em]"
-                  style={{ color: colors.text.muted }}
+                <Icon
+                  type={isDocumentExpanded ? "chevronUp" : "chevronDown"}
+                  size={13}
+                />
+                {isDocumentExpanded
+                  ? "Collapse document"
+                  : "Show full document"}
+              </button>
+            ) : null}
+
+            <div
+              className="grid gap-3 border-t p-5 sm:grid-cols-2"
+              style={{ borderColor: colors.surface[200] }}
+            >
+              <div className="flex items-start gap-2">
+                <span
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
+                  style={{ background: colors.brandSoft, color: colors.brand }}
                 >
-                  Certificate ID
-                </p>
-                <p
-                  className="mt-2 break-all font-mono text-[12px] font-bold"
-                  style={{ color: colors.text.primary }}
-                >
-                  {submission.certificate_id || "Not issued"}
-                </p>
+                  <Icon type="hash" size={12} />
+                </span>
+                <div className="min-w-0">
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-[0.12em]"
+                    style={{ color: colors.text.muted }}
+                  >
+                    Certificate ID
+                  </p>
+                  <p
+                    className="mt-1 break-all font-mono text-[12px] font-bold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {submission.certificate_id || "Not issued"}
+                  </p>
+                </div>
               </div>
-              <div
-                className="rounded-md border p-3"
-                style={{
-                  borderColor: colors.surface[200],
-                  background: colors.surface[100],
-                }}
-              >
-                <p
-                  className="text-[10px] font-bold uppercase tracking-[0.12em]"
-                  style={{ color: colors.text.muted }}
+              <div className="flex items-start gap-2">
+                <span
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
+                  style={{ background: colors.brandSoft, color: colors.brand }}
                 >
-                  SHA-256 document hash
-                </p>
-                <p
-                  className="mt-2 break-all font-mono text-[12px] font-bold"
-                  style={{ color: colors.text.primary }}
-                >
-                  {submission.document_hash || "Not available"}
-                </p>
+                  <Icon type="hash" size={12} />
+                </span>
+                <div className="min-w-0">
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-[0.12em]"
+                    style={{ color: colors.text.muted }}
+                  >
+                    SHA-256 document hash
+                  </p>
+                  <p
+                    className="mt-1 break-all font-mono text-[12px] font-bold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {submission.document_hash || "Not available"}
+                  </p>
+                </div>
               </div>
             </div>
           </Card>
@@ -1028,7 +1037,7 @@ export default function TeacherReviewPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2
-                    className="text-[16px] font-bold tracking-[-0.03em]"
+                    className="text-[15px] font-bold tracking-[-0.03em]"
                     style={{ color: colors.text.primary }}
                   >
                     Teacher decision
@@ -1037,8 +1046,7 @@ export default function TeacherReviewPage() {
                     className="mt-1 text-[12px] leading-5"
                     style={{ color: colors.text.secondary }}
                   >
-                    Choose the current academic review outcome and save notes
-                    for the record.
+                    Choose the review outcome and save notes for the record.
                   </p>
                 </div>
                 <Badge tone={selectedReviewOption.tone}>{reviewStatus}</Badge>
@@ -1084,7 +1092,7 @@ export default function TeacherReviewPage() {
                   value={reviewNotes}
                   onChange={(event) => setReviewNotes(event.target.value)}
                   placeholder="Record what you reviewed, why you chose this decision, and any next action for the student."
-                  rows={8}
+                  rows={6}
                   className="mt-1.5 w-full resize-none rounded-md border px-3 py-2 text-[13px] leading-6 outline-none"
                   style={{
                     background: colors.surface[50],
@@ -1108,53 +1116,50 @@ export default function TeacherReviewPage() {
                     ? "Save teacher decision"
                     : "Decision saved"}
               </button>
-            </div>
-          </Card>
 
-          <Card className="p-5">
-            <h2
-              className="text-[15px] font-bold tracking-[-0.03em]"
-              style={{ color: colors.text.primary }}
-            >
-              Review checklist
-            </h2>
-            <p
-              className="mt-1 text-[12px] leading-5"
-              style={{ color: colors.text.secondary }}
-            >
-              Keep the decision grounded in evidence, not a single score.
-            </p>
-            <div className="mt-4 space-y-2">
-              {[
-                "Check the replay timeline for typing continuity.",
-                "Compare confidence with WPM, pauses, and revision volume.",
-                "Use certificate and hash fields only as integrity evidence.",
-              ].map((item) => (
-                <div
-                  key={item}
-                  className="flex items-start gap-2 rounded-md border p-3"
+              <details className="mt-4 group">
+                <summary
+                  className="flex cursor-pointer list-none items-center justify-between rounded-md border px-3 py-2 text-[11px] font-bold uppercase tracking-[0.1em]"
                   style={{
                     borderColor: colors.surface[200],
+                    color: colors.text.muted,
                     background: colors.surface[100],
                   }}
                 >
-                  <span
-                    className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-md"
-                    style={{
-                      background: colors.brandSoft,
-                      color: colors.brand,
-                    }}
-                  >
-                    <Icon type="check" size={10} />
+                  Review tips
+                  <span className="transition-transform group-open:rotate-180">
+                    <Icon type="chevronDown" size={12} />
                   </span>
-                  <span
-                    className="text-[12px] leading-5"
-                    style={{ color: colors.text.secondary }}
-                  >
-                    {item}
-                  </span>
+                </summary>
+                <div className="mt-2 space-y-2">
+                  {reviewTips.map((item) => (
+                    <div
+                      key={item}
+                      className="flex items-start gap-2 rounded-md border p-2.5"
+                      style={{
+                        borderColor: colors.surface[200],
+                        background: colors.surface[100],
+                      }}
+                    >
+                      <span
+                        className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-md"
+                        style={{
+                          background: colors.brandSoft,
+                          color: colors.brand,
+                        }}
+                      >
+                        <Icon type="check" size={10} />
+                      </span>
+                      <span
+                        className="text-[11px] leading-5"
+                        style={{ color: colors.text.secondary }}
+                      >
+                        {item}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </details>
             </div>
           </Card>
 
