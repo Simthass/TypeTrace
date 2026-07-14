@@ -1,5 +1,3 @@
-// frontend/src/components/internal/InternalShell.tsx
-
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 

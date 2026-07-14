@@ -38,7 +38,6 @@ export const ROUTES = {
   TEACHER_SUBMISSIONS: "/teacher/submissions",
   TEACHER_STUDENTS: "/teacher/students",
   TEACHER_REVIEW: "/teacher/review/:sessionId",
-  TEACHER_MODEL_STATUS: "/teacher/model-status",
 
   // Fallback
   NOT_FOUND: "*",

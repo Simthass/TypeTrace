@@ -197,13 +197,6 @@ export const PAGE_METADATA_ROUTES: PageMetadataRoute[] = [
     description:
       "Review a TypeTrace writing session with behavioral metrics, replay evidence, classification output, and certificate metadata.",
   },
-
-  {
-    path: ROUTES.TEACHER_MODEL_STATUS,
-    title: "Model Status",
-    description:
-      "Review the active TypeTrace Isolation Forest model status, metrics, feature schema, and operational readiness.",
-  },
   {
     path: ROUTES.NOT_FOUND,
     title: "Page Not Found",

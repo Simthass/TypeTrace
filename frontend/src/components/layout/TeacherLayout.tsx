@@ -170,11 +170,6 @@ const navSections: TeacherNavSection[] = [
         path: ROUTES.TEACHER_SUBMISSIONS,
         icon: "submissions",
       },
-      {
-        label: "Model Status",
-        path: ROUTES.TEACHER_MODEL_STATUS,
-        icon: "model",
-      },
     ],
   },
   {
@@ -228,7 +223,6 @@ function getPageTitle(pathname: string) {
   }
   if (pathname.startsWith(ROUTES.TEACHER_SUBMISSIONS)) return "Submissions";
   if (pathname.startsWith(ROUTES.TEACHER_STUDENTS)) return "Students";
-  if (pathname.startsWith(ROUTES.TEACHER_MODEL_STATUS)) return "Model Status";
   if (pathname.startsWith(ROUTES.TEACHER_REVIEW.replace(":sessionId", ""))) {
     return "Review Session";
   }

@@ -44,7 +44,6 @@ import JoinCoursePage from "./pages/student/JoinCoursePage";
 import TeacherCourseDetailPage from "./pages/teacher/TeacherCourseDetailPage";
 import TeacherCoursesPage from "./pages/teacher/TeacherCoursesPage";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
-import TeacherModelStatusPage from "./pages/teacher/TeacherModelStatusPage";
 import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
 import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage";
 import TeacherSubmissionsPage from "./pages/teacher/TeacherSubmissionsPage";
@@ -158,10 +157,6 @@ export default function App() {
                   <Route
                     path={ROUTES.TEACHER_STUDENTS}
                     element={<TeacherStudentsPage />}
-                  />
-                  <Route
-                    path={ROUTES.TEACHER_MODEL_STATUS}
-                    element={<TeacherModelStatusPage />}
                   />
                   <Route
                     path={ROUTES.TEACHER_REVIEW}
