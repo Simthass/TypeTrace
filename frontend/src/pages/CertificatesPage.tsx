@@ -49,7 +49,7 @@ const PAGE_SIZE = 16;
 const filters: Array<{ value: ClassificationFilter; label: string }> = [
   { value: "ALL", label: "All certificates" },
   { value: "HUMAN", label: "Human" },
-  { value: "SUSPICIOUS", label: "Review Required" },
+  { value: "SUSPICIOUS", label: "Needs review" },
   { value: "SYNTHETIC", label: "High risk" },
 ];
 
@@ -211,6 +211,19 @@ function classificationBucket(
   return "UNKNOWN";
 }
 
+/**
+ * Progress-bar / accent color for a given classification bucket.
+ * Human = green, Review Required (Suspicious) = amber, High Risk = red.
+ * Falls back to brand blue only for genuinely unknown/unclassified state.
+ */
+function progressBarColor(value?: string): string {
+  const bucket = classificationBucket(value);
+  if (bucket === "HUMAN") return colors.green;
+  if (bucket === "SUSPICIOUS") return colors.amber;
+  if (bucket === "HIGH_RISK") return colors.red;
+  return colors.brand;
+}
+
 function countByFilter(
   certificates: CertificateItem[],
   filter: ClassificationFilter,
@@ -291,7 +304,7 @@ function statusStyle(value?: string) {
       background: colors.amberTint,
       color: brand.suspiciousText,
       borderColor: colors.amberTint,
-      label: normalized === "SUSPICIOUS" ? "Review Required" : normalized,
+      label: normalized === "SUSPICIOUS" ? "Needs review" : normalized,
     };
   }
 
@@ -895,7 +908,7 @@ export default function CertificatesPage() {
                       "Document",
                       "Course",
                       "Classification",
-                      "Human Evidence Score",
+                      "Confidence",
                       "Risk",
                       "Issued",
                       "Actions",
@@ -913,6 +926,9 @@ export default function CertificatesPage() {
                 <tbody>
                   {paginatedCertificates.map((certificate) => {
                     const confidence = normalizePercent(certificate.confidence);
+                    const barColor = progressBarColor(
+                      certificate.classification,
+                    );
 
                     return (
                       <tr
@@ -1027,7 +1043,7 @@ export default function CertificatesPage() {
                               <div
                                 className="h-1 rounded-md"
                                 style={{
-                                  background: colors.brand,
+                                  background: barColor,
                                   width: `${confidence}%`,
                                 }}
                               />
@@ -1280,7 +1296,11 @@ export default function CertificatesPage() {
                   </p>
                   <p
                     className="mt-2 text-[18px] font-bold tabular-nums"
-                    style={{ color: colors.text.primary }}
+                    style={{
+                      color: progressBarColor(
+                        selectedCertificate.classification,
+                      ),
+                    }}
                   >
                     {normalizePercent(selectedCertificate.confidence)}%
                   </p>

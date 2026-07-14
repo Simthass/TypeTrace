@@ -58,7 +58,7 @@ const classificationFilters: Array<{
 }> = [
   { value: "ALL", label: "All evidence" },
   { value: "HUMAN", label: "Human" },
-  { value: "SUSPICIOUS", label: "Review Required" },
+  { value: "SUSPICIOUS", label: "Needs review" },
   { value: "SYNTHETIC", label: "High risk" },
 ];
 
@@ -261,6 +261,20 @@ function normalizeClassification(
   return "UNKNOWN";
 }
 
+/**
+ * Progress-bar color for a session's confidence value, driven by its
+ * classification bucket. Human = green, Needs review (Suspicious) = amber,
+ * High risk (Synthetic) = red. Falls back to brand blue only when the
+ * classification is genuinely unknown/unset.
+ */
+function progressBarColor(session: SessionItem): string {
+  const bucket = normalizeClassification(getBucket(session));
+  if (bucket === "HUMAN") return colors.green;
+  if (bucket === "SUSPICIOUS") return colors.amber;
+  if (bucket === "SYNTHETIC") return colors.red;
+  return colors.brand;
+}
+
 function normalizeReviewStatus(value?: string): ReviewFilter | "UNKNOWN" {
   const normalized = String(value || "PENDING").toUpperCase();
   if (normalized === "APPROVED") return "APPROVED";
@@ -307,7 +321,7 @@ function statusStyle(value?: string) {
       background: colors.amberTint,
       color: brand.suspiciousText,
       borderColor: colors.amberTint,
-      label: normalized === "SUSPICIOUS" ? "Review Required" : normalized,
+      label: normalized === "SUSPICIOUS" ? "Needs review" : normalized,
     };
   }
 
@@ -941,7 +955,7 @@ export default function SessionsPage() {
                       "Document",
                       "Course",
                       "Classification",
-                      "Human Evidence Score",
+                      "Confidence",
                       "Capture stats",
                       "Review",
                       "Certificate",
@@ -962,6 +976,7 @@ export default function SessionsPage() {
                     const bucket = getBucket(session);
                     const confidence = normalizePercent(session.confidence);
                     const hasCertificate = Boolean(session.certificate_id);
+                    const barColor = progressBarColor(session);
 
                     return (
                       <tr
@@ -1022,7 +1037,7 @@ export default function SessionsPage() {
                               <div
                                 className="h-1 rounded-md"
                                 style={{
-                                  background: colors.brand,
+                                  background: barColor,
                                   width: `${confidence}%`,
                                 }}
                               />
