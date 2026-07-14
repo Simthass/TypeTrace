@@ -1,11 +1,11 @@
 from app.core.privacy import summarize_keystroke_events
 import secrets
 import string
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from app.api.deps import require_teacher
 from app.core.config import settings
 from app.models.user import User
+from app.services.notifications import bump_unread_cache
 
 
 router = APIRouter()
@@ -385,8 +386,8 @@ async def list_teacher_courses(
                         COUNT(CASE WHEN COALESCE(review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
                         COUNT(CASE WHEN review_status = 'APPROVED' THEN 1 END) AS approved_count,
                         COUNT(CASE WHEN review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
-                        AVG(ml_confidence_score) AS avg_confidence,
-                        AVG(wpm) AS avg_wpm
+                        COALESCE(ROUND(AVG(ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
+                        COALESCE(ROUND(AVG(wpm)::numeric, 1), 0) AS avg_wpm
                     FROM typing_sessions
                     GROUP BY course_id
                 ) ts ON ts.course_id = c.id
@@ -827,6 +828,7 @@ async def get_teacher_submission_detail(
 async def review_teacher_submission(
     session_id: int,
     payload: TeacherReviewUpdate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_teacher),
 ):
     teacher_id = str(current_user.id)
@@ -844,7 +846,7 @@ async def review_teacher_submission(
         existing = conn.execute(
             text(
                 """
-                SELECT ts.id
+                SELECT ts.id, ts.user_id, ts.title
                 FROM typing_sessions ts
                 JOIN courses c ON c.id = ts.course_id
                 WHERE ts.id = :session_id
@@ -856,7 +858,7 @@ async def review_teacher_submission(
                 "session_id": session_id,
                 "teacher_id": teacher_id,
             },
-        ).fetchone()
+        ).mappings().fetchone()
 
         if existing is None:
             raise HTTPException(
@@ -884,6 +886,34 @@ async def review_teacher_submission(
                 "session_id": session_id,
             },
         ).mappings().fetchone()
+
+        notif_id = str(uuid.uuid4())
+        conn.execute(
+            text(
+                """
+                INSERT INTO notifications (
+                    id, recipient_id, actor_id, event_type, entity_type, entity_id,
+                    title, body, action_url, is_read, created_at
+                ) VALUES (
+                    :id, :recipient_id, :actor_id, :event_type, :entity_type, :entity_id,
+                    :title, :body, :action_url, false, NOW()
+                )
+                """
+            ),
+            {
+                "id": notif_id,
+                "recipient_id": existing["user_id"],
+                "actor_id": teacher_id,
+                "event_type": "REVIEW_COMPLETED",
+                "entity_type": "typing_session",
+                "entity_id": str(session_id),
+                "title": f"Review Updated: {review_status.replace('_', ' ').title()}",
+                "body": f"Your instructor updated the review status for '{existing['title']}'.",
+                "action_url": f"/sessions",
+            }
+        )
+
+    background_tasks.add_task(bump_unread_cache, recipient_id=existing["user_id"])
 
     return {
         "status": "success",

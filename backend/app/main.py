@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from app.api.routes.notifications import router as notifications_router
 
 from app.core.config import settings
 
@@ -156,6 +157,12 @@ def create_application() -> FastAPI:
         auth_router,
         prefix=f"{settings.API_V1_PREFIX}/auth",
         tags=["Authentication"],
+    )
+    
+    app.include_router(
+        notifications_router,
+        prefix=f"{settings.API_V1_PREFIX}/notifications",
+        tags=["Notifications"],
     )
 
     app.include_router(

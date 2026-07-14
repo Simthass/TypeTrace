@@ -10,8 +10,8 @@ import {
 import { ROUTES } from "../../constants/routes";
 import { colors } from "../../styles/colors";
 import { useAuthStore } from "../../store/authStore";
-
-// ─── COMPLETE ICON SET (Merged from both layouts) ──────────────────────────
+import { NotificationBell } from "../ui/NotificationBell";
+import { useNotificationPolling } from "../../hooks/useNotificationPolling";
 
 function Icon({ type, size = 16 }: { type: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
@@ -48,13 +48,6 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
         <path d="m9 15 2 2 4-5" />
       </>
     ),
-    model: (
-      <>
-        <circle cx="12" cy="12" r="3" />
-        <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
-        <path d="M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
-      </>
-    ),
     settings: (
       <>
         <circle cx="12" cy="12" r="3" />
@@ -78,12 +71,6 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
       <>
         <circle cx="11" cy="11" r="7" />
         <path d="m21 21-4.3-4.3" />
-      </>
-    ),
-    bell: (
-      <>
-        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
       </>
     ),
     plus: (
@@ -139,8 +126,6 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
     </svg>
   );
 }
-
-// ─── NAVIGATION CONFIGURATION ──────────────────────────────────────────────
 
 type TeacherNavItem = {
   label: string;
@@ -214,8 +199,6 @@ const resourceLinks: ResourceItem[] = [
   },
 ];
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-
 function getPageTitle(pathname: string) {
   if (pathname === ROUTES.TEACHER_DASHBOARD) return "Teacher Dashboard";
   if (pathname.startsWith(ROUTES.TEACHER_COURSES.replace(":courseId", ""))) {
@@ -229,8 +212,6 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith(ROUTES.TEACHER_SETTINGS)) return "Settings";
   return "Teacher Console";
 }
-
-// ─── SIDEBAR CONTENT ─────────────────────────────────────────────────────────
 
 function SidebarContent({
   collapsed,
@@ -255,7 +236,6 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Logo */}
       <div className="flex h-[52px] items-center px-4">
         <Link
           to={ROUTES.TEACHER_DASHBOARD}
@@ -297,7 +277,6 @@ function SidebarContent({
         </Link>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-5">
         <div className="space-y-6">
           {navSections.map((section) => (
@@ -353,7 +332,6 @@ function SidebarContent({
             </div>
           ))}
 
-          {/* Resources */}
           <div>
             {!collapsed && (
               <p
@@ -401,7 +379,6 @@ function SidebarContent({
         </div>
       </nav>
 
-      {/* User footer */}
       <div
         className="space-y-3 border-t p-3"
         style={{ borderColor: colors.surface[200] }}
@@ -488,8 +465,6 @@ function SidebarContent({
   );
 }
 
-// ─── MAIN LAYOUT ─────────────────────────────────────────────────────────────
-
 export default function TeacherLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -497,6 +472,8 @@ export default function TeacherLayout() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const location = useLocation();
+
+  useNotificationPolling();
 
   const title = useMemo(
     () => getPageTitle(location.pathname),
@@ -518,7 +495,6 @@ export default function TeacherLayout() {
       className="min-h-screen"
       style={{ backgroundColor: colors.surface[100] }}
     >
-      {/* Desktop sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-40 hidden border-r transition-all duration-200 md:flex md:flex-col ${
           collapsed ? "w-[64px]" : "w-[260px]"
@@ -554,7 +530,6 @@ export default function TeacherLayout() {
         <SidebarContent collapsed={collapsed} />
       </aside>
 
-      {/* Mobile sidebar */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <button
@@ -604,13 +579,11 @@ export default function TeacherLayout() {
         </div>
       )}
 
-      {/* Main content area */}
       <div
         className={`min-h-screen transition-all duration-200 ${
           collapsed ? "md:ml-[64px]" : "md:ml-[260px]"
         }`}
       >
-        {/* Top header bar */}
         <header
           className="sticky top-0 z-30 h-[56px] border-b"
           style={{
@@ -650,7 +623,6 @@ export default function TeacherLayout() {
               </div>
             </div>
 
-            {/* Search bar */}
             <div className="hidden min-w-0 flex-1 justify-center md:flex">
               <div
                 className="flex h-9 w-full max-w-[440px] items-center gap-2 rounded-md border px-3"
@@ -679,27 +651,9 @@ export default function TeacherLayout() {
               </div>
             </div>
 
-            {/* Right actions */}
             <div className="flex items-center gap-2">
-              {/* Notifications */}
-              <button
-                type="button"
-                className="relative flex h-9 w-9 items-center justify-center rounded-md border transition-colors hover:bg-surface-100"
-                style={{
-                  backgroundColor: colors.surface[50],
-                  borderColor: colors.surface[200],
-                  color: colors.text.secondary,
-                }}
-                aria-label="Notifications"
-              >
-                <Icon type="bell" />
-                <span
-                  className="absolute right-2 top-2 h-1.5 w-1.5 rounded-md"
-                  style={{ backgroundColor: colors.amber }}
-                />
-              </button>
+              <NotificationBell />
 
-              {/* New Course CTA */}
               <Link
                 to={`${ROUTES.TEACHER_COURSES}?createCourse=1`}
                 className="hidden h-9 items-center gap-2 rounded-md px-3 text-[13px] font-semibold transition hover:opacity-90 md:inline-flex"
@@ -712,7 +666,6 @@ export default function TeacherLayout() {
                 Create course
               </Link>
 
-              {/* Profile dropdown */}
               <div className="relative">
                 <button
                   type="button"
@@ -800,7 +753,6 @@ export default function TeacherLayout() {
           </div>
         </header>
 
-        {/* Page content */}
         <main
           className="min-h-[calc(100vh-56px)] p-4 md:p-6"
           style={{ backgroundColor: colors.surface[100] }}

@@ -1,12 +1,13 @@
 import io
 import json
 import re
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse
 from reportlab.lib import colors as pdf_colors
@@ -24,6 +25,7 @@ from app.core.config import PROJECT_ROOT, settings
 from app.models.user import User
 from app.core.privacy import safe_public_certificate_identity
 from app.services.certificate_signing import verify_certificate_record
+from app.services.notifications import bump_unread_cache
 
 
 router = APIRouter()
@@ -593,6 +595,7 @@ async def revoke_certificate(
     cert_id: str,
     payload: CertificateRevocationRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -656,6 +659,34 @@ async def revoke_certificate(
                 ),
             },
         )
+
+        notif_id = str(uuid.uuid4())
+        conn.execute(
+            text(
+                """
+                INSERT INTO notifications (
+                    id, recipient_id, actor_id, event_type, entity_type, entity_id,
+                    title, body, action_url, is_read, created_at
+                ) VALUES (
+                    :notif_id, :recipient_id, :actor_id, :event_type, :entity_type, :entity_id,
+                    :title, :body, :action_url, false, NOW()
+                )
+                """
+            ),
+            {
+                "notif_id": notif_id,
+                "recipient_id": str(record.get("user_id")),
+                "actor_id": str(current_user.id),
+                "event_type": "CERTIFICATE_REVOKED",
+                "entity_type": "certificate",
+                "entity_id": str(record["certificate_id"]),
+                "title": "Certificate Revoked",
+                "body": f"Your certificate for '{record.get('title')}' has been revoked by your instructor.",
+                "action_url": f"/verify/{record['certificate_id']}",
+            }
+        )
+
+    background_tasks.add_task(bump_unread_cache, recipient_id=str(record.get("user_id")))
 
     updated = _fetch_certificate_record(record["certificate_id"])
     return {

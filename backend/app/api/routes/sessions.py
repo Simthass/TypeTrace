@@ -1,10 +1,9 @@
-# backend/app/api/routes/sessions.py
 
 import secrets
 import string
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,13 +12,14 @@ from app.api.deps import require_student
 from app.db.database import get_db
 from app.ml.inference_engine import inference_engine
 from app.models.certificate import Certificate
-from app.models.course import CourseStudent
+from app.models.course import Course, CourseStudent
 from app.models.draft import DraftSession
 from app.models.session import TypingSession
 from app.models.user import User
 from app.services.audit_log import create_audit_log
 from app.services.canonical_evidence import compute_canonical_evidence, normalize_title
 from app.services.certificate_signing import sign_certificate_for_session
+from app.services.notifications import dispatch_notification
 
 
 router = APIRouter()
@@ -57,10 +57,6 @@ class KeystrokeSessionAnalyzeRequest(BaseModel):
 
 class AnalysisResponse(BaseModel):
     classification: str
-    # NOTE: confidence_score is a single UNIFIED "Human Writing Evidence
-    # Score" (0-100). It always means "how human-like this session is,"
-    # regardless of classification -- it never flips meaning between
-    # HUMAN / SUSPICIOUS / SYNTHETIC. Do not reintroduce per-label scales.
     confidence_score: float
     kill_switch_triggered: bool
     kill_switch_reason: Optional[str]
@@ -172,9 +168,6 @@ def _apply_paste_dominant_override(
         }
     )
 
-    # confidence_score is the unified Human Writing Evidence Score, so a
-    # paste-dominant session should read as a very LOW human score, not an
-    # artificially high "confidence" value pointed at the SYNTHETIC label.
     return {
         "classification": "SYNTHETIC",
         "confidence_score": min(confidence_score, 2.0),
@@ -257,9 +250,6 @@ def _normalize_risk_level(value: Any, risk_score: float) -> str:
     level = str(value or "").strip().upper()
     if level in {"LOW", "MEDIUM", "HIGH"}:
         return level
-    # Aligned with the unified human_score thresholds in inference_engine.py
-    # (human_score >= 80 -> LOW risk (<=20), 50-79 -> MEDIUM risk (21-50),
-    # <50 -> HIGH risk (>50)). risk_score here is always 100 - human_score.
     if risk_score >= 50:
         return "HIGH"
     if risk_score >= 20:
@@ -315,6 +305,7 @@ async def _mark_draft_submitted(
 async def analyze_session(
     payload: KeystrokeSessionAnalyzeRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
@@ -491,6 +482,22 @@ async def analyze_session(
     except Exception:
         await db.rollback()
         raise
+
+    if payload.course_id:
+        course_query = await db.execute(select(Course).where(Course.id == payload.course_id))
+        course_obj = course_query.scalars().first()
+        if course_obj:
+            background_tasks.add_task(
+                dispatch_notification,
+                recipient_id=course_obj.teacher_id,
+                actor_id=str(current_user.id),
+                event_type="SESSION_SUBMITTED",
+                entity_type="typing_session",
+                entity_id=str(session.id),
+                title=f"{current_user.first_name} submitted \"{title}\"",
+                body=f"Classification: {classification} · Risk: {risk_level}",
+                action_url=f"/teacher/submissions?search={session.id}",
+            )
 
     return AnalysisResponse(
         classification=classification,

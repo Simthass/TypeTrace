@@ -10,6 +10,8 @@ import {
 import { ROUTES } from "../../constants/routes";
 import { colors } from "../../styles/colors";
 import { useAuthStore } from "../../store/authStore";
+import { NotificationBell } from "../ui/NotificationBell";
+import { useNotificationPolling } from "../../hooks/useNotificationPolling";
 
 function Icon({ type, size = 16 }: { type: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
@@ -110,56 +112,18 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
         <path d="M5 12h14" />
       </>
     ),
-    bell: (
-      <>
-        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-      </>
-    ),
     search: (
       <>
         <circle cx="11" cy="11" r="7" />
         <path d="m21 21-4.3-4.3" />
       </>
     ),
-    chevron: <path d="m9 18 6-6-6-6" />,
+    chevronDown: <path d="m6 9 6 6 6-6" />,
     logout: (
       <>
         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
         <path d="m16 17 5-5-5-5" />
         <path d="M21 12H9" />
-      </>
-    ),
-    shield: (
-      <>
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <path d="m9 12 2 2 4-4" />
-      </>
-    ),
-    activity: <path d="M3 12h4l2-7 4 14 2-7h6" />,
-    helpCircle: (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M9.5 9a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1.4.9-1.4 1.7v.5" />
-        <path d="M12 17h.01" />
-      </>
-    ),
-    key: (
-      <>
-        <circle cx="8" cy="8" r="5" />
-        <path d="m14 12 6.5 6.5" />
-        <path d="m17 15 2-2" />
-        <path d="m20 12 2-2" />
-      </>
-    ),
-    sparkle: (
-      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" />
-    ),
-    chevronDown: <path d="m6 9 6 6 6-6" />,
-    user: (
-      <>
-        <path d="M20 21a8 8 0 0 0-16 0" />
-        <circle cx="12" cy="7" r="4" />
       </>
     ),
   };
@@ -279,7 +243,6 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Logo */}
       <div className="flex h-[52px] items-center px-4">
         <Link
           to={ROUTES.DASHBOARD}
@@ -321,7 +284,6 @@ function SidebarContent({
         </Link>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-5">
         <div className="space-y-6">
           {navSections.map((section) => (
@@ -377,7 +339,6 @@ function SidebarContent({
             </div>
           ))}
 
-          {/* Resources */}
           <div>
             {!collapsed && (
               <p
@@ -449,7 +410,6 @@ function SidebarContent({
         </div>
       </nav>
 
-      {/* User footer */}
       <div
         className="space-y-3 border-t p-3"
         style={{ borderColor: colors.surface[200] }}
@@ -544,6 +504,9 @@ export default function DashboardLayout() {
   const { user, logout } = useAuthStore();
   const location = useLocation();
 
+  // Initiate polling
+  useNotificationPolling();
+
   const title = useMemo(
     () => getPageTitle(location.pathname),
     [location.pathname],
@@ -564,7 +527,6 @@ export default function DashboardLayout() {
       className="min-h-screen"
       style={{ backgroundColor: colors.surface[100] }}
     >
-      {/* Desktop sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-40 hidden border-r transition-all duration-200 md:flex md:flex-col ${
           collapsed ? "w-[64px]" : "w-[260px]"
@@ -600,7 +562,6 @@ export default function DashboardLayout() {
         <SidebarContent collapsed={collapsed} />
       </aside>
 
-      {/* Mobile sidebar */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <button
@@ -650,13 +611,11 @@ export default function DashboardLayout() {
         </div>
       )}
 
-      {/* Main content area */}
       <div
         className={`min-h-screen transition-all duration-200 ${
           collapsed ? "md:ml-[64px]" : "md:ml-[260px]"
         }`}
       >
-        {/* Top header bar */}
         <header
           className="sticky top-0 z-30 h-[56px] border-b"
           style={{
@@ -696,7 +655,6 @@ export default function DashboardLayout() {
               </div>
             </div>
 
-            {/* Search bar */}
             <div className="hidden min-w-0 flex-1 justify-center md:flex">
               <div
                 className="flex h-9 w-full max-w-[420px] items-center gap-2 rounded-md border px-3"
@@ -725,27 +683,9 @@ export default function DashboardLayout() {
               </div>
             </div>
 
-            {/* Right actions */}
             <div className="flex items-center gap-2">
-              {/* Notifications */}
-              <button
-                type="button"
-                className="relative flex h-9 w-9 items-center justify-center rounded-md border transition-colors hover:bg-surface-100"
-                style={{
-                  backgroundColor: colors.surface[50],
-                  borderColor: colors.surface[200],
-                  color: colors.text.secondary,
-                }}
-                aria-label="Notifications"
-              >
-                <Icon type="bell" />
-                <span
-                  className="absolute right-2 top-2 h-1.5 w-1.5 rounded-md"
-                  style={{ backgroundColor: colors.red }}
-                />
-              </button>
+              <NotificationBell />
 
-              {/* New Session CTA */}
               <Link
                 to={ROUTES.EDITOR_NEW}
                 className="hidden h-9 items-center gap-2 rounded-md px-3 text-[13px] font-semibold transition hover:opacity-90 md:inline-flex"
@@ -758,7 +698,6 @@ export default function DashboardLayout() {
                 New Session
               </Link>
 
-              {/* Profile dropdown */}
               <div className="relative">
                 <button
                   type="button"
@@ -843,7 +782,6 @@ export default function DashboardLayout() {
           </div>
         </header>
 
-        {/* Page content */}
         <main
           className="min-h-[calc(100vh-56px)] p-4 md:p-6"
           style={{ backgroundColor: colors.surface[100] }}

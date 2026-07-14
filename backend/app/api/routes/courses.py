@@ -1,8 +1,7 @@
-# backend/app/api/routes/courses.py
 
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -12,6 +11,7 @@ from app.api.deps import require_student
 from app.db.database import get_db
 from app.models.course import Course, CourseStudent
 from app.models.user import User
+from app.services.notifications import dispatch_notification
 
 
 router = APIRouter()
@@ -33,6 +33,7 @@ def _course_payload(course: Course) -> Dict[str, Any]:
 @router.post("/courses/join", status_code=status.HTTP_200_OK)
 async def join_course(
     payload: JoinCourseRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
@@ -82,6 +83,18 @@ async def join_course(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You are already enrolled in this course.",
         )
+
+    background_tasks.add_task(
+        dispatch_notification,
+        recipient_id=course.teacher_id,
+        actor_id=str(current_user.id),
+        event_type="COURSE_JOINED",
+        entity_type="course",
+        entity_id=str(course.id),
+        title="New Student Joined",
+        body=f"{current_user.first_name} {current_user.last_name} joined {course.course_name}.",
+        action_url=f"/teacher/courses/{course.id}",
+    )
 
     return {
         "status": "success",

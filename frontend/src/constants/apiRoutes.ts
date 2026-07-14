@@ -82,4 +82,11 @@ export const API_ROUTES = {
     features: "/model/features",
     reload: "/model/reload",
   },
+
+  notifications: {
+    list: "/notifications",
+    unreadCount: "/notifications/unread-count",
+    markRead: (id: string) => `/notifications/${id}/read`,
+    markAllRead: "/notifications/mark-all-read",
+  },
 } as const;
