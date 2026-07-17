@@ -805,8 +805,8 @@ async def get_teacher_submission_detail(
     text_content = row["text_content"] or ""
 
     payload = _submission_payload(dict(row))
-    payload["text_preview"] = text_content[:1200]
-    payload["text_preview_truncated"] = len(text_content) > 1200
+    payload["text_content"] = text_content[:1200]
+    payload["text_content_truncated"] = len(text_content) > 1200
     payload["has_text_content"] = bool(text_content)
     payload["has_raw_keystroke_data"] = bool(row["raw_keystroke_data"])
     payload["keystroke_summary"] = summarize_keystroke_events(
