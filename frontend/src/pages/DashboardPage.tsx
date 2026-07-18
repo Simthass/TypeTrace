@@ -1146,7 +1146,7 @@ function LatestSessionsPanel({ sessions }: { sessions: StudentSession[] }) {
                       </div>
                       <div className="min-w-0">
                         <Link
-                          to={ROUTES.REPLAY.replace(
+                          to={ROUTES.SESSION_DETAIL.replace(
                             ":sessionId",
                             String(session.id),
                           )}

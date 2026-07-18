@@ -261,12 +261,6 @@ function normalizeClassification(
   return "UNKNOWN";
 }
 
-/**
- * Progress-bar color for a session's confidence value, driven by its
- * classification bucket. Human = green, Needs review (Suspicious) = amber,
- * High risk (Synthetic) = red. Falls back to brand blue only when the
- * classification is genuinely unknown/unset.
- */
 function progressBarColor(session: SessionItem): string {
   const bucket = normalizeClassification(getBucket(session));
   if (bucket === "HUMAN") return colors.green;
@@ -986,12 +980,16 @@ export default function SessionsPage() {
                       >
                         <td className="px-4 py-3 align-middle">
                           <div className="min-w-0">
-                            <p
-                              className="max-w-[280px] truncate text-[13px] font-semibold"
+                            <Link
+                              to={ROUTES.SESSION_DETAIL.replace(
+                                ":sessionId",
+                                String(session.id),
+                              )}
+                              className="block max-w-[280px] truncate text-[13px] font-semibold hover:underline"
                               style={{ color: colors.text.primary }}
                             >
                               {session.title || "Untitled Document"}
-                            </p>
+                            </Link>
                             <p
                               className="mt-0.5 text-[11px]"
                               style={{ color: colors.text.muted }}
@@ -1132,7 +1130,7 @@ export default function SessionsPage() {
                                 ":sessionId",
                                 String(session.id),
                               )}
-                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold"
+                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold hover:bg-surface-100"
                               style={{
                                 borderColor: colors.surface[200],
                                 color: colors.text.secondary,
@@ -1146,7 +1144,7 @@ export default function SessionsPage() {
                             {session.certificate_id && (
                               <Link
                                 to={`/verify/${session.certificate_id}`}
-                                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold"
+                                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold hover:bg-surface-100"
                                 style={{
                                   borderColor: colors.surface[200],
                                   color: colors.text.secondary,

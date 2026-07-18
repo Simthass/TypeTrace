@@ -1,3 +1,4 @@
+# backend/app/api/routes/student.py
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -7,6 +8,7 @@ from sqlalchemy import create_engine, text
 
 from app.api.deps import require_student
 from app.core.config import settings
+from app.core.crypto import decrypt_text
 from app.models.user import User
 
 
@@ -170,10 +172,7 @@ async def get_student_dashboard(
                     ts.created_at,
                     c.course_name,
                     c.course_code,
-                    CASE
-                        WHEN ts.text_content IS NULL THEN 0
-                        ELSE array_length(regexp_split_to_array(trim(ts.text_content), '\\s+'), 1)
-                    END AS word_count
+                    ts.word_count AS word_count
                 FROM typing_sessions ts
                 LEFT JOIN courses c ON c.id = ts.course_id
                 WHERE ts.user_id = :user_id
@@ -316,7 +315,7 @@ async def get_student_sessions(
         params["review_status"] = review_status.upper()
 
     if search:
-        where_parts.append("(LOWER(ts.title) LIKE :search OR LOWER(ts.text_content) LIKE :search)")
+        where_parts.append("(LOWER(ts.title) LIKE :search)")
         params["search"] = f"%{search.lower()}%"
 
     where_clause = " AND ".join(where_parts)
@@ -356,10 +355,7 @@ async def get_student_sessions(
                     ts.created_at,
                     c.course_name,
                     c.course_code,
-                    CASE
-                        WHEN ts.text_content IS NULL THEN 0
-                        ELSE array_length(regexp_split_to_array(trim(ts.text_content), '\\s+'), 1)
-                    END AS word_count
+                    ts.word_count AS word_count
                 FROM typing_sessions ts
                 LEFT JOIN courses c ON c.id = ts.course_id
                 WHERE {where_clause}
@@ -411,10 +407,7 @@ async def get_student_session_detail(
                     ts.created_at,
                     c.course_name,
                     c.course_code,
-                    CASE
-                        WHEN ts.text_content IS NULL THEN 0
-                        ELSE array_length(regexp_split_to_array(trim(ts.text_content), '\\s+'), 1)
-                    END AS word_count
+                    ts.word_count AS word_count
                 FROM typing_sessions ts
                 LEFT JOIN courses c ON c.id = ts.course_id
                 WHERE ts.id = :session_id
@@ -435,7 +428,8 @@ async def get_student_session_detail(
         )
 
     payload = _session_to_dict(dict(row))
-    payload["text_content"] = row["text_content"] or ""
+    payload["word_count"] = row["word_count"]
+    payload["text_content"] = decrypt_text(row["text_content"]) or ""
 
     return {
         "status": "success",

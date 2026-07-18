@@ -20,6 +20,8 @@ export const API_ROUTES = {
     dashboard: "/student/dashboard",
     analytics: "/student/analytics",
     sessions: "/student/sessions",
+    sessionDetail: (sessionId: string | number) =>
+      `/student/sessions/${sessionId}`,
   },
 
   drafts: {

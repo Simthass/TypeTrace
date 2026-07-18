@@ -1,3 +1,4 @@
+# backend/app/api/routes/user.py
 
 import json
 from datetime import datetime, timezone
@@ -14,9 +15,8 @@ from app.models.user import User
 
 from fastapi import Query, Response
 from app.core.config import settings
+from app.core.crypto import decrypt_text, decrypt_json
 from app.core.privacy import privacy_safe_export_session
-
-
 
 
 router = APIRouter()
@@ -462,6 +462,19 @@ async def export_user_data(
 
     exported_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
+    decrypted_sessions = []
+    for row in session_rows:
+        row_dict = dict(row)
+        if include_sensitive:
+            row_dict["text_content"] = decrypt_text(row_dict.get("text_content"))
+            row_dict["raw_keystroke_data"] = decrypt_json(row_dict.get("raw_keystroke_data"))
+        decrypted_sessions.append(
+            privacy_safe_export_session(
+                row_dict,
+                include_sensitive=include_sensitive,
+            )
+        )
+
     return {
         "status": "success",
         "exported_at": exported_at,
@@ -475,13 +488,7 @@ async def export_user_data(
         },
         "profile": _serialize_user(current_user),
         "summary": _fetch_account_summary(user_id),
-        "sessions": [
-            privacy_safe_export_session(
-                dict(row),
-                include_sensitive=include_sensitive,
-            )
-            for row in session_rows
-        ],
+        "sessions": decrypted_sessions,
         "certificates": [
             {
                 "id": row["id"],

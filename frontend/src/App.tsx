@@ -34,6 +34,7 @@ import PrivacyPage from "./pages/PrivacyPage";
 import RegisterPage from "./pages/RegisterPage";
 import ReplayPage from "./pages/ReplayPage";
 import SessionsPage from "./pages/SessionsPage";
+import StudentSessionDetailPage from "./pages/student/StudentSessionDetailPage";
 import SettingsPage from "./pages/SettingsPage";
 import SettingsRedirectPage from "./pages/SettingsRedirectPage";
 import VerifyLookupPage from "./pages/VerifyLookupPage";
@@ -123,6 +124,10 @@ export default function App() {
                   <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
                   <Route path={ROUTES.DRAFTS} element={<DraftsPage />} />
                   <Route path={ROUTES.SESSIONS} element={<SessionsPage />} />
+                  <Route
+                    path={ROUTES.SESSION_DETAIL}
+                    element={<StudentSessionDetailPage />}
+                  />
                   <Route
                     path={ROUTES.CERTIFICATES}
                     element={<CertificatesPage />}

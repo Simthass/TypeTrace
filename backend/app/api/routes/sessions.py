@@ -1,3 +1,4 @@
+# backend/app/api/routes/sessions.py
 
 import secrets
 import string
@@ -9,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_student
+from app.core.crypto import encrypt_json, encrypt_text
 from app.db.database import get_db
 from app.ml.inference_engine import inference_engine
 from app.models.certificate import Certificate
@@ -381,13 +383,20 @@ async def analyze_session(
     )
     model_score = _clamp_score(advanced_stats.get("model_score", risk_score))
 
+    total_words = len((payload.text_content or "").split())
+
     certificate_id = await _create_unique_certificate_id(db)
+
+    encrypted_text = encrypt_text(payload.text_content)
+    encrypted_events = encrypt_json(payload.keystroke_array)
 
     session = TypingSession(
         user_id=str(current_user.id),
         course_id=payload.course_id,
         title=title,
-        text_content=payload.text_content,
+        text_content=encrypted_text,
+        raw_keystroke_data=encrypted_events,
+        word_count=total_words,
         wpm=float(server_stats.wpm),
         total_keystrokes=int(server_stats.keystrokes),
         deletions=int(server_stats.deletions),
@@ -396,7 +405,6 @@ async def analyze_session(
         duration_seconds=float(server_stats.sessionSeconds),
         ml_confidence_score=confidence_score,
         classification_result=classification,
-        raw_keystroke_data=payload.keystroke_array,
         certificate_id=certificate_id,
         document_hash=canonical.document_hash,
         evidence_hash=canonical.evidence_hash,

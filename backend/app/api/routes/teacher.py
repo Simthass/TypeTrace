@@ -1,3 +1,5 @@
+# backend/app/api/routes/teacher.py
+
 from app.core.privacy import summarize_keystroke_events
 import secrets
 import string
@@ -12,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import require_teacher
 from app.core.config import settings
+from app.core.crypto import decrypt_text, decrypt_json
 from app.models.user import User
 from app.services.notifications import bump_unread_cache
 
@@ -197,10 +200,7 @@ async def get_teacher_dashboard(
                     u.last_name,
                     u.email,
                     u.student_id,
-                    CASE
-                        WHEN ts.text_content IS NULL THEN 0
-                        ELSE array_length(regexp_split_to_array(trim(ts.text_content), '\\s+'), 1)
-                    END AS word_count
+                    ts.word_count AS word_count
                 FROM typing_sessions ts
                 JOIN courses c ON c.id = ts.course_id
                 JOIN users u ON u.id = ts.user_id
@@ -520,10 +520,7 @@ async def get_teacher_course_detail(
                     u.last_name,
                     u.email,
                     u.student_id,
-                    CASE
-                        WHEN ts.text_content IS NULL THEN 0
-                        ELSE array_length(regexp_split_to_array(trim(ts.text_content), '\\s+'), 1)
-                    END AS word_count
+                    ts.word_count AS word_count
                 FROM typing_sessions ts
                 JOIN users u ON u.id = ts.user_id
                 JOIN courses c ON c.id = ts.course_id
@@ -716,10 +713,7 @@ async def list_teacher_submissions(
                     u.last_name,
                     u.email,
                     u.student_id,
-                    CASE
-                        WHEN ts.text_content IS NULL THEN 0
-                        ELSE array_length(regexp_split_to_array(trim(ts.text_content), '\\s+'), 1)
-                    END AS word_count
+                    ts.word_count AS word_count
                 FROM typing_sessions ts
                 JOIN courses c ON c.id = ts.course_id
                 JOIN users u ON u.id = ts.user_id
@@ -778,10 +772,7 @@ async def get_teacher_submission_detail(
                     u.last_name,
                     u.email,
                     u.student_id,
-                    CASE
-                        WHEN ts.text_content IS NULL THEN 0
-                        ELSE array_length(regexp_split_to_array(trim(ts.text_content), '\\s+'), 1)
-                    END AS word_count
+                    ts.word_count AS word_count
                 FROM typing_sessions ts
                 JOIN courses c ON c.id = ts.course_id
                 JOIN users u ON u.id = ts.user_id
@@ -802,17 +793,18 @@ async def get_teacher_submission_detail(
             detail="Submission not found.",
         )
 
-    text_content = row["text_content"] or ""
+    decrypted_text = decrypt_text(row["text_content"]) or ""
+    decrypted_events = decrypt_json(row["raw_keystroke_data"])
 
     payload = _submission_payload(dict(row))
-    payload["text_content"] = text_content[:1200]
-    payload["text_content_truncated"] = len(text_content) > 1200
-    payload["has_text_content"] = bool(text_content)
-    payload["has_raw_keystroke_data"] = bool(row["raw_keystroke_data"])
-    payload["keystroke_summary"] = summarize_keystroke_events(
-        row["raw_keystroke_data"]
-    )
+    payload["word_count"] = row["word_count"]
+    payload["text_preview"] = decrypted_text[:1200]
+    payload["text_preview_truncated"] = len(decrypted_text) > 1200
+    payload["has_text_content"] = bool(decrypted_text)
+    payload["has_raw_keystroke_data"] = bool(decrypted_events)
+    payload["keystroke_summary"] = summarize_keystroke_events(decrypted_events)
     payload["raw_keystroke_data"] = None
+    payload["text_content"] = decrypted_text
     payload["review_saved_at"] = _format_datetime(row["review_saved_at"])
 
     return {

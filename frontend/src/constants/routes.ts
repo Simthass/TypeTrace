@@ -21,6 +21,7 @@ export const ROUTES = {
   EDITOR_NEW: "/editor/new",
   DRAFTS: "/drafts",
   SESSIONS: "/sessions",
+  SESSION_DETAIL: "/sessions/:sessionId",
   CERTIFICATES: "/certificates",
   ANALYTICS: "/analytics",
   REPLAY: "/session/:sessionId/replay",

@@ -1,3 +1,5 @@
+# backend/app/api/routes/replay.py
+
 import json
 from datetime import datetime, timezone
 from statistics import mean
@@ -8,6 +10,7 @@ from sqlalchemy import create_engine, text
 
 from app.api.deps import get_current_user
 from app.core.config import settings
+from app.core.crypto import decrypt_json, decrypt_text
 from app.models.user import User
 
 
@@ -343,6 +346,7 @@ def _fetch_replay_row(session_id: int) -> Optional[Dict[str, Any]]:
                     ts.course_id,
                     ts.title,
                     ts.text_content,
+                    ts.word_count,
                     ts.wpm,
                     ts.total_keystrokes,
                     ts.deletions,
@@ -427,7 +431,8 @@ async def get_replay_audit(
 
     _authorize_replay_access(row, current_user)
 
-    raw_events = _parse_raw_events(row.get("raw_keystroke_data"))
+    decrypted_raw = decrypt_json(row.get("raw_keystroke_data"))
+    raw_events = _parse_raw_events(decrypted_raw)
     events = _normalize_events(raw_events)
     is_truncated = len(events) > MAX_REPLAY_EVENTS
 
@@ -441,7 +446,7 @@ async def get_replay_audit(
     duration_seconds = _safe_float(row.get("duration_seconds"))
     duration_ms = round(duration_seconds * 1000)
 
-    word_count = len((row.get("text_content") or "").split())
+    word_count = int(row.get("word_count") or 0)
 
     return {
         "status": "success",
@@ -499,6 +504,3 @@ async def get_session_replay_compatible(
         response=response,
         current_user=current_user,
     )
-
-
-

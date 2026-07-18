@@ -1,3 +1,4 @@
+# backend/app/api/routes/drafts.py
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -8,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_student
+from app.core.crypto import decrypt_json, decrypt_text, encrypt_json, encrypt_text
 from app.db.database import get_db
 from app.models.course import CourseStudent
 from app.models.draft import DraftSession
@@ -164,9 +166,16 @@ async def list_drafts(
     )
     drafts = list(result.scalars().all())
 
+    decrypted_drafts = []
+    for draft in drafts:
+        payload = _draft_payload(draft)
+        payload["text_content"] = decrypt_text(draft.text_content) or ""
+        payload["keystroke_array"] = decrypt_json(draft.keystroke_array) or []
+        decrypted_drafts.append(payload)
+
     return {
         "status": "success",
-        "drafts": [_draft_payload(draft) for draft in drafts],
+        "drafts": decrypted_drafts,
     }
 
 
@@ -187,9 +196,13 @@ async def get_draft(
             detail="Draft not found.",
         )
 
+    payload = _draft_payload(draft)
+    payload["text_content"] = decrypt_text(draft.text_content) or ""
+    payload["keystroke_array"] = decrypt_json(draft.keystroke_array) or []
+
     return {
         "status": "success",
-        "draft": _draft_payload(draft),
+        "draft": payload,
     }
 
 
@@ -252,8 +265,10 @@ async def upsert_draft(
 
     draft.course_id = payload.course_id
     draft.title = _normalize_title(payload.title)
-    draft.text_content = payload.text_content or ""
-    draft.keystroke_array = payload.keystroke_array or []
+    
+    draft.text_content = encrypt_text(payload.text_content) or ""
+    draft.keystroke_array = encrypt_json(payload.keystroke_array) or []
+    
     draft.active_duration_ms = int(payload.active_duration_ms or 0)
     draft.started_at = _ms_to_datetime(payload.started_at)
     draft.last_activity_at = _ms_to_datetime(payload.last_activity_at)
@@ -281,7 +296,7 @@ async def upsert_draft(
                 "local_draft_id": draft.local_draft_id,
                 "save_reason": draft.save_reason,
                 "lifecycle_status": draft.lifecycle_status,
-                "event_count": len(draft.keystroke_array or []),
+                "event_count": len(payload.keystroke_array or []),
                 "active_duration_ms": int(draft.active_duration_ms or 0),
             },
         )
@@ -290,9 +305,13 @@ async def upsert_draft(
     await db.commit()
     await db.refresh(draft)
 
+    payload_response = _draft_payload(draft)
+    payload_response["text_content"] = payload.text_content
+    payload_response["keystroke_array"] = payload.keystroke_array
+
     return {
         "status": "success",
-        "draft": _draft_payload(draft),
+        "draft": payload_response,
     }
 
 

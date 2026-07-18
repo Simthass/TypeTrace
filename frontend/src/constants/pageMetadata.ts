@@ -142,6 +142,13 @@ export const PAGE_METADATA_ROUTES: PageMetadataRoute[] = [
       "Browse and review your TypeTrace writing sessions, analysis results, certificates, and replay-ready evidence trails.",
   },
   {
+    path: ROUTES.SESSION_DETAIL,
+    title: ({ sessionId }) =>
+      sessionId ? `Session Document ${shortId(sessionId)}` : "Session Document",
+    description:
+      "View full document text and authorship evidence metrics for a completed TypeTrace session.",
+  },
+  {
     path: ROUTES.CERTIFICATES,
     title: "Certificates",
     description:
@@ -195,7 +202,7 @@ export const PAGE_METADATA_ROUTES: PageMetadataRoute[] = [
     title: ({ sessionId }) =>
       sessionId ? `Review Session ${shortId(sessionId)}` : "Review Session",
     description:
-      "Review a TypeTrace writing session with behavioral metrics, replay evidence, classification output, and certificate metadata.",
+      "Review a TypeTrace writing session with behavioral metrics, full text content, classification output, and certificate metadata.",
   },
   {
     path: ROUTES.NOT_FOUND,

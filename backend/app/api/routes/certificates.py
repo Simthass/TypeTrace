@@ -1,3 +1,5 @@
+# backend/app/api/routes/certificates.py
+
 import io
 import json
 import re
@@ -149,7 +151,7 @@ def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
                 SELECT
                     ts.id AS session_id,
                     ts.title AS title,
-                    ts.text_content AS text_content,
+                    ts.word_count AS word_count,
                     ts.wpm AS wpm,
                     ts.total_keystrokes AS total_keystrokes,
                     ts.deletions AS deletions,
@@ -205,8 +207,6 @@ def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
     if row is None:
         return None
 
-    word_count = len((row["text_content"] or "").split())
-
     ledger_status = _ledger_display_status(
         ledger_status=row["verification_status"],
         classification=row["classification_result"],
@@ -226,8 +226,7 @@ def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
         "department": row["department"] or "",
         "course_name": row["course_name"],
         "course_code": row["course_code"],
-        "word_count": word_count,
-        # Display-rounded values for the public API/UI.
+        "word_count": int(row["word_count"] or 0),
         "wpm": round(float(row["wpm"] or 0), 1),
         "total_keystrokes": int(row["total_keystrokes"] or 0),
         "deletions": int(row["deletions"] or 0),
@@ -244,9 +243,6 @@ def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
         "evidence_hash": row["certificate_evidence_hash"] or row["session_evidence_hash"],
         "model_version": row["model_version"],
         "model_score": round(float(row["model_score"] or 0), 4),
-        # Raw evidence values used only for signature verification. These are
-        # not exposed by the public payload, but they stop UI rounding from
-        # changing the signed payload hash.
         "wpm_raw": row["wpm"],
         "avg_iki_raw": row["avg_iki"],
         "duration_seconds_raw": row["duration_seconds"],

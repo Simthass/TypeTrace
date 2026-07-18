@@ -40,6 +40,7 @@ class TypingSession(Base):
 
     title = Column(String(255), nullable=False, default="Untitled Document")
     text_content = Column(Text, nullable=False)
+    word_count = Column(Integer, nullable=False, default=0, server_default="0")
 
     # Canonical backend-computed behavioral metrics. These fields remain for
     # compatibility with the existing app and are populated from server-side
