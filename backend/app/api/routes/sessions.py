@@ -1,5 +1,3 @@
-# backend/app/api/routes/sessions.py
-
 import secrets
 import string
 from typing import Any, Dict, List, Optional
@@ -126,58 +124,133 @@ def _apply_paste_dominant_override(
     risk_score: float,
     risk_level: str,
 ) -> Dict[str, Any]:
+    """Apply and fully record the route-level paste-dominant decision.
+
+    The previous implementation changed the returned classification to HIGH RISK
+    and the human score to 2%, but left the nested advanced statistics carrying
+    the pre-override HUMAN/SUSPICIOUS values. That produced contradictory result
+    screens. This function now preserves both the pre-override trace and one
+    synchronized final decision.
+    """
 
     text_length = len(text_content or "")
-    paste_count = event_counts.get("paste_count", 0)
-    pasted_length = event_counts.get("pasted_length", 0)
-    keydown_count = event_counts.get("keydown_count", 0)
+    paste_count = max(0, int(event_counts.get("paste_count", 0)))
+    pasted_length = max(0, int(event_counts.get("pasted_length", 0)))
+    keydown_count = max(0, int(event_counts.get("keydown_count", 0)))
+    pasted_character_ratio = (
+        round(pasted_length / text_length, 4) if text_length > 0 else 0.0
+    )
 
     paste_dominant = (
         paste_count > 0
         and (
             keydown_count < MINIMUM_KEYSTROKES
-            or (text_length > 0 and pasted_length >= text_length * 0.6)
+            or pasted_character_ratio >= 0.6
         )
     )
 
-    if not paste_dominant:
-        return {
-            "classification": classification,
-            "confidence_score": confidence_score,
-            "risk_score": risk_score,
-            "risk_level": risk_level,
-            "advanced_stats": result.advanced_stats,
-            "kill_switch_triggered": bool(result.kill_switch_triggered),
-            "kill_switch_reason": result.kill_switch_reason,
-        }
+    pre_override_decision = {
+        "classification": classification,
+        "confidence_score": confidence_score,
+        "human_score": confidence_score,
+        "risk_score": risk_score,
+        "risk_level": risk_level,
+        "decision_source": str(
+            (result.advanced_stats or {}).get("decision_source")
+            or getattr(result, "decision_source", "analysis_engine")
+        ),
+    }
+
+    if paste_dominant:
+        final_classification = "SYNTHETIC"
+        final_confidence_score = min(confidence_score, 2.0)
+        final_risk_score = max(risk_score, 92.0)
+        final_risk_level = "HIGH"
+        final_decision_source = "paste_dominant_override"
+        final_kill_switch_triggered = True
+        final_kill_switch_reason = "Paste-dominant writing session detected."
+    else:
+        final_classification = classification
+        final_confidence_score = confidence_score
+        final_risk_score = risk_score
+        final_risk_level = risk_level
+        final_decision_source = pre_override_decision["decision_source"]
+        final_kill_switch_triggered = bool(result.kill_switch_triggered)
+        final_kill_switch_reason = result.kill_switch_reason
 
     advanced_stats = dict(result.advanced_stats or {})
     risk_signals = list(advanced_stats.get("risk_signals") or [])
-    risk_signals.append(
-        "Most of the document was inserted through paste rather than typed directly."
+
+    if paste_dominant:
+        paste_signal = (
+            "Most of the document was inserted through paste rather than typed "
+            "directly."
+        )
+        if paste_signal not in risk_signals:
+            risk_signals.append(paste_signal)
+
+    existing_diagnostics = advanced_stats.get("score_diagnostics")
+    score_diagnostics = (
+        dict(existing_diagnostics) if isinstance(existing_diagnostics, dict) else {}
     )
+    score_diagnostics.update(
+        {
+            "paste_override_applied": paste_dominant,
+            "paste_evidence": {
+                "paste_count": paste_count,
+                "pasted_length": pasted_length,
+                "text_length": text_length,
+                "pasted_character_ratio": pasted_character_ratio,
+                "keydown_count": keydown_count,
+                "minimum_keydown_requirement": MINIMUM_KEYSTROKES,
+                "paste_dominant_ratio_threshold": 0.6,
+            },
+            "pre_override_decision": pre_override_decision,
+            "final_decision": {
+                "classification": final_classification,
+                "confidence_score": final_confidence_score,
+                "human_score": final_confidence_score,
+                "risk_score": final_risk_score,
+                "risk_level": final_risk_level,
+                "decision_source": final_decision_source,
+            },
+        }
+    )
+
     advanced_stats.update(
         {
             "paste_count": paste_count,
             "pasted_length": pasted_length,
-            "paste_dominant": True,
+            "pasted_character_ratio": pasted_character_ratio,
+            "paste_dominant": paste_dominant,
+            "paste_override_applied": paste_dominant,
+            "pre_override_decision": pre_override_decision,
+            "classification": final_classification,
+            "confidence_score": final_confidence_score,
+            "human_score": final_confidence_score,
+            "risk_score": final_risk_score,
+            "risk_level": final_risk_level,
             "risk_signals": risk_signals,
-            "decision_source": "paste_dominant_override",
-            "academic_interpretation": (
-                "This result indicates high paste/automation risk. It should be "
-                "reviewed as supporting evidence, not as an automatic misconduct decision."
-            ),
+            "decision_source": final_decision_source,
+            "score_diagnostics": score_diagnostics,
         }
     )
 
+    if paste_dominant:
+        advanced_stats["academic_interpretation"] = (
+            "This result indicates high paste/automation risk. It should be "
+            "reviewed as supporting evidence, not as an automatic misconduct "
+            "decision."
+        )
+
     return {
-        "classification": "SYNTHETIC",
-        "confidence_score": min(confidence_score, 2.0),
-        "risk_score": max(risk_score, 92.0),
-        "risk_level": "HIGH",
+        "classification": final_classification,
+        "confidence_score": final_confidence_score,
+        "risk_score": final_risk_score,
+        "risk_level": final_risk_level,
         "advanced_stats": advanced_stats,
-        "kill_switch_triggered": True,
-        "kill_switch_reason": "Paste-dominant writing session detected.",
+        "kill_switch_triggered": final_kill_switch_triggered,
+        "kill_switch_reason": final_kill_switch_reason,
     }
 
 

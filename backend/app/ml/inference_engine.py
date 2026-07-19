@@ -57,6 +57,7 @@ MODEL_CARD_PATH = ARTIFACT_DIR / "model_card.json"
 # truth for turning human_score into a label anywhere in the backend.
 HUMAN_SCORE_THRESHOLD = 80.0
 SUSPICIOUS_SCORE_THRESHOLD = 50.0
+SCORING_ENGINE_VERSION = "scoring-v1.1-day1"
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -82,6 +83,61 @@ def classify_from_human_score(human_score: float) -> Dict[str, str]:
     if human_score >= SUSPICIOUS_SCORE_THRESHOLD:
         return {"classification": "SUSPICIOUS", "risk_level": "MEDIUM"}
     return {"classification": "SYNTHETIC", "risk_level": "HIGH"}
+
+
+def _build_score_diagnostics(
+    *,
+    decision_source: str,
+    model_decision_score: Optional[float],
+    model_decision_threshold: Optional[float],
+    model_human_score: Optional[float],
+    rules_risk_score: float,
+    rules_human_score: float,
+    final_human_score: float,
+    final_risk_score: float,
+    classification: str,
+    risk_level: str,
+) -> Dict[str, Any]:
+    """Build one explicit, internally consistent scoring trace.
+
+    These values are diagnostic evidence for development and evaluation. They
+    make it possible to determine whether a low result came from the model,
+    behavioral rules, fallback mode, or a later route-level override.
+    """
+
+    return {
+        "scoring_engine_version": SCORING_ENGINE_VERSION,
+        "decision_source": decision_source,
+        "combination_policy": "minimum_of_model_and_rules",
+        "model_decision_score": (
+            None
+            if model_decision_score is None
+            else round(_safe_float(model_decision_score), 6)
+        ),
+        "model_decision_threshold": (
+            None
+            if model_decision_threshold is None
+            else round(_safe_float(model_decision_threshold), 6)
+        ),
+        "model_inside_baseline": (
+            None
+            if model_decision_score is None or model_decision_threshold is None
+            else model_decision_score >= model_decision_threshold
+        ),
+        "model_human_score": (
+            None if model_human_score is None else _clamp(model_human_score)
+        ),
+        "rules_risk_score": _clamp(rules_risk_score),
+        "rules_human_score": _clamp(rules_human_score),
+        "pre_override_human_score": _clamp(final_human_score),
+        "pre_override_risk_score": _clamp(final_risk_score),
+        "pre_override_classification": classification,
+        "pre_override_risk_level": risk_level,
+        "classification_thresholds": {
+            "human_min": HUMAN_SCORE_THRESHOLD,
+            "needs_review_min": SUSPICIOUS_SCORE_THRESHOLD,
+        },
+    }
 
 
 @dataclass
@@ -114,6 +170,18 @@ def _fallback_result(
     rules_risk_score = _clamp(behavioral_summary.get("risk_score", 50), 0, 100)
     human_score = _clamp(100.0 - rules_risk_score, 0, 100)
     labels = classify_from_human_score(human_score)
+    score_diagnostics = _build_score_diagnostics(
+        decision_source="fallback_rules",
+        model_decision_score=None,
+        model_decision_threshold=None,
+        model_human_score=None,
+        rules_risk_score=rules_risk_score,
+        rules_human_score=human_score,
+        final_human_score=human_score,
+        final_risk_score=rules_risk_score,
+        classification=labels["classification"],
+        risk_level=labels["risk_level"],
+    )
 
     return InferenceResult(
         classification=labels["classification"],
@@ -129,9 +197,16 @@ def _fallback_result(
             "model_name": MODEL_NAME,
             "model_version": "fallback-rules",
             "model_error": reason,
+            "scoring_engine_version": SCORING_ENGINE_VERSION,
+            "model_human_score": None,
+            "rules_risk_score": rules_risk_score,
+            "rules_human_score": human_score,
             "human_score": human_score,
+            "confidence_score": human_score,
             "risk_score": rules_risk_score,
             "risk_level": labels["risk_level"],
+            "classification": labels["classification"],
+            "score_diagnostics": score_diagnostics,
             "feature_explanations": build_feature_explanations({}),
             "academic_interpretation": (
                 "This result provides supporting behavioral evidence and should not be "
@@ -238,6 +313,7 @@ class ModelArtifacts:
                 "paste_override": True,
             },
             "scoring_model": {
+                "engine_version": SCORING_ENGINE_VERSION,
                 "type": "single_unified_score",
                 "score_name": "human_score",
                 "range": [0, 100],
@@ -366,9 +442,32 @@ class TypeTraceInferenceEngine:
             human_signals = list(behavioral_summary.get("human_signals") or [])
 
             if decision_score < threshold:
-                risk_signals.append("Isolation Forest marked the timing profile as outside the learned human baseline.")
+                model_signal = (
+                    "Isolation Forest marked the timing profile as outside the learned "
+                    "human baseline."
+                )
+                if model_signal not in risk_signals:
+                    risk_signals.append(model_signal)
             else:
-                human_signals.append("Isolation Forest placed the timing profile inside the learned human baseline.")
+                model_signal = (
+                    "Isolation Forest placed the timing profile inside the learned human "
+                    "baseline."
+                )
+                if model_signal not in human_signals:
+                    human_signals.append(model_signal)
+
+            score_diagnostics = _build_score_diagnostics(
+                decision_source=decision_source,
+                model_decision_score=decision_score,
+                model_decision_threshold=threshold,
+                model_human_score=model_human_score,
+                rules_risk_score=rules_risk_score,
+                rules_human_score=rules_human_score,
+                final_human_score=human_score,
+                final_risk_score=risk_score,
+                classification=classification,
+                risk_level=risk_level,
+            )
 
             advanced_stats = {
                 **behavioral_summary,
@@ -377,16 +476,19 @@ class TypeTraceInferenceEngine:
                 "model_name": self.artifacts.metadata.get("model_name", MODEL_NAME),
                 "model_version": self.artifacts.metadata.get("model_version", MODEL_VERSION),
                 "model_algorithm": "IsolationForest",
+                "scoring_engine_version": SCORING_ENGINE_VERSION,
                 "model_score": _safe_float(decision_score),
                 "model_raw_score": _safe_float(raw_score),
                 "model_decision_threshold": _safe_float(threshold),
                 "model_human_score": model_human_score,
+                "rules_risk_score": rules_risk_score,
                 "rules_human_score": rules_human_score,
                 "human_score": human_score,
                 "risk_score": risk_score,
                 "risk_level": risk_level,
                 "classification": classification,
                 "confidence_score": confidence,
+                "score_diagnostics": score_diagnostics,
                 "risk_signals": risk_signals,
                 "human_signals": human_signals,
                 "feature_vector": features,

@@ -15,6 +15,7 @@ import {
 } from "../../components/internal/InternalShell";
 import { Badge, classificationTone } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
+import { formatEvidenceScore } from "../../lib/evidenceScore";
 
 interface SessionDetailData {
   id: number;
@@ -200,7 +201,8 @@ export default function StudentSessionDetailPage() {
                   ML Classification
                 </p>
                 <Badge tone={classificationTone(session.classification)}>
-                  {session.classification} ({session.confidence}%)
+                  {session.classification} (
+                  {formatEvidenceScore(session.confidence)}%)
                 </Badge>
               </div>
 

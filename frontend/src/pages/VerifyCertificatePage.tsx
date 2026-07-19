@@ -9,6 +9,10 @@ import { API_BASE_URL, api, getApiErrorMessage } from "../lib/api";
 import { isValidCertificateId, normalizeCertificateId } from "../lib/edgeCases";
 import { brand, colors } from "../styles/colors";
 import type { PublicCertificateVerification } from "../types/certificate";
+import {
+  formatEvidenceScore,
+  normalizeEvidenceScore,
+} from "../lib/evidenceScore";
 
 function Icon({
   name,
@@ -606,7 +610,7 @@ export default function VerifyCertificatePage() {
     result.certificate_id,
   )}`;
 
-  const confidence = Number(result.confidence || 0);
+  const confidence = normalizeEvidenceScore(result.confidence);
 
   return (
     <section
@@ -713,7 +717,7 @@ export default function VerifyCertificatePage() {
               <div className="grid gap-4 md:grid-cols-4">
                 <MetricCard
                   label="Human Writing Evidence Score"
-                  value={`${confidence}%`}
+                  value={`${formatEvidenceScore(confidence)}%`}
                   sub="Behavioral evidence score"
                 />
                 <MetricCard
@@ -774,7 +778,7 @@ export default function VerifyCertificatePage() {
                       className="mt-2 text-right text-[12px] font-medium"
                       style={{ color: colors.text.secondary }}
                     >
-                      {confidence}% confidence
+                      {formatEvidenceScore(confidence)}% human evidence
                     </p>
                   </div>
                 </div>

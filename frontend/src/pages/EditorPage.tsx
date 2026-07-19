@@ -18,6 +18,7 @@ import {
   MINIMUM_KEYSTROKES,
   truncateTitle,
 } from "../lib/edgeCases";
+import { formatEvidenceScore } from "../lib/evidenceScore";
 
 const EDITOR_CONSENT_STORAGE_KEY = "typetrace.editorEvidenceConsent.v1";
 
@@ -848,7 +849,7 @@ function AnalysisResultModal({
                     className="mt-3 text-[42px] font-black leading-none tracking-[-0.055em]"
                     style={{ color: style.text }}
                   >
-                    {Math.round(result.confidence)}%
+                    {formatEvidenceScore(result.confidence)}%
                   </p>
                   <p
                     className="mt-3 text-[16px] font-extrabold"

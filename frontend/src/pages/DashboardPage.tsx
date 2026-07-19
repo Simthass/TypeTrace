@@ -24,6 +24,10 @@ import { brand, colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
 import { ErrorState } from "../components/ui/AsyncState";
 import { classificationDisplayLabel } from "../lib/edgeCases";
+import {
+  formatEvidenceScore,
+  normalizeEvidenceScore,
+} from "../lib/evidenceScore";
 
 interface StudentSummary {
   total_sessions: number;
@@ -1105,7 +1109,7 @@ function LatestSessionsPanel({ sessions }: { sessions: StudentSession[] }) {
                 "Document",
                 "Classification",
                 "Review",
-                "Confidence",
+                "Human score",
                 "Evidence",
                 "Date",
               ].map((heading) => (
@@ -1125,7 +1129,7 @@ function LatestSessionsPanel({ sessions }: { sessions: StudentSession[] }) {
                 session.classification_bucket,
               );
               const review = reviewTone(session.review_status);
-              const confidence = clamp(Math.round(session.confidence));
+              const confidence = normalizeEvidenceScore(session.confidence);
               return (
                 <tr
                   key={session.id}
@@ -1188,7 +1192,7 @@ function LatestSessionsPanel({ sessions }: { sessions: StudentSession[] }) {
                         className="w-10 font-mono text-[12px] font-bold tabular-nums"
                         style={{ color: colors.text.primary }}
                       >
-                        {confidence}%
+                        {formatEvidenceScore(confidence)}%
                       </span>
                       <div
                         className="h-1.5 w-16 rounded-md"

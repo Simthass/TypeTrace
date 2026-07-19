@@ -8,6 +8,10 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/ToastProvider";
 import { brand, colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
+import {
+  formatEvidenceScore,
+  normalizeEvidenceScore,
+} from "../lib/evidenceScore";
 
 interface SessionItem {
   id: number;
@@ -74,8 +78,8 @@ const reviewFilters: Array<{ value: ReviewFilter; label: string }> = [
 const sortOptions: Array<{ value: SortValue; label: string }> = [
   { value: "newest", label: "Newest first" },
   { value: "oldest", label: "Oldest first" },
-  { value: "confidence-desc", label: "Confidence high to low" },
-  { value: "confidence-asc", label: "Confidence low to high" },
+  { value: "confidence-desc", label: "Human score high to low" },
+  { value: "confidence-asc", label: "Human score low to high" },
   { value: "wpm-desc", label: "Typing speed high to low" },
   { value: "duration-desc", label: "Longest sessions" },
 ];
@@ -211,10 +215,6 @@ function safeAverage(values: number[]): number {
   return (
     values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length
   );
-}
-
-function normalizePercent(value: number): number {
-  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
 }
 
 function parseTime(value: string): number {
@@ -741,9 +741,9 @@ export default function SessionsPage() {
           icon="shield"
         />
         <MetricCard
-          label="Average confidence"
+          label="Average human score"
           value={`${stats.avgConfidence}%`}
-          helper="Mean confidence across all captured evidence"
+          helper="Mean human-writing evidence score across captured sessions"
           icon="award"
         />
         <MetricCard
@@ -949,7 +949,7 @@ export default function SessionsPage() {
                       "Document",
                       "Course",
                       "Classification",
-                      "Confidence",
+                      "Human score",
                       "Capture stats",
                       "Review",
                       "Certificate",
@@ -968,7 +968,9 @@ export default function SessionsPage() {
                 <tbody>
                   {paginatedSessions.map((session) => {
                     const bucket = getBucket(session);
-                    const confidence = normalizePercent(session.confidence);
+                    const confidence = normalizeEvidenceScore(
+                      session.confidence,
+                    );
                     const hasCertificate = Boolean(session.certificate_id);
                     const barColor = progressBarColor(session);
 
@@ -1026,7 +1028,7 @@ export default function SessionsPage() {
                               className="font-mono text-[13px] font-bold tabular-nums"
                               style={{ color: colors.text.primary }}
                             >
-                              {confidence}%
+                              {formatEvidenceScore(confidence)}%
                             </p>
                             <div
                               className="mt-1 h-1 rounded-md"

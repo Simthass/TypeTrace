@@ -22,6 +22,10 @@ import { ErrorState } from "../../components/ui/AsyncState";
 import { useToast } from "../../components/ui/ToastProvider";
 import { useAuthStore } from "../../store/authStore";
 import { API_ROUTES } from "../../constants/apiRoutes";
+import {
+  formatEvidenceScore,
+  normalizeEvidenceScore,
+} from "../../lib/evidenceScore";
 
 interface TeacherSummary {
   total_courses: number;
@@ -183,10 +187,6 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
 
 function cardShadow() {
   return `0 1px 3px ${colors.shadow}`;
-}
-
-function normalizePercent(value: number): number {
-  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
 }
 
 function pct(value: number, total: number): number {
@@ -1185,7 +1185,7 @@ export default function TeacherDashboard() {
                   "Document",
                   "Student",
                   "Classification",
-                  "Confidence",
+                  "Human score",
                   "Review",
                   "Action",
                 ].map((heading) => (
@@ -1200,7 +1200,9 @@ export default function TeacherDashboard() {
               </div>
 
               {data.recent_submissions.map((submission) => {
-                const confidence = normalizePercent(submission.confidence);
+                const confidence = normalizeEvidenceScore(
+                  submission.confidence,
+                );
                 return (
                   <Link
                     key={submission.id}
@@ -1255,7 +1257,7 @@ export default function TeacherDashboard() {
                         className="font-mono text-[13px] font-bold tabular-nums"
                         style={{ color: colors.text.primary }}
                       >
-                        {confidence}%
+                        {formatEvidenceScore(confidence)}%
                       </p>
                       <div
                         className="mt-1 h-1 rounded-md"

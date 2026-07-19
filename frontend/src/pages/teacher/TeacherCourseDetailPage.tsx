@@ -12,6 +12,7 @@ import type {
   TeacherCourseDetailResponse,
   TeacherSubmission,
 } from "../../types/teacher";
+import { formatEvidenceScore } from "../../lib/evidenceScore";
 
 type CourseView = "submissions" | "students";
 
@@ -120,10 +121,6 @@ function cardShadow() {
 function safeNumber(value: number | string | null | undefined): number {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function normalizePercent(value: number): number {
-  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
 }
 
 function progress(value: number, total: number): number {
@@ -691,7 +688,7 @@ export default function TeacherCourseDetailPage() {
                             className="block font-mono text-[11px] font-bold"
                             style={{ color: colors.text.secondary }}
                           >
-                            {normalizePercent(submission.confidence)}%
+                            {formatEvidenceScore(submission.confidence)}%
                           </span>
                         </div>
                         <div className="space-y-1.5">
@@ -806,7 +803,7 @@ export default function TeacherCourseDetailPage() {
                         "Student",
                         "Submissions",
                         "Avg WPM",
-                        "Confidence",
+                        "Human score",
                         "Last activity",
                       ].map((heading) => (
                         <div

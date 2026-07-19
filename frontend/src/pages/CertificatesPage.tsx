@@ -15,6 +15,10 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/ToastProvider";
 import { brand, colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
+import {
+  formatEvidenceScore,
+  normalizeEvidenceScore,
+} from "../lib/evidenceScore";
 
 interface CertificateItem {
   session_id: number;
@@ -56,8 +60,8 @@ const filters: Array<{ value: ClassificationFilter; label: string }> = [
 const sortOptions: Array<{ value: SortMode; label: string }> = [
   { value: "NEWEST", label: "Newest first" },
   { value: "OLDEST", label: "Oldest first" },
-  { value: "CONFIDENCE_HIGH", label: "Confidence high" },
-  { value: "CONFIDENCE_LOW", label: "Confidence low" },
+  { value: "CONFIDENCE_HIGH", label: "Human score high" },
+  { value: "CONFIDENCE_LOW", label: "Human score low" },
   { value: "COURSE", label: "Course" },
 ];
 
@@ -235,10 +239,6 @@ function countByFilter(
     if (filter === "SYNTHETIC") return value === "HIGH_RISK";
     return value === filter;
   }).length;
-}
-
-function normalizePercent(value: number): number {
-  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
 }
 
 function safeNumber(value: unknown): number {
@@ -908,7 +908,7 @@ export default function CertificatesPage() {
                       "Document",
                       "Course",
                       "Classification",
-                      "Confidence",
+                      "Human score",
                       "Risk",
                       "Issued",
                       "Actions",
@@ -925,7 +925,9 @@ export default function CertificatesPage() {
                 </thead>
                 <tbody>
                   {paginatedCertificates.map((certificate) => {
-                    const confidence = normalizePercent(certificate.confidence);
+                    const confidence = normalizeEvidenceScore(
+                      certificate.confidence,
+                    );
                     const barColor = progressBarColor(
                       certificate.classification,
                     );
@@ -1034,7 +1036,7 @@ export default function CertificatesPage() {
                               className="font-mono text-[13px] font-bold tabular-nums"
                               style={{ color: colors.text.primary }}
                             >
-                              {confidence}%
+                              {formatEvidenceScore(confidence)}%
                             </p>
                             <div
                               className="mt-1 h-1 rounded-md"
@@ -1302,7 +1304,7 @@ export default function CertificatesPage() {
                       ),
                     }}
                   >
-                    {normalizePercent(selectedCertificate.confidence)}%
+                    {formatEvidenceScore(selectedCertificate.confidence)}%
                   </p>
                 </div>
                 <div

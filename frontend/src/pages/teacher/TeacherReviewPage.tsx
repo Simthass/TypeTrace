@@ -8,6 +8,10 @@ import { api, getApiErrorMessage } from "../../lib/api";
 import { useSafeRequest } from "../../hooks/useSafeRequest";
 import { colors } from "../../styles/colors";
 import { classificationDisplayLabel } from "../../lib/edgeCases";
+import {
+  formatEvidenceScore,
+  normalizeEvidenceScore,
+} from "../../lib/evidenceScore";
 
 import { ErrorState, LoadingState } from "../../components/ui/AsyncState";
 import {
@@ -441,10 +445,7 @@ export default function TeacherReviewPage() {
   const classificationLabel = classificationDisplayLabel(
     submission.classification_bucket,
   );
-  const confidence = Math.max(
-    0,
-    Math.min(100, Math.round(safeNumber(submission.confidence))),
-  );
+  const confidence = normalizeEvidenceScore(submission.confidence);
   const tone = classificationTone(submission.classification_bucket);
   const accentColor = confidenceColor(tone);
 
@@ -682,7 +683,7 @@ export default function TeacherReviewPage() {
                 className="mt-2 text-[34px] font-bold leading-none tracking-[-0.04em] tabular-nums"
                 style={{ color: accentColor }}
               >
-                {confidence}%
+                {formatEvidenceScore(confidence)}%
               </p>
               <div
                 className="mt-3 h-2.5 overflow-hidden rounded-md"
