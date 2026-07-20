@@ -66,7 +66,23 @@ PRIMARY_ARTIFACT_PATHS = {
 
 HUMAN_SCORE_THRESHOLD = 80.0
 SUSPICIOUS_SCORE_THRESHOLD = 50.0
-SCORING_ENGINE_VERSION = "scoring-v1.2-day2"
+SCORING_ENGINE_VERSION = "scoring-v1.3-day3"
+MODEL_SCORE_WEIGHT = 0.65
+BEHAVIORAL_SCORE_WEIGHT = 0.35
+HIGH_RISK_MODEL_MAX = SUSPICIOUS_SCORE_THRESHOLD - 0.01
+HIGH_RISK_RULES_MAX = 69.99
+HIGH_RISK_MAX_SCORE = SUSPICIOUS_SCORE_THRESHOLD - 0.01
+NEEDS_REVIEW_FLOOR = SUSPICIOUS_SCORE_THRESHOLD
+NEEDS_REVIEW_MAX_SCORE = HUMAN_SCORE_THRESHOLD - 0.01
+
+PRIMARY_CORROBORATION_KEYS = (
+    "mechanically_uniform_rhythm",
+    "extreme_typing_speed",
+)
+SUPPORTING_CORROBORATION_KEYS = (
+    "minimal_revision",
+    "minimal_thinking_pauses",
+)
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -128,6 +144,147 @@ def classify_from_human_score(human_score: float) -> Dict[str, str]:
     return {"classification": "SYNTHETIC", "risk_level": "HIGH"}
 
 
+def _active_behavioral_corroboration(
+    behavioral_summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Return independent process-risk signals used for high-risk corroboration.
+
+    Paste evidence is intentionally excluded here because the route-level paste
+    policy applies separate character-contribution thresholds. Missing dwell
+    evidence is also excluded because capture availability is not misconduct
+    evidence.
+    """
+
+    contributions_value = behavioral_summary.get("risk_contributions")
+    contributions = (
+        dict(contributions_value)
+        if isinstance(contributions_value, dict)
+        else {}
+    )
+
+    active_signals: List[str] = []
+    primary_signals: List[str] = []
+    supporting_signals: List[str] = []
+
+    mechanically_uniform = bool(
+        behavioral_summary.get("mechanically_uniform_rhythm")
+    ) and _safe_float(
+        contributions.get("mechanically_uniform_rhythm")
+    ) > 0
+    if mechanically_uniform:
+        active_signals.append("mechanically_uniform_rhythm")
+        primary_signals.append("mechanically_uniform_rhythm")
+
+    extreme_speed_contribution = _safe_float(
+        contributions.get("extreme_typing_speed")
+    )
+    if extreme_speed_contribution >= 12.0:
+        active_signals.append("extreme_typing_speed")
+        primary_signals.append("extreme_typing_speed")
+
+    for key in SUPPORTING_CORROBORATION_KEYS:
+        if _safe_float(contributions.get(key)) > 0:
+            active_signals.append(key)
+            supporting_signals.append(key)
+
+    return {
+        "active_signals": active_signals,
+        "primary_signals": primary_signals,
+        "supporting_signals": supporting_signals,
+        "active_signal_count": len(active_signals),
+        "primary_signal_count": len(primary_signals),
+        "supporting_signal_count": len(supporting_signals),
+    }
+
+
+def fuse_evidence_scores(
+    *,
+    model_human_score: float,
+    rules_human_score: float,
+    behavioral_summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Fuse timing-model and writing-process evidence without one-score vetoes.
+
+    The weighted score prevents a single weak model result from erasing strong
+    human process evidence. Category guards then enforce two safety properties:
+
+    1. HUMAN requires both evidence layers to reach the human band.
+    2. HIGH RISK requires a strong model anomaly plus corroborating independent
+       process evidence. An uncorroborated low weighted score is limited to
+       NEEDS REVIEW rather than becoming an automatic high-risk result.
+    """
+
+    model_score = _clamp(model_human_score)
+    rules_score = _clamp(rules_human_score)
+    weighted_score = _clamp(
+        model_score * MODEL_SCORE_WEIGHT
+        + rules_score * BEHAVIORAL_SCORE_WEIGHT
+    )
+
+    corroboration = _active_behavioral_corroboration(behavioral_summary)
+    has_primary_signal = corroboration["primary_signal_count"] >= 1
+    has_supporting_signal = corroboration["supporting_signal_count"] >= 1
+
+    high_risk_corroborated = (
+        model_score <= HIGH_RISK_MODEL_MAX
+        and rules_score <= HIGH_RISK_RULES_MAX
+        and has_primary_signal
+        and has_supporting_signal
+    )
+
+    final_score = weighted_score
+    high_risk_cap_applied = False
+    needs_review_floor_applied = False
+    human_band_guard_applied = False
+
+    if high_risk_corroborated:
+        capped_score = min(final_score, HIGH_RISK_MAX_SCORE)
+        high_risk_cap_applied = capped_score != final_score
+        final_score = capped_score
+    elif final_score < NEEDS_REVIEW_FLOOR:
+        final_score = NEEDS_REVIEW_FLOOR
+        needs_review_floor_applied = True
+
+    # A weighted average must not hide disagreement between the layers. Human
+    # classification is available only when both layers individually support it.
+    if (
+        final_score >= HUMAN_SCORE_THRESHOLD
+        and (
+            model_score < HUMAN_SCORE_THRESHOLD
+            or rules_score < HUMAN_SCORE_THRESHOLD
+        )
+    ):
+        final_score = NEEDS_REVIEW_MAX_SCORE
+        human_band_guard_applied = True
+
+    final_score = _clamp(final_score)
+    labels = classify_from_human_score(final_score)
+
+    return {
+        "policy": "weighted_fusion_with_corroboration_guards",
+        "model_weight": MODEL_SCORE_WEIGHT,
+        "behavioral_weight": BEHAVIORAL_SCORE_WEIGHT,
+        "model_human_score": model_score,
+        "rules_human_score": rules_score,
+        "weighted_human_score": weighted_score,
+        "final_human_score": final_score,
+        "final_risk_score": _clamp(100.0 - final_score),
+        "classification": labels["classification"],
+        "risk_level": labels["risk_level"],
+        "high_risk_corroborated": high_risk_corroborated,
+        "high_risk_cap_applied": high_risk_cap_applied,
+        "needs_review_floor_applied": needs_review_floor_applied,
+        "human_band_guard_applied": human_band_guard_applied,
+        "corroboration": corroboration,
+        "thresholds": {
+            "human_min": HUMAN_SCORE_THRESHOLD,
+            "needs_review_min": SUSPICIOUS_SCORE_THRESHOLD,
+            "strong_model_anomaly_max": HIGH_RISK_MODEL_MAX,
+            "high_risk_rules_max": HIGH_RISK_RULES_MAX,
+        },
+    }
+
+
 def _build_score_diagnostics(
     *,
     decision_source: str,
@@ -141,11 +298,22 @@ def _build_score_diagnostics(
     classification: str,
     risk_level: str,
     model_feature_count: int,
+    fusion_diagnostics: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    fusion = (
+        dict(fusion_diagnostics)
+        if isinstance(fusion_diagnostics, dict)
+        else {}
+    )
     return {
         "scoring_engine_version": SCORING_ENGINE_VERSION,
         "decision_source": decision_source,
-        "combination_policy": "minimum_of_model_and_rules",
+        "combination_policy": fusion.get(
+            "policy",
+            "behavioral_rules_only",
+        ),
+        "model_weight": fusion.get("model_weight"),
+        "behavioral_weight": fusion.get("behavioral_weight"),
         "model_feature_family": MODEL_FEATURE_FAMILY,
         "model_feature_count": model_feature_count,
         "model_decision_score": (
@@ -169,6 +337,36 @@ def _build_score_diagnostics(
         ),
         "rules_risk_score": _clamp(rules_risk_score),
         "rules_human_score": _clamp(rules_human_score),
+        "weighted_human_score": fusion.get("weighted_human_score"),
+        "high_risk_corroborated": fusion.get(
+            "high_risk_corroborated",
+            False,
+        ),
+        "corroboration": fusion.get(
+            "corroboration",
+            {
+                "active_signals": [],
+                "primary_signals": [],
+                "supporting_signals": [],
+                "active_signal_count": 0,
+                "primary_signal_count": 0,
+                "supporting_signal_count": 0,
+            },
+        ),
+        "guards": {
+            "high_risk_cap_applied": fusion.get(
+                "high_risk_cap_applied",
+                False,
+            ),
+            "needs_review_floor_applied": fusion.get(
+                "needs_review_floor_applied",
+                False,
+            ),
+            "human_band_guard_applied": fusion.get(
+                "human_band_guard_applied",
+                False,
+            ),
+        },
         "pre_override_human_score": _clamp(final_human_score),
         "pre_override_risk_score": _clamp(final_risk_score),
         "pre_override_classification": classification,
@@ -218,7 +416,17 @@ def _fallback_result(
         0,
         100,
     )
-    human_score = _clamp(100.0 - rules_risk_score, 0, 100)
+    rules_human_score = _clamp(100.0 - rules_risk_score, 0, 100)
+    fallback_review_floor_applied = (
+        rules_human_score < SUSPICIOUS_SCORE_THRESHOLD
+    )
+    human_score = (
+        SUSPICIOUS_SCORE_THRESHOLD
+        if fallback_review_floor_applied
+        else rules_human_score
+    )
+    human_score = _clamp(human_score)
+    final_risk_score = _clamp(100.0 - human_score)
     labels = classify_from_human_score(human_score)
     model_feature_vector = select_feature_vector(
         features,
@@ -230,12 +438,20 @@ def _fallback_result(
         model_decision_threshold=None,
         model_human_score=None,
         rules_risk_score=rules_risk_score,
-        rules_human_score=human_score,
+        rules_human_score=rules_human_score,
         final_human_score=human_score,
-        final_risk_score=rules_risk_score,
+        final_risk_score=final_risk_score,
         classification=labels["classification"],
         risk_level=labels["risk_level"],
         model_feature_count=len(MODEL_FEATURE_COLUMNS),
+        fusion_diagnostics={
+            "policy": "behavioral_rules_only_with_review_floor",
+            "weighted_human_score": rules_human_score,
+            "needs_review_floor_applied": fallback_review_floor_applied,
+            "human_band_guard_applied": False,
+            "high_risk_corroborated": False,
+            "high_risk_cap_applied": False,
+        },
     )
 
     return InferenceResult(
@@ -258,10 +474,24 @@ def _fallback_result(
             "scoring_engine_version": SCORING_ENGINE_VERSION,
             "model_human_score": None,
             "rules_risk_score": rules_risk_score,
-            "rules_human_score": human_score,
+            "rules_human_score": rules_human_score,
+            "weighted_human_score": rules_human_score,
+            "fusion_policy": "behavioral_rules_only_with_review_floor",
+            "fallback_review_floor_applied": (
+                fallback_review_floor_applied
+            ),
+            "decision_notes": (
+                [
+                    "High Risk was withheld because the trained timing model "
+                    "was unavailable; the behavioral-only result was limited "
+                    "to Needs Review."
+                ]
+                if fallback_review_floor_applied
+                else []
+            ),
             "human_score": human_score,
             "confidence_score": human_score,
-            "risk_score": rules_risk_score,
+            "risk_score": final_risk_score,
             "risk_level": labels["risk_level"],
             "classification": labels["classification"],
             "score_diagnostics": score_diagnostics,
@@ -275,7 +505,7 @@ def _fallback_result(
         },
         decision_source="fallback_rules",
         risk_level=labels["risk_level"],
-        risk_score=rules_risk_score,
+        risk_score=final_risk_score,
         human_score=human_score,
     )
 
@@ -586,12 +816,22 @@ class ModelArtifacts:
             },
             "scoring_model": {
                 "engine_version": SCORING_ENGINE_VERSION,
-                "type": "single_unified_score",
+                "type": "weighted_evidence_fusion",
                 "score_name": "human_score",
                 "range": [0, 100],
+                "weights": {
+                    "timing_model": MODEL_SCORE_WEIGHT,
+                    "behavioral_rules": BEHAVIORAL_SCORE_WEIGHT,
+                },
                 "thresholds": {
                     "human_min": HUMAN_SCORE_THRESHOLD,
                     "suspicious_min": SUSPICIOUS_SCORE_THRESHOLD,
+                },
+                "category_guards": {
+                    "human_requires_both_layers": True,
+                    "high_risk_requires_corroboration": True,
+                    "uncorroborated_low_score_floor": NEEDS_REVIEW_FLOOR,
+                    "human_disagreement_cap": NEEDS_REVIEW_MAX_SCORE,
                 },
                 "model_score_mapping": {
                     "train_min": 0,
@@ -750,22 +990,18 @@ class TypeTraceInferenceEngine:
                 100,
             )
 
-            # Day 2 retains the existing conservative fusion policy. Day 3 will
-            # replace this minimum rule with the explicit evidence-fusion policy.
-            human_score = _clamp(
-                min(model_human_score, rules_human_score),
-                0,
-                100,
+            fusion = fuse_evidence_scores(
+                model_human_score=model_human_score,
+                rules_human_score=rules_human_score,
+                behavioral_summary=behavioral_summary,
             )
-            risk_score = _clamp(100.0 - human_score, 0, 100)
-            labels = classify_from_human_score(human_score)
-            classification = labels["classification"]
-            risk_level = labels["risk_level"]
+            human_score = _clamp(fusion["final_human_score"])
+            risk_score = _clamp(fusion["final_risk_score"])
+            classification = str(fusion["classification"])
+            risk_level = str(fusion["risk_level"])
             confidence = human_score
 
-            decision_source = (
-                "timing_isolation_forest_plus_behavioral_rules"
-            )
+            decision_source = "weighted_timing_behavioral_fusion"
             risk_signals = list(
                 behavioral_summary.get("risk_signals") or []
             )
@@ -773,10 +1009,17 @@ class TypeTraceInferenceEngine:
                 behavioral_summary.get("human_signals") or []
             )
 
-            if decision_score < threshold:
+            if model_human_score < SUSPICIOUS_SCORE_THRESHOLD:
                 model_signal = (
-                    "Isolation Forest marked the timing profile as outside the "
-                    "learned human timing baseline."
+                    "Isolation Forest marked the timing profile as strongly "
+                    "outside the learned human timing baseline."
+                )
+                if model_signal not in risk_signals:
+                    risk_signals.append(model_signal)
+            elif model_human_score < HUMAN_SCORE_THRESHOLD:
+                model_signal = (
+                    "Isolation Forest marked the timing profile as borderline "
+                    "outside the learned human timing baseline."
                 )
                 if model_signal not in risk_signals:
                     risk_signals.append(model_signal)
@@ -787,6 +1030,26 @@ class TypeTraceInferenceEngine:
                 )
                 if model_signal not in human_signals:
                     human_signals.append(model_signal)
+
+            decision_notes: List[str] = []
+            if fusion["needs_review_floor_applied"]:
+                decision_notes.append(
+                    "A low weighted score was limited to Needs Review because "
+                    "the timing anomaly lacked sufficient independent process "
+                    "corroboration for a High Risk decision."
+                )
+            if fusion["human_band_guard_applied"]:
+                decision_notes.append(
+                    "Human classification was withheld because both the timing "
+                    "model and behavioral layer must independently reach the "
+                    "human evidence band."
+                )
+            if fusion["high_risk_corroborated"]:
+                decision_notes.append(
+                    "High Risk was permitted because a strong timing anomaly "
+                    "was corroborated by independent mechanical and writing-"
+                    "process risk signals."
+                )
 
             score_diagnostics = _build_score_diagnostics(
                 decision_source=decision_source,
@@ -800,6 +1063,7 @@ class TypeTraceInferenceEngine:
                 classification=classification,
                 risk_level=risk_level,
                 model_feature_count=len(self.artifacts.feature_columns),
+                fusion_diagnostics=fusion,
             )
 
             advanced_stats = {
@@ -825,6 +1089,28 @@ class TypeTraceInferenceEngine:
                 "model_human_score": model_human_score,
                 "rules_risk_score": rules_risk_score,
                 "rules_human_score": rules_human_score,
+                "weighted_human_score": fusion["weighted_human_score"],
+                "fusion_policy": fusion["policy"],
+                "model_weight": fusion["model_weight"],
+                "behavioral_weight": fusion["behavioral_weight"],
+                "high_risk_corroborated": fusion[
+                    "high_risk_corroborated"
+                ],
+                "corroborating_risk_signals": fusion[
+                    "corroboration"
+                ]["active_signals"],
+                "fusion_guards": {
+                    "high_risk_cap_applied": fusion[
+                        "high_risk_cap_applied"
+                    ],
+                    "needs_review_floor_applied": fusion[
+                        "needs_review_floor_applied"
+                    ],
+                    "human_band_guard_applied": fusion[
+                        "human_band_guard_applied"
+                    ],
+                },
+                "decision_notes": decision_notes,
                 "human_score": human_score,
                 "risk_score": risk_score,
                 "risk_level": risk_level,
@@ -854,7 +1140,8 @@ class TypeTraceInferenceEngine:
                 "academic_interpretation": (
                     "The Isolation Forest evaluates timing-liveness features "
                     "only. TypeTrace writing-process signals are evaluated by a "
-                    "separate behavioral layer. The combined result supports, "
+                    "separate behavioral layer and combined using a weighted "
+                    "policy with corroboration safeguards. The result supports, "
                     "but does not replace, human academic review."
                 ),
             }

@@ -20,6 +20,9 @@ VERY_LOW_IKI_ENTROPY = 0.5
 NATURAL_IKI_STD = 25
 NATURAL_IKI_ENTROPY = 1.0
 
+LIGHT_PASTE_RATIO_THRESHOLD = 0.20
+DOMINANT_PASTE_RATIO_THRESHOLD = 0.60
+
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -78,6 +81,21 @@ def _entropy(
     return entropy
 
 
+def _event_pasted_length(event: Dict[str, Any]) -> int:
+    """Return the best available character count for a captured paste event."""
+
+    for key in ("pastedLength", "insertedCharacters", "deltaLength"):
+        value = _safe_float(event.get(key), 0.0)
+        if value > 0:
+            return max(0, int(round(value)))
+
+    inserted_text = event.get("insertedText", event.get("inserted_text"))
+    if isinstance(inserted_text, str):
+        return len(inserted_text)
+
+    return 0
+
+
 def _extract_timing_values(events: List[Dict[str, Any]]) -> Dict[str, Any]:
     keydown_events: List[Dict[str, Any]] = []
     dwell_values: List[float] = []
@@ -85,6 +103,7 @@ def _extract_timing_values(events: List[Dict[str, Any]]) -> Dict[str, Any]:
     rhythm_flight_values: List[float] = []
     thinking_pause_values: List[float] = []
     paste_count = 0
+    pasted_length = 0
 
     for event in events:
         if not isinstance(event, dict):
@@ -95,6 +114,7 @@ def _extract_timing_values(events: List[Dict[str, Any]]) -> Dict[str, Any]:
 
         if event_key == "__PASTE_EVENT__" or event_type == "paste":
             paste_count += 1
+            pasted_length += _event_pasted_length(event)
             continue
 
         if event_type != "keydown":
@@ -129,6 +149,7 @@ def _extract_timing_values(events: List[Dict[str, Any]]) -> Dict[str, Any]:
         "rhythm_flight_values": rhythm_flight_values,
         "thinking_pause_values": thinking_pause_values,
         "paste_count": paste_count,
+        "pasted_length": pasted_length,
     }
 
 
@@ -249,6 +270,7 @@ def _build_signal_list(
     *,
     wpm: float,
     paste_count: int,
+    pasted_character_ratio: float,
     rhythm_flight_std: float,
     rhythm_flight_entropy: float,
     deletion_ratio: float,
@@ -271,8 +293,18 @@ def _build_signal_list(
     if wpm > MAX_HUMAN_REASONABLE_WPM:
         risk_signals.append("Typing speed is above the realistic human range.")
 
-    if paste_count > HIGH_PASTE_COUNT:
-        risk_signals.append("Multiple paste events were detected.")
+    if pasted_character_ratio >= DOMINANT_PASTE_RATIO_THRESHOLD:
+        risk_signals.append(
+            "Paste activity contributed most of the final document."
+        )
+    elif pasted_character_ratio >= LIGHT_PASTE_RATIO_THRESHOLD:
+        risk_signals.append(
+            "Paste activity contributed a substantial portion of the final document."
+        )
+    elif paste_count > HIGH_PASTE_COUNT:
+        risk_signals.append(
+            "Multiple limited paste events were detected."
+        )
 
     if mechanically_uniform:
         risk_signals.append(
@@ -345,6 +377,7 @@ def compute_behavioral_summary(
     rhythm_flight_values = extracted["rhythm_flight_values"]
     thinking_pause_values = extracted["thinking_pause_values"]
     paste_count = extracted["paste_count"]
+    pasted_length = extracted["pasted_length"]
 
     total_keys = len(keydown_events)
     revision_metrics = _compute_revision_metrics(events, stats)
@@ -359,7 +392,11 @@ def compute_behavioral_summary(
     deleted_character_ratio = deleted_characters / max(text_length, 1)
     revision_intensity = deleted_characters / max(text_length + deleted_characters, 1)
     pause_ratio = pauses / max(total_keys, 1)
-    paste_ratio = paste_count / max(total_keys, 1)
+    paste_event_ratio = paste_count / max(total_keys, 1)
+    pasted_character_ratio = min(
+        pasted_length / max(text_length, 1),
+        1.0,
+    )
 
     dwell_mean = mean(dwell_values) if dwell_values else 0.0
     dwell_std = pstdev(dwell_values) if len(dwell_values) > 1 else 0.0
@@ -394,6 +431,7 @@ def compute_behavioral_summary(
     signals = _build_signal_list(
         wpm=wpm,
         paste_count=paste_count,
+        pasted_character_ratio=pasted_character_ratio,
         rhythm_flight_std=rhythm_flight_std,
         rhythm_flight_entropy=rhythm_flight_entropy,
         deletion_ratio=deletion_ratio,
@@ -426,7 +464,14 @@ def compute_behavioral_summary(
         )
 
     if paste_count > 0:
-        risk_contributions["paste_events"] = min(paste_count / 5, 1.0) * 18
+        if pasted_character_ratio >= DOMINANT_PASTE_RATIO_THRESHOLD:
+            risk_contributions["paste_events"] = 28.0
+        elif pasted_character_ratio >= LIGHT_PASTE_RATIO_THRESHOLD:
+            risk_contributions["paste_events"] = 16.0
+        elif pasted_length >= 50 or paste_count > 1:
+            risk_contributions["paste_events"] = 5.0
+        else:
+            risk_contributions["paste_events"] = 2.0
 
     # Low entropy is not penalised independently. It must be corroborated by
     # extremely low timing variation over a sufficiently large rhythm sample.
@@ -468,7 +513,10 @@ def compute_behavioral_summary(
         "session_seconds": round(session_seconds, 2),
         "wpm": round(wpm, 2),
         "paste_count": paste_count,
-        "paste_ratio": round(paste_ratio, 4),
+        "pasted_length": pasted_length,
+        "paste_ratio": round(pasted_character_ratio, 4),
+        "pasted_character_ratio": round(pasted_character_ratio, 4),
+        "paste_event_ratio": round(paste_event_ratio, 4),
         "deletion_ratio": round(deletion_ratio, 4),
         "deletion_action_ratio": round(deletion_ratio, 4),
         "deleted_characters": int(deleted_characters),
