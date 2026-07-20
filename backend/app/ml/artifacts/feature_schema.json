@@ -1,6 +1,18 @@
 {
-  "model_name": "TypeTrace Isolation Forest",
-  "model_version": "isolation-forest-v1",
+  "excluded_live_feature_columns": [
+    "log_wpm",
+    "active_duration_log",
+    "paste_count_log",
+    "paste_ratio",
+    "cut_count_log",
+    "delete_actions_log",
+    "deleted_characters_log",
+    "deletion_ratio",
+    "bulk_deletion_ratio",
+    "revision_pressure",
+    "pause_count_log",
+    "idle_break_count_log"
+  ],
   "feature_columns": [
     "ht_count",
     "ft_count",
@@ -44,20 +56,14 @@
     "ft_low_variance_ratio",
     "pause_marker_ratio",
     "burst_ratio",
-    "ht_ft_correlation",
-    "log_wpm",
-    "active_duration_log",
-    "paste_count_log",
-    "paste_ratio",
-    "cut_count_log",
-    "delete_actions_log",
-    "deleted_characters_log",
-    "deletion_ratio",
-    "bulk_deletion_ratio",
-    "revision_pressure",
-    "pause_count_log",
-    "idle_break_count_log"
+    "ht_ft_correlation"
   ],
-  "missing_value_policy": "Missing/non-finite values are replaced with zero after feature engineering.",
-  "timing_policy": "-1 and timings over 1500 ms in the public dataset are treated as missing/censored."
+  "feature_count": 43,
+  "feature_family": "public-timing-v2",
+  "feature_order_is_contractual": true,
+  "missing_value_policy": "Missing or non-finite values are replaced with zero after feature engineering.",
+  "model_name": "TypeTrace Isolation Forest",
+  "model_version": "isolation-forest-v2-timing-only",
+  "schema_version": 2,
+  "timing_policy": "-1 and timings above 1500 ms are treated as missing or censored for the timing model."
 }
