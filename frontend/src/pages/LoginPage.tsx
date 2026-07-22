@@ -13,7 +13,7 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { useAuthStore, type AuthUser } from "../store/authStore";
 import { colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
-import { useToast } from "../components/ui/ToastProvider";
+import { useToast } from "../components/ui/ToastContext";
 import { normalizeEmail, isValidEmail } from "../lib/edgeCases";
 
 interface LoginResponse {
@@ -96,7 +96,7 @@ export default function LoginPage() {
       eyebrow="Secure sign in"
       title="Welcome back to your authorship workspace."
       description="Access your writing sessions, certificates, replay trails, and academic verification tools."
-      sideTitle="A cleaner way to prove original work."
+      sideTitle="A clearer record of how original work was produced."
       sideDescription="TypeTrace helps students and teachers move beyond final-text guessing by preserving the writing process itself."
     >
       <AuthForm onSubmit={handleSubmit}>

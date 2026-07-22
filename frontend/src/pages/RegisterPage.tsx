@@ -14,7 +14,7 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { useAuthStore, type UserRole } from "../store/authStore";
 import { brand, colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
-import { useToast } from "../components/ui/ToastProvider";
+import { useToast } from "../components/ui/ToastContext";
 
 interface RegisterResponse {
   message: string;

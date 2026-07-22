@@ -25,7 +25,7 @@ import {
 } from "recharts";
 
 import { ErrorState } from "../components/ui/AsyncState";
-import { useToast } from "../components/ui/ToastProvider";
+import { useToast } from "../components/ui/ToastContext";
 import { API_ROUTES } from "../constants/apiRoutes";
 import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";

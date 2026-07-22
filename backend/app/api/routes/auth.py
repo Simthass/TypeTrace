@@ -1,4 +1,3 @@
-
 from typing import Union
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -9,7 +8,9 @@ from sqlalchemy.future import select
 
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.jwt import create_access_token, create_reset_token, verify_reset_token
+from app.core.rate_limit import limiter, per_minute
 from app.core.security import (
     generate_otp,
     get_password_hash,
@@ -73,6 +74,7 @@ async def _send_otp_email(email: str, otp: str) -> None:
     status_code=status.HTTP_202_ACCEPTED,
     response_model=RegisterResponse,
 )
+@limiter.limit(per_minute(settings.MAX_LOGIN_ATTEMPTS_PER_MINUTE))
 async def register_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -156,7 +158,9 @@ async def register_user(
     status_code=status.HTTP_200_OK,
     response_model=MessageResponse,
 )
+@limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
 async def resend_registration_otp(
+    request: Request,
     req: ResendOTPRequest,
 ):
     """
@@ -195,7 +199,9 @@ async def resend_registration_otp(
     status_code=status.HTTP_201_CREATED,
     response_model=AuthTokenResponse,
 )
+@limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
 async def verify_otp(
+    request: Request,
     otp_in: OTPVerify,
     db: AsyncSession = Depends(get_db),
 ):
@@ -289,7 +295,9 @@ async def verify_otp(
     status_code=status.HTTP_200_OK,
     response_model=AuthTokenResponse,
 )
+@limiter.limit(per_minute(settings.MAX_LOGIN_ATTEMPTS_PER_MINUTE))
 async def login_user(
+    request: Request,
     login_in: UserLogin,
     db: AsyncSession = Depends(get_db),
 ):
@@ -390,7 +398,9 @@ async def logout_user():
     status_code=status.HTTP_200_OK,
     response_model=MessageResponse,
 )
+@limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
 async def request_password_reset(
+    request: Request,
     req: PasswordResetRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -422,7 +432,9 @@ async def request_password_reset(
     status_code=status.HTTP_200_OK,
     response_model=PasswordResetVerifyResponse,
 )
+@limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
 async def verify_password_reset(
+    request: Request,
     req: PasswordResetVerify,
 ):
     """
@@ -453,7 +465,9 @@ async def verify_password_reset(
     status_code=status.HTTP_200_OK,
     response_model=MessageResponse,
 )
+@limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
 async def confirm_password_reset(
+    request: Request,
     req: PasswordResetConfirm,
     db: AsyncSession = Depends(get_db),
 ):

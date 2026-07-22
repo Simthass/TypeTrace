@@ -455,7 +455,7 @@ function SegmentRenderer({
   cursor: number;
   showCursor: boolean;
   isPlaying: boolean;
-  caretRef: React.RefObject<HTMLSpanElement>;
+  caretRef: React.RefObject<HTMLSpanElement | null>;
 }) {
   if (segments.length === 0) {
     return (
@@ -601,7 +601,11 @@ export default function ReplayPage() {
   }, [sessionId]);
 
   useEffect(() => {
-    void loadReplay();
+    const timer = window.setTimeout(() => {
+      void loadReplay();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadReplay]);
 
   useEffect(() => {
@@ -612,16 +616,6 @@ export default function ReplayPage() {
       }
     };
   }, []);
-
-  useEffect(() => {
-    setIsPlaying(false);
-    setCurrentTimeMs(0);
-
-    if (playbackTimerRef.current) {
-      window.clearInterval(playbackTimerRef.current);
-      playbackTimerRef.current = null;
-    }
-  }, [replay?.session.id]);
 
   const maxTimeMs = useMemo(() => {
     if (!replay) return 1000;

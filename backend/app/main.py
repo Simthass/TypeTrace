@@ -1,4 +1,3 @@
-
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict
@@ -13,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.routes.notifications import router as notifications_router
 
 from app.core.config import settings
+from app.core.rate_limit import limiter
 
 from app.middleware.security_headers import SecurityHeadersMiddleware
 
@@ -59,11 +59,13 @@ def create_application() -> FastAPI:
     app = FastAPI(
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url="/docs" if settings.api_docs_enabled else None,
+        redoc_url="/redoc" if settings.api_docs_enabled else None,
+        openapi_url="/openapi.json" if settings.api_docs_enabled else None,
     )
     
+    app.state.limiter = limiter
+
     app.add_middleware(SecurityHeadersMiddleware)
 
     app.add_middleware(

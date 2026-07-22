@@ -3,6 +3,14 @@ import { create } from "zustand";
 import { API_ROUTES } from "../constants/apiRoutes";
 import { api } from "../lib/api";
 
+interface UnreadCountResponse {
+  unread_count: number;
+}
+
+interface NotificationListResponse {
+  notifications: NotificationItem[];
+}
+
 export interface NotificationItem {
   id: string;
   event_type: string;
@@ -43,12 +51,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   fetchUnreadCount: async () => {
     try {
-      // Justification: Extending AxiosRequestConfig locally for custom interceptor flags.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const res = await api.get(API_ROUTES.notifications.unreadCount, {
-        skipGlobalToast: true,
-        skipAuthRedirect: true,
-      } as any);
+      const res = await api.get<UnreadCountResponse>(
+        API_ROUTES.notifications.unreadCount,
+        {
+          skipGlobalToast: true,
+          skipAuthRedirect: true,
+        },
+      );
 
       const count = res.data.unread_count ?? 0;
       set({ unreadCount: count });
@@ -61,12 +70,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   fetchList: async () => {
     set({ isLoading: true });
     try {
-      // Justification: Extending AxiosRequestConfig locally for custom interceptor flags.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const res = await api.get(API_ROUTES.notifications.list, {
-        skipGlobalToast: true,
-        skipAuthRedirect: true,
-      } as any);
+      const res = await api.get<NotificationListResponse>(
+        API_ROUTES.notifications.list,
+        {
+          skipGlobalToast: true,
+          skipAuthRedirect: true,
+        },
+      );
 
       set({ items: res.data.notifications || [], hasFetchedOnce: true });
     } finally {
@@ -83,12 +93,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         ),
         unreadCount: Math.max(0, state.unreadCount - 1),
       }));
-
-      // Justification: Extending AxiosRequestConfig locally for custom interceptor flags.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await api.patch(API_ROUTES.notifications.markRead(id), {}, {
-        skipGlobalToast: true,
-      } as any);
+      await api.patch(
+        API_ROUTES.notifications.markRead(id),
+        {},
+        {
+          skipGlobalToast: true,
+        },
+      );
     } catch {
       // Revert optimism if failed
       get().fetchUnreadCount();
@@ -102,12 +113,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         items: state.items.map((n) => ({ ...n, is_read: true })),
         unreadCount: 0,
       }));
-
-      // Justification: Extending AxiosRequestConfig locally for custom interceptor flags.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await api.post(API_ROUTES.notifications.markAllRead, {}, {
-        skipGlobalToast: true,
-      } as any);
+      await api.post(
+        API_ROUTES.notifications.markAllRead,
+        {},
+        {
+          skipGlobalToast: true,
+        },
+      );
     } catch {
       get().fetchUnreadCount();
       get().fetchList();

@@ -25,11 +25,11 @@ export function useEditorDraftRecovery({
   draftId,
 }: UseEditorDraftRecoveryOptions) {
   const safeUser = safeDraftUserId(userId);
-  const generatedDraftIdRef = useRef(createEditorDraftId());
   const requestedDraftId = draftId?.trim() || null;
-  const initialDraftId = requestedDraftId ?? generatedDraftIdRef.current;
 
-  const [activeDraftId, setActiveDraftId] = useState(initialDraftId);
+  const [activeDraftId, setActiveDraftId] = useState(
+    () => requestedDraftId ?? createEditorDraftId(),
+  );
   const [activeCreatedAt, setActiveCreatedAt] = useState<number | null>(null);
   const [recoveredDraft, setRecoveredDraft] =
     useState<EditorDraftSnapshot | null>(null);
@@ -116,7 +116,6 @@ export function useEditorDraftRecovery({
       );
       if (targetDraftId === activeDraftId) {
         const nextDraftId = createEditorDraftId();
-        generatedDraftIdRef.current = nextDraftId;
         setActiveDraftId(nextDraftId);
         setActiveCreatedAt(null);
       }

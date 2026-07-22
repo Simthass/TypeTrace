@@ -167,3 +167,10 @@ Thumbs.db
 *.rar
 *.7z
 !docs/**/*.zip
+
+# ── Validation virtual environment ────────────────────────────────────────────
+venv-validation/
+
+
+# ── Controlled-validation outputs ─────────────────────────────────────────────
+validation_runs/

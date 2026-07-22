@@ -8,7 +8,7 @@ import {
   type EditorDraftSnapshot,
 } from "../hooks/useEditorDraftRecovery";
 import { api, getApiErrorMessage } from "../lib/api";
-import { useToast } from "../components/ui/ToastProvider";
+import { useToast } from "../components/ui/ToastContext";
 import { useAuthStore } from "../store/authStore";
 import { brand, colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
@@ -2243,7 +2243,7 @@ export default function EditorPage() {
                       </svg>
                     ),
                     label: "Document hash",
-                    detail: "Tamper-proof content fingerprint",
+                    detail: "Tamper-evident content fingerprint",
                   },
                 ].map(({ icon, label, detail }) => (
                   <div key={label} className="flex items-start gap-3">

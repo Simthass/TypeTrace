@@ -1,9 +1,5 @@
-// frontend/src/components/ui/ToastProvider.tsx
-
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
@@ -17,21 +13,11 @@ import {
   type ToastType,
 } from "../../lib/toast";
 import { brand, colors } from "../../styles/colors";
+import { ToastContext, type ToastContextValue } from "./ToastContext";
 
 interface ToastItem extends ToastPayload {
   id: string;
 }
-
-interface ToastContextValue {
-  showToast: (toast: ToastPayload) => void;
-  dismissToast: (id: string) => void;
-  success: (title: string, message?: string) => void;
-  error: (title: string, message?: string) => void;
-  warning: (title: string, message?: string) => void;
-  info: (title: string, message?: string) => void;
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null);
 
 const MAX_TOASTS = 4;
 const DEFAULT_DURATION = 4500;
@@ -217,14 +203,4 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       </div>
     </ToastContext.Provider>
   );
-}
-
-export function useToast() {
-  const context = useContext(ToastContext);
-
-  if (!context) {
-    throw new Error("useToast must be used inside ToastProvider.");
-  }
-
-  return context;
 }

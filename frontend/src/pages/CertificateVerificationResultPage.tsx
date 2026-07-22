@@ -8,7 +8,7 @@ import {
 import { Link, useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 
-import { useToast } from "../components/ui/ToastProvider";
+import { useToast } from "../components/ui/ToastContext";
 import { API_ROUTES } from "../constants/apiRoutes";
 import { ROUTES } from "../constants/routes";
 import { API_BASE_URL, api, getApiErrorMessage } from "../lib/api";
@@ -231,7 +231,9 @@ function CopyButton({
       await navigator.clipboard.writeText(value);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
-    } catch {}
+    } catch (error) {
+      console.warn("Unable to copy certificate value.", error);
+    }
   };
   return (
     <button
@@ -602,7 +604,14 @@ export default function VerifyCertificatePage() {
                 if (!certificateUrl) return;
                 try {
                   await navigator.clipboard.writeText(certificateUrl);
-                } catch {}
+                } catch (error) {
+                  showToast({
+                    type: "error",
+                    title: "Copy failed",
+                    message: "The certificate link could not be copied.",
+                  });
+                  console.warn("Unable to copy certificate link.", error);
+                }
               }}
               className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-[13px] font-semibold transition-all duration-150 hover:bg-surface-100"
               style={{

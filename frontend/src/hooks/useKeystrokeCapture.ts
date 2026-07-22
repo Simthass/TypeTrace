@@ -1486,7 +1486,7 @@ export function useKeystrokeCapture({
       avgIki,
       sessionSeconds,
     };
-  }, [activeDurationMs, getActiveDurationMs, lastActivityAt]);
+  }, [getActiveDurationMs]);
 
   const [liveStats, setLiveStats] = useState<SessionStats>(() =>
     createEmptyStats(),

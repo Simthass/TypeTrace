@@ -1,10 +1,8 @@
-// frontend/src/hooks/useCertificateDownload.ts
-
 import { useState } from "react";
 
 import { API_ROUTES } from "../constants/apiRoutes";
 import { api, getApiErrorMessage } from "../lib/api";
-import { useToast } from "../components/ui/ToastProvider";
+import { useToast } from "../components/ui/ToastContext";
 
 export function useCertificateDownload() {
   const toast = useToast();

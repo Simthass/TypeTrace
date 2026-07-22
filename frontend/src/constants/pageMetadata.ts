@@ -14,7 +14,7 @@ export const PAGE_METADATA_ROUTES: PageMetadataRoute[] = [
     path: ROUTES.HOME,
     title: "TypeTrace · Academic Authorship Verification",
     description:
-      "TypeTrace captures keystroke dynamics, revision behavior, pause timing, and cryptographic evidence so students can prove how their work was written.",
+      "TypeTrace captures keystroke timing, revision behavior, pauses, and integrity metadata so students can show how their work was written.",
   },
   {
     path: ROUTES.HOW_IT_WORKS,

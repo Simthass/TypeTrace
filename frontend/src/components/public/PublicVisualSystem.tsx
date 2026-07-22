@@ -557,8 +557,8 @@ export function CertificateGraphic() {
           className="mt-1.5 text-[13px] leading-relaxed"
           style={{ color: colors.text.secondary }}
         >
-          Cryptographic proof of human authorship mapped to behavioral session
-          data.
+          A cryptographically signed record of captured writing-process
+          evidence.
         </p>
       </div>
 

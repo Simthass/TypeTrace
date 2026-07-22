@@ -13,7 +13,7 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { useAuthStore, type AuthUser } from "../store/authStore";
 import { colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
-import { useToast } from "../components/ui/ToastProvider";
+import { useToast } from "../components/ui/ToastContext";
 import { isValidOtp, normalizeEmail, isValidEmail } from "../lib/edgeCases";
 
 interface VerifyOtpResponse {

@@ -19,7 +19,7 @@ import {
 
 import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
-import { useToast } from "../components/ui/ToastProvider";
+import { useToast } from "../components/ui/ToastContext";
 import { brand, colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
 import { ErrorState } from "../components/ui/AsyncState";
@@ -633,8 +633,8 @@ function EvidenceTrendPanel({
       total: trend.reduce((sum, point) => sum + point.human_sessions, 0),
     },
     {
-      label: "Suspicious sessions",
-      shortLabel: "Suspicious",
+      label: "Review Required sessions",
+      shortLabel: "Review Required",
       dataKey: "suspicious_sessions",
       color: colors.amber,
       total: trend.reduce((sum, point) => sum + point.suspicious_sessions, 0),
@@ -776,13 +776,13 @@ function ClassificationPanel({ summary }: { summary: StudentSummary }) {
       tone: "human" as const,
     },
     {
-      name: "Suspicious",
+      name: "Review Required",
       value: summary.suspicious_sessions,
       color: colors.amber,
       tone: "warning" as const,
     },
     {
-      name: "AI-like",
+      name: "High Risk",
       value: summary.synthetic_sessions,
       color: colors.red,
       tone: "danger" as const,

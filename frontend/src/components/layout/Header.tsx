@@ -1134,7 +1134,7 @@ function AnnouncementBanner({ onDismiss }: { onDismiss: () => void }) {
           whiteSpace: "nowrap",
         }}
       >
-        TypeTrace v1.0 - Behavioral authorship verification now in early access
+        TypeTrace v1.0 - Writing-process evidence for fair academic review
       </span>
       <Link
         to={ROUTES.HOW_IT_WORKS}

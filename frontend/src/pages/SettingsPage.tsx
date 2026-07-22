@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { api, getApiErrorMessage } from "../lib/api";
-import { useToast } from "../components/ui/ToastProvider";
+import { useToast } from "../components/ui/ToastContext";
 import { ROUTES } from "../constants/routes";
 import { useAuthStore } from "../store/authStore";
 import { brand, colors } from "../styles/colors";
@@ -214,14 +214,25 @@ function initialsFor(firstName?: string, lastName?: string) {
 
 // ─── Page Component ──────────────────────────────────────────────────────────
 
+type SettingsTab = "profile" | "security" | "data" | "danger";
+
+const SETTINGS_TABS: ReadonlyArray<{
+  id: SettingsTab;
+  label: string;
+  icon: string;
+}> = [
+  { id: "profile", label: "Profile", icon: "user" },
+  { id: "security", label: "Security", icon: "lock" },
+  { id: "data", label: "Data & Export", icon: "download" },
+  { id: "danger", label: "Danger Zone", icon: "trash" },
+];
+
 export default function SettingsPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const { user, setUser, logout } = useAuthStore();
 
-  const [activeTab, setActiveTab] = useState<
-    "profile" | "security" | "data" | "danger"
-  >("profile");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -369,17 +380,12 @@ export default function SettingsPage() {
             boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.03)",
           }}
         >
-          {[
-            { id: "profile", label: "Profile", icon: "user" },
-            { id: "security", label: "Security", icon: "lock" },
-            { id: "data", label: "Data & Export", icon: "download" },
-            { id: "danger", label: "Danger Zone", icon: "trash" },
-          ].map((tab) => {
+          {SETTINGS_TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 rounded-md px-3.5 py-1.5 text-[13px] font-medium transition-all ${
                   isActive ? "shadow-sm" : "hover:bg-gray-50/50"
                 }`}

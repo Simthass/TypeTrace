@@ -18,7 +18,8 @@ import {
   AppSurface,
   InternalIcon,
 } from "../../components/internal/InternalShell";
-import { Badge, classificationTone } from "../../components/ui/Badge";
+import { Badge } from "../../components/ui/Badge";
+import { classificationTone } from "../../components/ui/badgeTone";
 
 interface TeacherSubmissionDetail {
   id: number;

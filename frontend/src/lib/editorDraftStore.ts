@@ -1,7 +1,7 @@
 import type { KeystrokeEvent } from "../types/editor";
 
 import { API_ROUTES } from "../constants/apiRoutes";
-import { api } from "./api";
+import { api, getApiStatusCode } from "./api";
 
 const DB_NAME = "typetrace-editor-drafts";
 const DB_VERSION = 3;
@@ -607,7 +607,7 @@ async function fetchServerDrafts(
     const response = await api.get(API_ROUTES.drafts.list, {
       skipGlobalToast: true,
       skipAuthRedirect: true,
-    } as any);
+    });
     const rawDrafts = Array.isArray(response.data?.drafts)
       ? response.data.drafts
       : [];
@@ -633,7 +633,7 @@ async function fetchServerDraft(
     const response = await api.get(API_ROUTES.drafts.detail(draftId), {
       skipGlobalToast: true,
       skipAuthRedirect: true,
-    } as any);
+    });
     return serverDraftToSnapshot(response.data?.draft, userId);
   } catch {
     return null;
@@ -654,17 +654,31 @@ async function syncDraftToServer(
       {
         skipGlobalToast: true,
         skipAuthRedirect: true,
-      } as any,
+      },
     );
     const serverDraft = serverDraftToSnapshot(
       response.data?.draft,
       snapshot.userId,
     );
     return serverDraft ?? { ...snapshot, syncStatus: "SYNCED" };
-  } catch (error: any) {
-    const status = error?.response?.status;
+  } catch (error: unknown) {
+    const status = getApiStatusCode(error);
+    const response =
+      error && typeof error === "object" && "response" in error
+        ? (
+            error as {
+              response?: {
+                data?: {
+                  detail?: {
+                    server_draft?: unknown;
+                  };
+                };
+              };
+            }
+          ).response
+        : undefined;
     const serverDraft = serverDraftToSnapshot(
-      error?.response?.data?.detail?.server_draft,
+      response?.data?.detail?.server_draft,
       snapshot.userId,
     );
 
@@ -689,7 +703,7 @@ async function deleteServerDraftById(draftId: string | null): Promise<void> {
     await api.delete(API_ROUTES.drafts.detail(draftId), {
       skipGlobalToast: true,
       skipAuthRedirect: true,
-    } as any);
+    });
   } catch {
     // Local deletion still wins for the current browser. Backend cleanup retries
     // when the draft is next synced/listed.
@@ -713,17 +727,17 @@ export async function listEditorDrafts(
   userId?: string | null,
 ): Promise<EditorDraftSnapshot[]> {
   const localDrafts = listLocalDrafts(userId);
-  let indexedDrafts: EditorDraftSnapshot[] = [];
-
-  try {
-    const values = await readAllIndexedDbValues();
-    indexedDrafts = values
-      .map((value) => normalizeDraft(value, userId))
-      .filter((draft): draft is EditorDraftSnapshot => Boolean(draft))
-      .filter((draft) => isDraftForUser(draft, userId));
-  } catch {
-    indexedDrafts = [];
-  }
+  const indexedDrafts = await (async (): Promise<EditorDraftSnapshot[]> => {
+    try {
+      const values = await readAllIndexedDbValues();
+      return values
+        .map((value) => normalizeDraft(value, userId))
+        .filter((draft): draft is EditorDraftSnapshot => Boolean(draft))
+        .filter((draft) => isDraftForUser(draft, userId));
+    } catch {
+      return [];
+    }
+  })();
 
   const localCombined = mergeDraftLists([...localDrafts, ...indexedDrafts]);
   const syncedLocalDrafts = await Promise.all(

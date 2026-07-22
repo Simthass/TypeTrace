@@ -5,7 +5,7 @@ import { api, getApiErrorMessage } from "../../lib/api";
 import { ROUTES } from "../../constants/routes";
 import { colors, brand } from "../../styles/colors";
 import { ErrorState, EmptyState } from "../../components/ui/AsyncState";
-import { useToast } from "../../components/ui/ToastProvider";
+import { useToast } from "../../components/ui/ToastContext";
 import type {
   TeacherStudent,
   TeacherStudentsResponse,
@@ -513,15 +513,12 @@ export default function TeacherStudentsPage() {
     safePage * PAGE_SIZE + PAGE_SIZE,
   );
 
-  useEffect(() => {
-    setPage(0);
-  }, [search, courseFilter, statusFilter, sortKey]);
-
   const resetFilters = () => {
     setSearch("");
     setCourseFilter("ALL");
     setStatusFilter("ALL");
     setSortKey("name");
+    setPage(0);
   };
 
   if (isLoading) return <InlineLoader />;
@@ -649,7 +646,10 @@ export default function TeacherStudentsPage() {
               </span>
               <input
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(0);
+                }}
                 placeholder="Search student, email, ID..."
                 className="h-9 w-full rounded-md border pl-9 pr-9 text-[12px] font-medium outline-none"
                 style={{
@@ -661,7 +661,10 @@ export default function TeacherStudentsPage() {
               {search && (
                 <button
                   type="button"
-                  onClick={() => setSearch("")}
+                  onClick={() => {
+                    setSearch("");
+                    setPage(0);
+                  }}
                   className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md"
                   style={{ color: colors.text.secondary }}
                   aria-label="Clear search"
@@ -673,7 +676,10 @@ export default function TeacherStudentsPage() {
 
             <select
               value={courseFilter}
-              onChange={(event) => setCourseFilter(event.target.value)}
+              onChange={(event) => {
+                setCourseFilter(event.target.value);
+                setPage(0);
+              }}
               className="h-9 rounded-md border px-3 text-[12px] font-semibold outline-none"
               style={{
                 background: colors.surface[50],
@@ -691,9 +697,10 @@ export default function TeacherStudentsPage() {
 
             <select
               value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(event.target.value as StatusFilter)
-              }
+              onChange={(event) => {
+                setStatusFilter(event.target.value as StatusFilter);
+                setPage(0);
+              }}
               className="h-9 rounded-md border px-3 text-[12px] font-semibold outline-none"
               style={{
                 background: colors.surface[50],
@@ -710,7 +717,10 @@ export default function TeacherStudentsPage() {
 
             <select
               value={sortKey}
-              onChange={(event) => setSortKey(event.target.value as SortKey)}
+              onChange={(event) => {
+                setSortKey(event.target.value as SortKey);
+                setPage(0);
+              }}
               className="h-9 rounded-md border px-3 text-[12px] font-semibold outline-none"
               style={{
                 background: colors.surface[50],

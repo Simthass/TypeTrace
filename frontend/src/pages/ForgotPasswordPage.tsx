@@ -12,7 +12,7 @@ import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
 import { colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
-import { useToast } from "../components/ui/ToastProvider";
+import { useToast } from "../components/ui/ToastContext";
 import {
   normalizeEmail,
   isValidEmail,

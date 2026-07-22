@@ -19,7 +19,7 @@ import {
   titleForDraft,
   type EditorDraftSnapshot,
 } from "../lib/editorDraftStore";
-import { useToast } from "../components/ui/ToastProvider";
+import { useToast } from "../components/ui/ToastContext";
 import { MINIMUM_KEYSTROKES } from "../lib/edgeCases";
 
 function Icon({ type, size = 16 }: { type: string; size?: number }) {

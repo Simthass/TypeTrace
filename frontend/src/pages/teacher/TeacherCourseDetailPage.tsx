@@ -5,7 +5,7 @@ import { ROUTES } from "../../constants/routes";
 import { api, getApiErrorMessage } from "../../lib/api";
 import { brand, colors } from "../../styles/colors";
 import { ErrorState, EmptyState } from "../../components/ui/AsyncState";
-import { useToast } from "../../components/ui/ToastProvider";
+import { useToast } from "../../components/ui/ToastContext";
 import { API_ROUTES } from "../../constants/apiRoutes";
 import type {
   TeacherClassificationBucket,

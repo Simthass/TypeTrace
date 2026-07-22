@@ -1,9 +1,7 @@
-// frontend/src/hooks/useSafeRequest.ts
-
 import { useCallback, useRef, useState } from "react";
 
 import { getApiErrorMessage } from "../lib/api";
-import { useToast } from "../components/ui/ToastProvider";
+import { useToast } from "../components/ui/ToastContext";
 
 interface SafeRequestOptions {
   errorTitle?: string;

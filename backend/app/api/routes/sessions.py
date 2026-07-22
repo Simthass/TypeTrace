@@ -10,8 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_student
 from app.core.crypto import encrypt_json, encrypt_text
 from app.db.database import get_db
-from app.ml.inference_engine import inference_engine
-from app.ml.paste_policy import MINIMUM_KEYSTROKES, apply_paste_policy
+from app.ml.inference_engine import (
+    SCORING_ENGINE_VERSION,
+    inference_engine,
+)
+from app.ml.paste_policy import (
+    MINIMUM_KEYSTROKES,
+    PASTE_POLICY_VERSION,
+    apply_paste_policy,
+)
 from app.models.certificate import Certificate
 from app.models.course import Course, CourseStudent
 from app.models.draft import DraftSession
@@ -347,6 +354,21 @@ async def analyze_session(
         evidence_metadata={
             **canonical.evidence_metadata,
             "client_metadata": payload.client_metadata,
+            "analysis_versions": {
+                "scoring_engine_version": str(
+                    advanced_stats.get("scoring_engine_version")
+                    or SCORING_ENGINE_VERSION
+                ),
+                "paste_policy_version": str(
+                    advanced_stats.get("paste_policy_version")
+                    or PASTE_POLICY_VERSION
+                ),
+                "model_version": str(model_version),
+                "model_feature_family": advanced_stats.get(
+                    "model_feature_family"
+                ),
+                "decision_source": advanced_stats.get("decision_source"),
+            },
         },
         active_duration_ms=canonical.active_duration_ms,
         idle_breaks_json=canonical.idle_breaks,
@@ -394,6 +416,14 @@ async def analyze_session(
                 "draft_id": payload.draft_id,
                 "model_version": str(model_version),
                 "model_score": model_score,
+                "scoring_engine_version": str(
+                    advanced_stats.get("scoring_engine_version")
+                    or SCORING_ENGINE_VERSION
+                ),
+                "paste_policy_version": str(
+                    advanced_stats.get("paste_policy_version")
+                    or PASTE_POLICY_VERSION
+                ),
             },
         )
     )

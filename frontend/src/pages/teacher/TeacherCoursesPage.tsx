@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { api, getApiErrorMessage } from "../../lib/api";
 import { API_ROUTES } from "../../constants/apiRoutes";
 import { ROUTES } from "../../constants/routes";
-import { useToast } from "../../components/ui/ToastProvider";
+import { useToast } from "../../components/ui/ToastContext";
 import { colors, brand } from "../../styles/colors";
 import { Button } from "../../components/ui/Button";
 import { EmptyState, ErrorState } from "../../components/ui/AsyncState";
@@ -289,11 +289,9 @@ function CourseCard({ course, index }: { course: Course; index: number }) {
 }
 
 function CreateCourseModal({
-  isOpen,
   onClose,
   onSuccess,
 }: {
-  isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -302,15 +300,6 @@ function CreateCourseModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
-
-  // Reset state when opened
-  useEffect(() => {
-    if (isOpen) {
-      setCourseName("");
-      setCourseCode("");
-      setError(null);
-    }
-  }, [isOpen]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -340,132 +329,126 @@ function CreateCourseModal({
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
-            onClick={onClose}
-          />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-md pointer-events-auto rounded-md border bg-white shadow-2xl"
-              style={{ borderColor: colors.surface[200] }}
+    <>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full max-w-md pointer-events-auto rounded-md border bg-white shadow-2xl"
+          style={{ borderColor: colors.surface[200] }}
+        >
+          <div
+            className="flex items-center justify-between border-b px-5 py-4"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <h2
+              className="text-[16px] font-bold tracking-tight"
+              style={{ color: colors.text.primary }}
             >
-              <div
-                className="flex items-center justify-between border-b px-5 py-4"
-                style={{ borderColor: colors.surface[200] }}
-              >
-                <h2
-                  className="text-[16px] font-bold tracking-tight"
-                  style={{ color: colors.text.primary }}
-                >
-                  Create New Course
-                </h2>
-                <button
-                  onClick={onClose}
-                  className="rounded-md p-1 transition-colors hover:bg-surface-100"
+              Create New Course
+            </h2>
+            <button
+              onClick={onClose}
+              className="rounded-md p-1 transition-colors hover:bg-surface-100"
+              style={{ color: colors.text.secondary }}
+            >
+              <Icon name="x" size={16} />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-5">
+            <div className="space-y-4">
+              <div>
+                <label
+                  className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wider"
                   style={{ color: colors.text.secondary }}
                 >
-                  <Icon name="x" size={16} />
-                </button>
+                  Course Name
+                </label>
+                <input
+                  type="text"
+                  value={courseName}
+                  onChange={(e) => setCourseName(e.target.value)}
+                  placeholder="e.g. Advanced Software Engineering"
+                  className="w-full rounded-md border px-3 py-2 text-[14px] outline-none transition-colors focus:ring-2"
+                  style={{
+                    borderColor: colors.surface[200],
+                    background: colors.surface[50],
+                    color: colors.text.primary,
+                  }}
+                  autoFocus
+                  disabled={isSubmitting}
+                />
               </div>
 
-              <form onSubmit={handleSubmit} className="p-5">
-                <div className="space-y-4">
-                  <div>
-                    <label
-                      className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wider"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      Course Name
-                    </label>
-                    <input
-                      type="text"
-                      value={courseName}
-                      onChange={(e) => setCourseName(e.target.value)}
-                      placeholder="e.g. Advanced Software Engineering"
-                      className="w-full rounded-md border px-3 py-2 text-[14px] outline-none transition-colors focus:ring-2"
-                      style={{
-                        borderColor: colors.surface[200],
-                        background: colors.surface[50],
-                        color: colors.text.primary,
-                      }}
-                      autoFocus
-                      disabled={isSubmitting}
-                    />
-                  </div>
+              <div>
+                <label
+                  className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wider"
+                  style={{ color: colors.text.secondary }}
+                >
+                  Course Code
+                </label>
+                <input
+                  type="text"
+                  value={courseCode}
+                  onChange={(e) => setCourseCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. CS-401"
+                  className="w-full rounded-md border px-3 py-2 text-[14px] uppercase outline-none transition-colors focus:ring-2"
+                  style={{
+                    borderColor: colors.surface[200],
+                    background: colors.surface[50],
+                    color: colors.text.primary,
+                  }}
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
 
-                  <div>
-                    <label
-                      className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wider"
-                      style={{ color: colors.text.secondary }}
-                    >
-                      Course Code
-                    </label>
-                    <input
-                      type="text"
-                      value={courseCode}
-                      onChange={(e) =>
-                        setCourseCode(e.target.value.toUpperCase())
-                      }
-                      placeholder="e.g. CS-401"
-                      className="w-full rounded-md border px-3 py-2 text-[14px] uppercase outline-none transition-colors focus:ring-2"
-                      style={{
-                        borderColor: colors.surface[200],
-                        background: colors.surface[50],
-                        color: colors.text.primary,
-                      }}
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                </div>
+            {error && (
+              <div
+                className="mt-4 rounded-md border px-3 py-2 text-[13px]"
+                style={{
+                  background: brand.aiBg,
+                  borderColor: brand.aiAccent,
+                  color: brand.aiText,
+                }}
+              >
+                {error}
+              </div>
+            )}
 
-                {error && (
-                  <div
-                    className="mt-4 rounded-md border px-3 py-2 text-[13px]"
-                    style={{
-                      background: brand.aiBg,
-                      borderColor: brand.aiAccent,
-                      color: brand.aiText,
-                    }}
-                  >
-                    {error}
-                  </div>
-                )}
-
-                <div className="mt-6 flex justify-end gap-3">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={onClose}
-                    disabled={isSubmitting}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    disabled={
-                      !courseName.trim() || !courseCode.trim() || isSubmitting
-                    }
-                  >
-                    {isSubmitting ? "Creating..." : "Create Course"}
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        </>
-      )}
-    </AnimatePresence>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onClose}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={
+                  !courseName.trim() || !courseCode.trim() || isSubmitting
+                }
+              >
+                {isSubmitting ? "Creating..." : "Create Course"}
+              </Button>
+            </div>
+          </form>
+        </motion.div>
+      </div>
+    </>
   );
 }
 
@@ -494,16 +477,25 @@ export default function TeacherCoursesPage() {
   };
 
   useEffect(() => {
-    fetchCourses();
+    const timer = window.setTimeout(() => {
+      void fetchCourses();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    if (searchParams.get("createCourse") === "1") {
+    if (searchParams.get("createCourse") !== "1") return;
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete("createCourse");
+    setSearchParams(nextSearchParams, { replace: true });
+
+    const timer = window.setTimeout(() => {
       setIsModalOpen(true);
-      // Clean up the URL so a refresh doesn't pop the modal again
-      searchParams.delete("createCourse");
-      setSearchParams(searchParams, { replace: true });
-    }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [searchParams, setSearchParams]);
 
   return (
@@ -555,8 +547,7 @@ export default function TeacherCoursesPage() {
       ) : courses.length === 0 ? (
         <EmptyState
           title="No courses created yet"
-          description="Create your first academic course to generate an invite code. Students will use this code to link their writing sessions to your module."
-          icon="course"
+          message="Create your first academic course to generate an invite code. Students will use this code to link their writing sessions to your module."
           action={
             <Button
               variant="primary"
@@ -576,11 +567,14 @@ export default function TeacherCoursesPage() {
       )}
 
       {/* Creation Modal */}
-      <CreateCourseModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSuccess={fetchCourses}
-      />
+      <AnimatePresence>
+        {isModalOpen && (
+          <CreateCourseModal
+            onClose={() => setIsModalOpen(false)}
+            onSuccess={fetchCourses}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

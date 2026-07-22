@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { api, getApiErrorMessage } from "../../lib/api";
 import { API_ROUTES } from "../../constants/apiRoutes";
 import { ROUTES } from "../../constants/routes";
-import { useToast } from "../../components/ui/ToastProvider";
+import { useToast } from "../../components/ui/ToastContext";
 import { brand, colors } from "../../styles/colors";
 import { Button } from "../../components/ui/Button";
 

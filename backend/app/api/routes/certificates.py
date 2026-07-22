@@ -1,4 +1,3 @@
-# backend/app/api/routes/certificates.py
 
 import io
 import json
@@ -24,6 +23,7 @@ from sqlalchemy import create_engine, text
 
 from app.api.deps import get_current_user
 from app.core.config import PROJECT_ROOT, settings
+from app.core.rate_limit import limiter, per_minute
 from app.models.user import User
 from app.core.privacy import safe_public_certificate_identity
 from app.services.certificate_signing import verify_certificate_record
@@ -465,6 +465,7 @@ def _pdf_public_record(record: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.get("/verify/{cert_id}", name="verify_certificate_public")
+@limiter.limit(per_minute(settings.MAX_PUBLIC_VERIFY_PER_MINUTE))
 async def verify_certificate_public(
     request: Request,
     cert_id: str,
@@ -1223,7 +1224,7 @@ async def download_certificate_pdf(
     """
     Public PDF download endpoint.
 
-    Public by design: anyone with a certificate ID can verify/download the proof.
+    Public by design: anyone with a certificate ID can verify or download the signed record.
     """
     record = _fetch_certificate_record(cert_id)
 

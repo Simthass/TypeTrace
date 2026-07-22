@@ -18,6 +18,7 @@ import {
   PublicCard,
   PrimaryLink,
   SecondaryLink,
+  type PublicIconName,
 } from "../components/public/PublicVisualSystem";
 
 // ─── Image paths ──────────────────────────────────────────────────────────────
@@ -61,44 +62,44 @@ function withAlpha(hex: string, alpha: string) {
 
 // ─── Icon primitives ──────────────────────────────────────────────────────────
 
-function Icon({
-  name,
-  size = 16,
-  strokeWidth = 2,
-}: {
-  name:
-    | "shield"
-    | "search"
-    | "keyboard"
-    | "timeline"
-    | "teacher"
-    | "document"
-    | "model"
-    | "certificate"
-    | "hash"
-    | "replay"
-    | "pulse"
-    | "lock"
-    | "check"
-    | "arrowRight"
-    | "spark"
-    | "zap"
-    | "eye"
-    | "fingerprint"
-    | "globe"
-    | "users"
-    | "clock"
-    | "activity"
-    | "server"
-    | "database"
-    | "shieldCheck"
-    | "barChart"
-    | "fileText"
-    | "download";
+type IconName =
+  | "shield"
+  | "search"
+  | "keyboard"
+  | "timeline"
+  | "teacher"
+  | "document"
+  | "model"
+  | "certificate"
+  | "hash"
+  | "replay"
+  | "pulse"
+  | "lock"
+  | "check"
+  | "arrowRight"
+  | "spark"
+  | "zap"
+  | "eye"
+  | "fingerprint"
+  | "globe"
+  | "users"
+  | "clock"
+  | "activity"
+  | "server"
+  | "database"
+  | "shieldCheck"
+  | "barChart"
+  | "fileText"
+  | "download";
+
+interface IconProps {
+  name: IconName;
   size?: number;
   strokeWidth?: number;
-}) {
-  const paths: Record<string, ReactNode> = {
+}
+
+function Icon({ name, size = 16, strokeWidth = 2 }: IconProps) {
+  const paths: Record<IconName, ReactNode> = {
     shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
     shieldCheck: (
       <>
@@ -389,23 +390,23 @@ function ToggleDot({ on }: { on: boolean }) {
   );
 }
 
-/** Left widget — mirrors the reference's "8% / 90% sync" toggle stat card. */
-function AccuracyToggleWidget() {
+/** Left widget — contrasts final-text review with captured process evidence. */
+function EvidenceSourceWidget() {
   return (
     <div className="flex w-[230px] flex-col gap-2.5 p-4">
       <div className="flex items-center justify-between">
         <div>
           <p
-            className="text-[9px] font-bold"
+            className="text-[9px] font-bold uppercase tracking-wider"
             style={{ color: colors.text.muted }}
           >
-            62%
+            Final text only
           </p>
           <p
             className="text-[11.5px] font-semibold"
             style={{ color: colors.text.secondary }}
           >
-            Manual review
+            No writing-process context
           </p>
         </div>
         <ToggleDot on={false} />
@@ -416,14 +417,17 @@ function AccuracyToggleWidget() {
       />
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[9px] font-bold" style={{ color: colors.brand }}>
-            99.7%
+          <p
+            className="text-[9px] font-bold uppercase tracking-wider"
+            style={{ color: colors.brand }}
+          >
+            TypeTrace session
           </p>
           <p
             className="text-[11.5px] font-semibold"
             style={{ color: colors.text.primary }}
           >
-            With TypeTrace
+            Process evidence recorded
           </p>
         </div>
         <ToggleDot on={true} />
@@ -432,7 +436,7 @@ function AccuracyToggleWidget() {
   );
 }
 
-/** Right widget — mirrors the reference's "Secure Proxy Protection" badge card. */
+/** Right widget — communicates certificate-record integrity without overclaiming. */
 function SealBadgeWidget() {
   return (
     <div className="flex w-[180px] flex-col items-center gap-2.5 p-4 text-center">
@@ -440,7 +444,7 @@ function SealBadgeWidget() {
         className="text-[10px] font-bold uppercase tracking-widest"
         style={{ color: colors.text.secondary }}
       >
-        Tamper-proof sealing
+        Tamper-evident record
       </p>
       <div
         className="flex h-11 w-11 items-center justify-center rounded-full"
@@ -452,7 +456,7 @@ function SealBadgeWidget() {
   );
 }
 
-/** Avatar-stack trust line, using actual images */
+/** Product-purpose line shown above the main hero heading. */
 function HeroTrustRow() {
   return (
     <div className="mb-7 flex flex-col items-center gap-3 sm:flex-row">
@@ -471,14 +475,14 @@ function HeroTrustRow() {
         className="text-[13px] font-medium"
         style={{ color: colors.text.secondary }}
       >
-        Trusted by students, teachers &amp; academic reviewers
+        Build for students, teachers &amp; academic reviewers
       </span>
     </div>
   );
 }
 
 /** Small icon node used inside the flow connector. */
-function FlowNode({ icon }: { icon: Parameters<typeof Icon>[0]["name"] }) {
+function FlowNode({ icon }: { icon: IconName }) {
   return (
     <div
       className="flex h-9 w-9 items-center justify-center rounded-lg border"
@@ -551,7 +555,7 @@ function WritingSessionsCardBody() {
         className="mb-3 text-[10px] font-bold uppercase tracking-widest"
         style={{ color: colors.text.secondary }}
       >
-        Student live writing sessions
+        Illustrative writing sessions
       </p>
       <div className="grid grid-cols-3 place-items-center gap-2">
         {STUDENT_AVATARS.map((src, i) => (
@@ -573,15 +577,15 @@ function WritingSessionsCardBody() {
 function CertifiedSessionsCardBody() {
   const rows = [
     {
-      name: "Amara K.",
+      name: "Example session A",
       pct: 96,
-      label: "Human",
+      label: "Human-supporting",
       avatar: STUDENT_AVATARS[0],
       color: brand.humanText,
       bg: brand.humanBg,
     },
     {
-      name: "Devon R.",
+      name: "Example session B",
       pct: 64,
       label: "Review Required",
       avatar: STUDENT_AVATARS[1],
@@ -589,9 +593,9 @@ function CertifiedSessionsCardBody() {
       bg: brand.suspiciousBg,
     },
     {
-      name: "Priya S.",
+      name: "Example session C",
       pct: 18,
-      label: "Synthetic behavior",
+      label: "High risk",
       avatar: STUDENT_AVATARS[2],
       color: colors.red,
       bg: withAlpha(colors.red, "12"),
@@ -604,7 +608,7 @@ function CertifiedSessionsCardBody() {
         className="mb-3 text-[10px] font-bold uppercase tracking-widest"
         style={{ color: colors.text.secondary }}
       >
-        Certified sessions
+        Illustrative evidence results
       </p>
       <div className="flex flex-col gap-3">
         {rows.map((row) => (
@@ -724,7 +728,7 @@ function HeroSection() {
         positionClass="left-[3%] top-[24%] xl:left-[7%]"
         delay={delay(0.7)}
       >
-        <AccuracyToggleWidget />
+        <EvidenceSourceWidget />
       </HeroWidget>
       <HeroWidget
         positionClass="right-[3%] top-[10%] xl:right-[8%]"
@@ -752,13 +756,13 @@ function HeroSection() {
           }}
           className="mb-6 max-w-[820px] text-[2.9rem] font-bold leading-[1.05] tracking-[-0.045em] sm:text-[4rem] lg:text-[4rem]"
         >
-          <span style={{ color: colors.text.primary }}>
-            Prove you wrote it with{" "}
-          </span>{" "}
-          <span style={{ color: colors.brand }}>behavioral</span>
+          <span style={{ color: colors.text.primary }}>Capture the </span>
+          <span style={{ color: colors.brand }}>Writing</span>
           <br />
-          <span style={{ color: colors.brand }}>authorship </span>{" "}
-          <span style={{ color: colors.text.primary }}>evidence.</span>
+          <span style={{ color: colors.brand }}>Process </span>
+          <span style={{ color: colors.text.primary }}>
+            Behind Every Draft.
+          </span>
         </motion.h1>
 
         <motion.p
@@ -768,8 +772,9 @@ function HeroSection() {
           className="mb-9 max-w-[560px] text-[16.5px] leading-[1.7]"
           style={{ color: colors.text.secondary }}
         >
-          TypeTrace records keystroke rhythm, pauses, and revisions as you
-          write, then seals it into a certificate you share.
+          TypeTrace records keystroke timing, pauses, revisions, and paste
+          activity during a writing session, then produces a tamper-evident
+          certificate for student and teacher review.
         </motion.p>
 
         <motion.div
@@ -778,8 +783,12 @@ function HeroSection() {
           transition={{ duration: 0.55, delay: delay(0.32) }}
           className="mb-4 flex flex-col items-center gap-3 sm:flex-row"
         >
-          <PrimaryLink to={ROUTES.REGISTER}>Start writing for free</PrimaryLink>
-          <SecondaryLink to={ROUTES.VERIFY_LOOKUP}>Learn more</SecondaryLink>
+          <PrimaryLink to={ROUTES.REGISTER}>
+            Start a writing session
+          </PrimaryLink>
+          <SecondaryLink to={ROUTES.HOW_IT_WORKS}>
+            See how it works
+          </SecondaryLink>
         </motion.div>
 
         <motion.p
@@ -789,7 +798,7 @@ function HeroSection() {
           className="text-[12.5px]"
           style={{ color: colors.text.muted }}
         >
-          Free for students · No credit card required
+          Student and teacher accounts available · No credit card required
         </motion.p>
       </div>
 
@@ -804,11 +813,12 @@ function HeroSection() {
 
 function TrustStrip() {
   const items = [
-    "University of Bedfordshire",
-    "Academic Integrity Office",
-    "Student Council",
-    "Writing Center",
+    "Capture the writing process",
+    "Analyze behavioral evidence",
+    "Review course submissions",
+    "Verify certificates",
   ];
+
   return (
     <section
       className="border-y px-6 py-8 md:px-12"
@@ -822,7 +832,7 @@ function TrustStrip() {
           className="text-[11px] font-bold uppercase tracking-[0.16em]"
           style={{ color: colors.text.muted }}
         >
-          Piloted with
+          Core workflow
         </span>
         {items.map((name) => (
           <span
@@ -839,29 +849,29 @@ function TrustStrip() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WHY CHOOSE US — new section, matches the supplied reference layout
+// WHY CHOOSE US
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WHY_CHOOSE_FEATURES = [
   {
     icon: "keyboard" as const,
-    title: "Every keystroke matters",
-    body: "TypeTrace captures rhythm, pauses, and revisions as they happen — not a snapshot of the finished text.",
+    title: "Process evidence captured in context",
+    body: "TypeTrace records timing, pauses, revisions, deletions, and paste activity while the writing session develops.",
   },
   {
     icon: "shieldCheck" as const,
-    title: "Tamper-proof certificates",
-    body: "Every session is sealed with a SHA-256 hash, so any edit to the record is instantly detectable.",
+    title: "Tamper-evident certificate records",
+    body: "Document and evidence hashes make later changes detectable, while the signed certificate preserves the recorded result.",
   },
   {
     icon: "teacher" as const,
-    title: "Built for teacher review",
-    body: "Reviewers see structured behavioral evidence and can verify authenticity in seconds, not guesswork.",
+    title: "Human review remains in control",
+    body: "Behavioral signals support a teacher's review; they do not make an automatic misconduct decision.",
   },
   {
     icon: "lock" as const,
-    title: "Privacy respected by design",
-    body: "No video, no screen recording. Only the writing signals needed to support a fair, human review.",
+    title: "Public verification limits exposure",
+    body: "Certificate lookup confirms a public record without publishing the full essay or raw keystroke stream.",
   },
 ];
 
@@ -894,8 +904,7 @@ function WhyChooseSection() {
             className="mx-auto mt-3 max-w-[720px] text-[2.1rem] font-bold leading-[1.18] tracking-[-0.03em] md:text-[2.75rem]"
             style={{ color: colors.text.primary }}
           >
-            Students and teachers choose TypeTrace because proof shouldn't be a
-            guess.
+            Academic review is stronger when the writing process is visible.
           </h2>
         </Reveal>
 
@@ -928,7 +937,7 @@ function WhyChooseSection() {
 
         <Reveal delay={0.3} className="mt-16">
           <Link
-            to={ROUTES.REGISTER}
+            to={ROUTES.HOW_IT_WORKS}
             className="inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-[14px] font-bold transition-all duration-150 hover:opacity-90 active:scale-[0.98]"
             style={{
               background: colors.brand,
@@ -965,26 +974,26 @@ const SHOWCASE_STEPS = [
   {
     number: "01",
     eyebrow: "Capture",
-    title: "Writing behavior captured the moment you start typing.",
-    body: "No plugins, no extra setup. The moment a student opens a session, TypeTrace begins recording rhythm, pauses, and revisions in the background.",
+    title: "Capture writing-process evidence as the session develops.",
+    body: "The editor records timing, pauses, revisions, deletions, and paste activity while the student writes. Idle time is separated from active writing time.",
     image: IMAGE_PATHS.capture,
     alt: "Student typing on a laptop during a focused writing session",
   },
   {
     number: "02",
     eyebrow: "Analyze",
-    title: "Behavioral signals reviewed by a transparent model.",
-    body: "Every session is scored against real writing-behavior patterns, not text style. Reviewers see the evidence, not a black-box verdict.",
+    title: "Combine timing-model output with transparent behavioral rules.",
+    body: "The timing anomaly model and behavioral rule layer produce a bounded human-support score and review signals. The result supports review; it does not decide misconduct.",
     image: IMAGE_PATHS.analysis,
-    alt: "Educator reviewing a writing analytics report on a desktop monitor",
+    alt: "Educator reviewing a writing evidence report on a desktop monitor",
   },
   {
     number: "03",
     eyebrow: "Certify",
-    title: "A sealed certificate, ready for academic submission.",
-    body: "Once verified, a tamper-evident certificate is generated instantly — shareable with any teacher or institution that needs to confirm authorship.",
+    title: "Generate a signed, tamper-evident certificate.",
+    body: "The certificate links document integrity, evidence integrity, model version, and the recorded result to a public verification record without exposing the essay or raw keystroke stream.",
     image: IMAGE_PATHS.certificate,
-    alt: "Hand holding a printed authorship certificate document",
+    alt: "Hand holding a printed TypeTrace evidence certificate",
   },
 ];
 
@@ -995,7 +1004,7 @@ function ShowcaseSection() {
         <Reveal className="mx-auto mb-16 max-w-2xl text-center">
           <SectionEyebrow>How it works</SectionEyebrow>
           <SectionHeading
-            title="From keystroke to certificate, in one continuous trail."
+            title="From writing session to reviewable certificate, in one evidence trail."
             align="center"
           />
         </Reveal>
@@ -1048,30 +1057,26 @@ function ShowcaseSection() {
 // RADIAL CAPABILITY MAP
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RADIAL_NODES = [
-  { label: "Pause detection", icon: "pulse" as const, angle: -38.6 },
-  { label: "Replay timeline", icon: "replay" as const, angle: 12.8 },
-  { label: "ML classification", icon: "model" as const, angle: 64.2 },
-  { label: "SHA-256 sealing", icon: "hash" as const, angle: 115.6 },
-  { label: "Certificate issue", icon: "certificate" as const, angle: 167 },
-  { label: "Teacher review", icon: "teacher" as const, angle: 218.4 },
-  { label: "Public verification", icon: "search" as const, angle: 269.8 },
+interface RadialNode {
+  label: string;
+  icon: IconName;
+  angle: number;
+}
+
+const RADIAL_NODES: ReadonlyArray<RadialNode> = [
+  { label: "Pause analysis", icon: "pulse", angle: -38.6 },
+  { label: "Event replay", icon: "replay", angle: 12.8 },
+  { label: "Timing-model score", icon: "model", angle: 64.2 },
+  { label: "Evidence hashing", icon: "hash", angle: 115.6 },
+  { label: "Certificate record", icon: "certificate", angle: 167 },
+  { label: "Teacher review", icon: "teacher", angle: 218.4 },
+  { label: "Public verification", icon: "search", angle: 269.8 },
 ];
 
 function RadialCapabilityMap() {
   const size = 560;
   const center = size / 2;
   const outerR = 230;
-  const iconNameMap: Record<string, any> = {
-    keyboard: "keyboard",
-    pulse: "pulse",
-    replay: "replay",
-    model: "model",
-    hash: "hash",
-    certificate: "certificate",
-    teacher: "teacher",
-    search: "search",
-  };
 
   return (
     <div className="relative mx-auto flex w-full max-w-[560px] items-center justify-center">
@@ -1137,7 +1142,6 @@ function RadialCapabilityMap() {
         const rad = (node.angle * Math.PI) / 180;
         const xPct = 50 + (outerR / size) * 100 * Math.cos(rad);
         const yPct = 50 + (outerR / size) * 100 * Math.sin(rad);
-        const localIconName = iconNameMap[node.icon] || "keyboard";
         return (
           <div
             key={node.label}
@@ -1158,7 +1162,7 @@ function RadialCapabilityMap() {
                 boxShadow: `0 8px 20px -10px ${colors.shadow}`,
               }}
             >
-              <Icon name={localIconName} size={19} strokeWidth={1.8} />
+              <Icon name={node.icon} size={19} strokeWidth={1.8} />
             </div>
             <span
               className="text-center text-[11.5px] font-semibold leading-tight"
@@ -1185,14 +1189,14 @@ function CapabilityMapSection() {
         </Reveal>
         <Reveal delay={0.08}>
           <SectionEyebrow>One workspace</SectionEyebrow>
-          <SectionHeading title="One writing session, seven layers of evidence." />
+          <SectionHeading title="One writing session, seven connected evidence functions." />
           <p
             className="mt-4 text-[16px] leading-relaxed"
             style={{ color: colors.text.secondary }}
           >
-            Every signal TypeTrace records feeds the same authorship record -
-            from the first keystroke to the certificate a teacher verifies.
-            Nothing is captured in isolation.
+            Captured timing, revision, pause, paste, and integrity signals feed
+            one session record. Each function supports a different stage of
+            academic review without claiming absolute proof.
           </p>
           <div className="mt-6 flex flex-col gap-2">
             <PrimaryLink to={ROUTES.REGISTER}>
@@ -1211,46 +1215,52 @@ function CapabilityMapSection() {
 
 const COMPETITOR_DATA = [
   {
-    feature: "Writing process capture",
+    feature: "Writing-process capture",
     typeTrace: true,
     aiDetectors: false,
-    proctoring: "Partial",
-    detail: "Records every keystroke, pause, and revision in real-time",
+    proctoring: "Varies",
+    detail:
+      "Records captured timing, pause, revision, deletion, and paste events during the writing session.",
   },
   {
-    feature: "Behavioral evidence",
-    typeTrace: true,
-    aiDetectors: false,
-    proctoring: false,
-    detail: "Analyzes how you write, not what you write",
-  },
-  {
-    feature: "Replayable sessions",
+    feature: "Behavioral timing evidence",
     typeTrace: true,
     aiDetectors: false,
     proctoring: "Limited",
-    detail: "Watch the entire writing process unfold",
+    detail:
+      "Evaluates how the session developed rather than relying on linguistic style alone.",
   },
   {
-    feature: "Privacy-preserving",
+    feature: "Replayable event trail",
+    typeTrace: true,
+    aiDetectors: false,
+    proctoring: "Varies",
+    detail:
+      "Presents the captured session timeline with pause, paste, deletion, and revision markers.",
+  },
+  {
+    feature: "Privacy-aware public lookup",
     typeTrace: true,
     aiDetectors: false,
     proctoring: false,
-    detail: "No video recording, no screen monitoring",
+    detail:
+      "Public verification excludes the full essay and raw keystroke evidence.",
   },
   {
-    feature: "Tamper-evident certificates",
+    feature: "Tamper-evident evidence record",
     typeTrace: true,
     aiDetectors: false,
-    proctoring: false,
-    detail: "SHA-256 sealed proof of authorship",
+    proctoring: "Varies",
+    detail:
+      "Uses document and evidence hashes together with a signed certificate payload.",
   },
   {
-    feature: "Teacher review tools",
+    feature: "Course-linked teacher review",
     typeTrace: true,
-    aiDetectors: "Partial",
-    proctoring: "Partial",
-    detail: "Built for academic review, not automated punishment",
+    aiDetectors: "Varies",
+    proctoring: "Varies",
+    detail:
+      "Connects enrolled student submissions to course ownership, replay evidence, notes, and review status.",
   },
 ];
 
@@ -1374,14 +1384,14 @@ function ComparisonRow({
 
 function LiveWritingPreview() {
   const text =
-    "The evidence of authorship lies not in the words we choose, but in how we write them.";
+    "A writing-process record gives reviewers context that final text alone cannot provide.";
   const events = [
     { time: "00:01", action: "Session started", type: "system" },
     { time: "00:03", action: "Keystroke rhythm captured", type: "keystroke" },
     { time: "00:07", action: "Pause detected (2.3s)", type: "pause" },
     { time: "00:12", action: "Text revised", type: "revision" },
-    { time: "00:18", action: "Paste blocked", type: "security" },
-    { time: "00:24", action: "Session hash generated", type: "system" },
+    { time: "00:18", action: "Paste event recorded", type: "security" },
+    { time: "00:24", action: "Evidence hash generated", type: "system" },
   ];
 
   return (
@@ -1506,7 +1516,7 @@ function StatCard({
 }: {
   value: string;
   label: string;
-  icon: string;
+  icon: IconName;
 }) {
   return (
     <motion.div
@@ -1521,7 +1531,7 @@ function StatCard({
         className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg"
         style={{ background: colors.brandSoft, color: colors.brand }}
       >
-        <Icon name={icon as any} size={16} strokeWidth={1.8} />
+        <Icon name={icon} size={16} strokeWidth={1.8} />
       </div>
       <p
         className="text-xl font-bold tracking-tight"
@@ -1556,21 +1566,21 @@ function DifferentiatorSection() {
         <Reveal className="mx-auto mb-12 max-w-2xl text-center">
           <SectionEyebrow>Why TypeTrace</SectionEyebrow>
           <SectionHeading
-            title="Evidence that holds up under scrutiny."
-            description="Unlike AI detectors that guess, and proctoring tools that spy, TypeTrace captures how you write - creating reviewable evidence that respects privacy."
+            title="A different source of evidence for academic review."
+            description="TypeTrace focuses on captured writing behavior. It complements, rather than replaces, academic judgement, institutional procedure, and other review evidence."
             align="center"
           />
         </Reveal>
 
         <Reveal className="mb-12 grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatCard value="100%" label="Privacy-preserving" icon="lock" />
-          <StatCard value="&lt;50ms" label="Capture latency" icon="zap" />
+          <StatCard value="43" label="Timing-model features" icon="model" />
+          <StatCard value="2" label="Evidence layers" icon="activity" />
           <StatCard
-            value="SHA-256"
-            label="Cryptographic seal"
+            value="Signed"
+            label="SHA-256 + Ed25519"
             icon="fingerprint"
           />
-          <StatCard value="7" label="Evidence layers" icon="activity" />
+          <StatCard value="3" label="Decision bands" icon="barChart" />
         </Reveal>
 
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-14">
@@ -1618,13 +1628,13 @@ function DifferentiatorSection() {
                       className="w-16 text-center text-[10px] font-bold uppercase tracking-wider"
                       style={{ color: colors.text.muted }}
                     >
-                      AI Detector
+                      Final-text detector
                     </span>
                     <span
                       className="w-16 text-center text-[10px] font-bold uppercase tracking-wider"
                       style={{ color: colors.text.muted }}
                     >
-                      Proctor
+                      Remote proctoring
                     </span>
                   </div>
                 </div>
@@ -1649,7 +1659,7 @@ function DifferentiatorSection() {
                       boxShadow: `0 4px 14px ${withAlpha(colors.brand, "30")}`,
                     }}
                   >
-                    Start free session
+                    Start a writing session
                     <Icon name="arrowRight" size={13} strokeWidth={2.5} />
                   </Link>
                 </div>
@@ -1660,18 +1670,23 @@ function DifferentiatorSection() {
 
         <Reveal delay={0.15} className="mt-12">
           <div className="flex flex-wrap items-center justify-center gap-6">
-            {[
-              { icon: "shield", text: "Encrypted sessions" },
-              { icon: "eye", text: "No video recording" },
-              { icon: "database", text: "EU data storage" },
-              { icon: "users", text: "Built with educators" },
-            ].map((badge) => (
+            {(
+              [
+                { icon: "shield", text: "Role-protected review" },
+                { icon: "eye", text: "No video capture" },
+                { icon: "lock", text: "Public lookup hides drafts" },
+                { icon: "users", text: "Human decision remains required" },
+              ] satisfies ReadonlyArray<{
+                icon: IconName;
+                text: string;
+              }>
+            ).map((badge) => (
               <div key={badge.text} className="flex items-center gap-2">
                 <div
                   className="flex h-7 w-7 items-center justify-center rounded-lg"
                   style={{ background: colors.brandSoft, color: colors.brand }}
                 >
-                  <Icon name={badge.icon as any} size={13} />
+                  <Icon name={badge.icon} size={13} />
                 </div>
                 <span
                   className="text-[11px] font-medium"
@@ -1698,7 +1713,7 @@ function RoleCard({
   body,
   points,
 }: {
-  icon: string;
+  icon: PublicIconName;
   title: string;
   body: string;
   points: string[];
@@ -1709,7 +1724,7 @@ function RoleCard({
         className="flex h-10 w-10 items-center justify-center rounded-xl"
         style={{ background: colors.brandSoft, color: colors.brand }}
       >
-        <PublicIcon name={icon as any} size={18} />
+        <PublicIcon name={icon} size={18} />
       </div>
       <h3
         className="mt-4 text-[1.3rem] font-bold tracking-[-0.02em]"
@@ -1751,7 +1766,7 @@ function StudentTeacherSection() {
         <Reveal className="mx-auto mb-12 max-w-2xl text-center">
           <SectionEyebrow>Two-sided workflow</SectionEyebrow>
           <SectionHeading
-            title="Built for students who need proof and teachers who need context."
+            title="Built for students who need a record and teachers who need context."
             align="center"
           />
         </Reveal>
@@ -1760,11 +1775,11 @@ function StudentTeacherSection() {
             <RoleCard
               icon="keyboard"
               title="For students"
-              body="Create authorship evidence while writing, before your work is ever questioned."
+              body="Create a writing-process record as you work, then use it in a personal or course-linked review."
               points={[
-                "Write inside a focused, distraction-free editor.",
-                "Capture rhythm, edits, pauses, and revisions automatically.",
-                "Generate a certificate for academic submission in one click.",
+                "Record timing, pause, revision, deletion, and paste events in the editor.",
+                "Save drafts and resume without treating inactive time as writing time.",
+                "Generate and share a verifiable session certificate.",
               ]}
             />
           </Reveal>
@@ -1772,11 +1787,11 @@ function StudentTeacherSection() {
             <RoleCard
               icon="teacher"
               title="For teachers"
-              body="Review the writing process instead of relying on a single AI detector score."
+              body="Review course-linked writing evidence instead of relying on a final-text score alone."
               points={[
-                "Verify certificate authenticity in seconds.",
-                "Review session-level behavioral evidence.",
-                "Use replay and metrics to support fair decisions.",
+                "Create courses and enrol students through controlled invite codes.",
+                "Review submitted sessions with metrics, signals, and replay evidence.",
+                "Record a review status and manage certificate revocation when required.",
               ]}
             />
           </Reveal>
@@ -1790,42 +1805,55 @@ function StudentTeacherSection() {
 // TRUST SECTION - Horizontal tabs + visual evidence chain
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TRUST_TABS = [
+type TrustTabId = "process" | "privacy" | "review";
+
+interface TrustTab {
+  id: TrustTabId;
+  label: string;
+  icon: IconName;
+  title: string;
+  content: string;
+  stat: string;
+  statLabel: string;
+}
+
+const TRUST_TABS: ReadonlyArray<TrustTab> = [
   {
     id: "process",
     label: "Process evidence",
     icon: "activity",
-    title: "How you write, not what you write.",
+    title: "Review how the session developed.",
     content:
-      "TypeTrace records rhythm, hesitation, revision patterns, paste bursts, deletions, and typing consistency - giving reviewers behavioral context that AI text detectors can never provide.",
-    stat: "100%",
-    statLabel: "Process captured",
+      "TypeTrace records captured timing, pauses, revisions, deletions, paste activity, and rhythm variation so that a reviewer can inspect the writing process alongside the final document.",
+    stat: "Session-level",
+    statLabel: "Evidence record",
   },
   {
     id: "privacy",
-    label: "Privacy by design",
+    label: "Public verification",
     icon: "shieldCheck",
-    title: "Verify without exposing drafts.",
+    title: "Verify a certificate without publishing the draft.",
     content:
-      "Public verification confirms certificate status and integrity metadata without revealing writing content or private session data. Students control what they share.",
-    stat: "0",
-    statLabel: "Drafts exposed",
+      "Public verification returns certificate status, integrity metadata, and a review-safe result summary. It does not expose the full essay or raw keystroke evidence.",
+    stat: "Public-safe",
+    statLabel: "Verification view",
   },
   {
     id: "review",
     label: "Human review",
     icon: "users",
-    title: "Evidence for humans, not algorithms.",
+    title: "Keep the final decision with the reviewer.",
     content:
-      "TypeTrace supports fair human review with structured behavioral evidence. Teachers interpret the data alongside institutional academic integrity procedures - no black-box punishments.",
-    stat: "Human-first",
-    statLabel: "Review process",
+      "TypeTrace classifications and behavioral signals support academic review. They are not automatic findings of authorship or misconduct and must be interpreted with institutional procedure and student context.",
+    stat: "Human-led",
+    statLabel: "Decision process",
   },
 ];
 
 function TrustSection() {
-  const [activeTab, setActiveTab] = useState("process");
-  const active = TRUST_TABS.find((t) => t.id === activeTab)!;
+  const [activeTab, setActiveTab] = useState<TrustTabId>("process");
+  const active =
+    TRUST_TABS.find((tab) => tab.id === activeTab) ?? TRUST_TABS[0];
   const reduced = useReducedMotion();
 
   return (
@@ -1869,16 +1897,16 @@ function TrustSection() {
             className="text-[2.2rem] font-bold leading-[1.1] tracking-[-0.04em] md:text-[3rem]"
             style={{ color: colors.text.light }}
           >
-            Serious evidence.
+            Evidence designed for
             <br />
-            Serious product design.
+            careful academic review.
           </h2>
           <p
             className="mt-3 text-[15px] leading-relaxed max-w-lg mx-auto"
             style={{ color: withAlpha(colors.text.light, "80") }}
           >
-            TypeTrace handles sensitive academic review workflows with the rigor
-            they demand.
+            TypeTrace separates private session evidence from public certificate
+            metadata and keeps final interpretation with the reviewer.
           </p>
         </Reveal>
 
@@ -1909,7 +1937,7 @@ function TrustSection() {
                         : "none",
                   }}
                 >
-                  <Icon name={tab.icon as any} size={14} strokeWidth={2} />
+                  <Icon name={tab.icon} size={14} strokeWidth={2} />
                   {tab.label}
                 </button>
               ))}
@@ -1935,11 +1963,7 @@ function TrustSection() {
                       color: colors.brand,
                     }}
                   >
-                    <Icon
-                      name={active.icon as any}
-                      size={18}
-                      strokeWidth={1.8}
-                    />
+                    <Icon name={active.icon} size={18} strokeWidth={1.8} />
                   </div>
                   <h3
                     className="text-xl font-bold tracking-[-0.03em]"
@@ -1964,7 +1988,7 @@ function TrustSection() {
                       boxShadow: `0 4px 16px ${withAlpha(colors.brand, "35")}`,
                     }}
                   >
-                    Start building evidence
+                    Start a writing session
                     <Icon name="arrowRight" size={13} strokeWidth={2.5} />
                   </Link>
                 </div>
@@ -2010,11 +2034,16 @@ function TrustSection() {
 
         <Reveal delay={0.1}>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-6">
-            {[
-              { icon: "lock", text: "End-to-end encrypted" },
-              { icon: "fingerprint", text: "SHA-256 integrity" },
-              { icon: "server", text: "SOC 2 compliant infra" },
-            ].map((item) => (
+            {(
+              [
+                { icon: "lock", text: "Role-based access" },
+                { icon: "fingerprint", text: "SHA-256 + Ed25519 integrity" },
+                { icon: "users", text: "Reviewer-led decisions" },
+              ] satisfies ReadonlyArray<{
+                icon: IconName;
+                text: string;
+              }>
+            ).map((item) => (
               <div key={item.text} className="flex items-center gap-2">
                 <div
                   className="flex h-7 w-7 items-center justify-center rounded-lg"
@@ -2023,7 +2052,7 @@ function TrustSection() {
                     color: colors.brand,
                   }}
                 >
-                  <Icon name={item.icon as any} size={13} />
+                  <Icon name={item.icon} size={13} />
                 </div>
                 <span
                   className="text-[11px] font-medium"
@@ -2068,7 +2097,7 @@ function FinalCtaSection() {
           >
             <Icon name="zap" size={13} />
             <span className="text-[11px] font-semibold">
-              Free forever - no credit card required
+              Student and teacher accounts available
             </span>
           </div>
         </Reveal>
@@ -2077,9 +2106,9 @@ function FinalCtaSection() {
             className="text-[2.6rem] font-bold leading-tight tracking-[-0.04em] md:text-[3.5rem]"
             style={{ color: colors.text.primary }}
           >
-            Stop defending final text.
+            Record the process before
             <br />
-            Start documenting the process.
+            the final document is reviewed.
           </h2>
         </Reveal>
         <Reveal delay={0.1}>
@@ -2087,8 +2116,9 @@ function FinalCtaSection() {
             className="max-w-lg text-[16px] leading-relaxed"
             style={{ color: colors.text.secondary }}
           >
-            Join thousands of students and educators who've moved beyond AI
-            detection drama. Create evidence that speaks for itself.
+            Start a TypeTrace session to capture writing-process evidence,
+            generate a certificate, and make the result available for careful
+            academic review.
           </p>
         </Reveal>
         <Reveal delay={0.14}>
@@ -2102,7 +2132,7 @@ function FinalCtaSection() {
                 boxShadow: `0 8px 32px ${withAlpha(colors.brand, "35")}`,
               }}
             >
-              Start writing — it's free
+              Create a free account
               <Icon name="arrowRight" size={15} strokeWidth={2.5} />
             </Link>
             <div className="flex items-center gap-4">
@@ -2125,37 +2155,27 @@ function FinalCtaSection() {
           </div>
         </Reveal>
         <Reveal delay={0.18}>
-          <div className="mt-4 flex items-center gap-6">
-            <div className="flex -space-x-2">
-              {[1, 2, 3, 4].map((i) => (
-                <div
-                  key={i}
-                  className="h-7 w-7 rounded-full border-2"
-                  style={{
-                    borderColor: colors.surface[50],
-                    background: `linear-gradient(135deg, ${colors.brandSoft}, ${colors.brand})`,
-                  }}
-                />
-              ))}
-            </div>
-            <div className="text-left">
-              <div className="flex items-center gap-0.5">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <span
-                    key={i}
-                    style={{ color: colors.amber, fontSize: "13px" }}
-                  >
-                    ★
-                  </span>
-                ))}
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+            {[
+              "Writing-process capture",
+              "Teacher review workflow",
+              "Public certificate verification",
+            ].map((item) => (
+              <div key={item} className="flex items-center gap-2">
+                <span
+                  className="flex h-5 w-5 items-center justify-center rounded-full"
+                  style={{ background: brand.humanBg, color: brand.humanText }}
+                >
+                  <Icon name="check" size={11} strokeWidth={2.8} />
+                </span>
+                <span
+                  className="text-[12px] font-medium"
+                  style={{ color: colors.text.secondary }}
+                >
+                  {item}
+                </span>
               </div>
-              <p
-                className="text-[11px] font-medium"
-                style={{ color: colors.text.secondary }}
-              >
-                Trusted by students at 50+ universities
-              </p>
-            </div>
+            ))}
           </div>
         </Reveal>
       </div>

@@ -2,10 +2,10 @@ export const APP_NAME = "TypeTrace";
 export const TITLE_SEPARATOR = "·";
 
 export const DEFAULT_DOCUMENT_TITLE =
-  "TypeTrace · Academic Authorship Verification";
+  "TypeTrace · Writing-Process Evidence for Academic Review";
 
 export const DEFAULT_DOCUMENT_DESCRIPTION =
-  "TypeTrace verifies academic authorship with keystroke biometrics, writing-process evidence, and cryptographic certificates.";
+  "TypeTrace supports academic authorship review with keystroke timing, writing-process evidence, and cryptographically signed certificate records.";
 
 export interface DocumentMetadata {
   title: string;

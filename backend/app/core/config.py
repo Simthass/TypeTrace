@@ -1,4 +1,3 @@
-
 from functools import lru_cache
 from pathlib import Path
 from typing import List
@@ -53,6 +52,7 @@ class Settings(BaseSettings):
     )
 
     LOG_LEVEL: str = Field(default="INFO")
+    ENABLE_API_DOCS: bool = True
 
     SECURITY_HEADERS_ENABLED: bool = True
     ENABLE_HSTS: bool = False
@@ -61,8 +61,12 @@ class Settings(BaseSettings):
     MAX_LOGIN_ATTEMPTS_PER_MINUTE: int = 8
     MAX_OTP_ATTEMPTS_PER_MINUTE: int = 6
     MAX_PUBLIC_VERIFY_PER_MINUTE: int = 30
+    RATE_LIMIT_STORAGE_URI: str = Field(default="memory://")
+
+    ENCRYPTION_MASTER_KEY: str = Field(default="")
+    ALLOW_LEGACY_EVIDENCE_DECRYPTION: bool = False
     
-    PUBLIC_CERTIFICATE_SHOW_STUDENT_NAME: bool = True
+    PUBLIC_CERTIFICATE_SHOW_STUDENT_NAME: bool = False
     PUBLIC_CERTIFICATE_SHOW_STUDENT_ID: bool = False
     PUBLIC_CERTIFICATE_PDF_SHOW_STUDENT_ID: bool = False
     DATA_EXPORT_INCLUDE_SENSITIVE_BY_DEFAULT: bool = False
@@ -74,6 +78,7 @@ class Settings(BaseSettings):
     CERTIFICATE_SIGNING_PUBLIC_KEY: str = Field(default="")
     CERTIFICATE_SIGNING_HMAC_SECRET: str = Field(default="")
     CERTIFICATE_ALLOW_HMAC_FALLBACK: bool = True
+    ALLOW_MODEL_RELOAD: bool = False
 
     @field_validator(
         "ENVIRONMENT",
@@ -84,6 +89,8 @@ class Settings(BaseSettings):
         "CERTIFICATE_SIGNING_PRIVATE_KEY",
         "CERTIFICATE_SIGNING_PUBLIC_KEY",
         "CERTIFICATE_SIGNING_HMAC_SECRET",
+        "ENCRYPTION_MASTER_KEY",
+        "RATE_LIMIT_STORAGE_URI",
     )
     @classmethod
     def strip_string_fields(cls, value: str) -> str:
@@ -115,6 +122,17 @@ class Settings(BaseSettings):
 
         return value
 
+    @field_validator(
+        "MAX_LOGIN_ATTEMPTS_PER_MINUTE",
+        "MAX_OTP_ATTEMPTS_PER_MINUTE",
+        "MAX_PUBLIC_VERIFY_PER_MINUTE",
+    )
+    @classmethod
+    def validate_rate_limits(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("Rate limits must be positive integers.")
+        return value
+
     @model_validator(mode="after")
     def validate_production_security(self):
         if self.is_production:
@@ -133,6 +151,17 @@ class Settings(BaseSettings):
             if self.SECRET_KEY.lower() in weak_values:
                 raise ValueError(
                     "Production SECRET_KEY must not use a placeholder value."
+                )
+
+            if not self.ENCRYPTION_MASTER_KEY:
+                raise ValueError(
+                    "Production ENCRYPTION_MASTER_KEY must be configured."
+                )
+
+            if self.RATE_LIMIT_STORAGE_URI.lower() == "memory://":
+                raise ValueError(
+                    "Production RATE_LIMIT_STORAGE_URI must use shared storage "
+                    "such as Redis."
                 )
 
             if "*" in self.cors_origins:
@@ -177,6 +206,10 @@ class Settings(BaseSettings):
         return self.ENVIRONMENT.lower() == "development"
 
     @property
+    def api_docs_enabled(self) -> bool:
+        return self.ENABLE_API_DOCS and not self.is_production
+
+    @property
     def hsts_header_value(self) -> str:
         return (
             f"max-age={self.HSTS_MAX_AGE_SECONDS}; "
@@ -190,4 +223,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-

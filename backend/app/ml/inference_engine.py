@@ -24,6 +24,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import pandas as pd
 
 import joblib
 
@@ -969,7 +970,13 @@ class TypeTraceInferenceEngine:
                 features,
                 self.artifacts.feature_columns,
             )
-            scaled_matrix = self.artifacts.scaler.transform(matrix)
+
+            matrix_frame = pd.DataFrame(
+                matrix,
+                columns=self.artifacts.feature_columns,
+            )
+
+            scaled_matrix = self.artifacts.scaler.transform(matrix_frame)
             decision_score = float(
                 self.artifacts.model.decision_function(scaled_matrix)[0]
             )

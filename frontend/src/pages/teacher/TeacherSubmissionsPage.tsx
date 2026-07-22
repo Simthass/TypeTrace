@@ -5,7 +5,7 @@ import { api, getApiErrorMessage } from "../../lib/api";
 import { ROUTES } from "../../constants/routes";
 import { brand, colors } from "../../styles/colors";
 import { ErrorState, EmptyState } from "../../components/ui/AsyncState";
-import { useToast } from "../../components/ui/ToastProvider";
+import { useToast } from "../../components/ui/ToastContext";
 import type {
   TeacherCourse,
   TeacherCoursesResponse,
@@ -434,7 +434,6 @@ export default function TeacherSubmissionsPage() {
     if (riskLevel !== "ALL") next.set("risk_level", riskLevel);
     if (search.trim()) next.set("search", search.trim());
     setSearchParams(next, { replace: true });
-    setPage(0);
   }, [courseId, reviewStatus, riskLevel, search, setSearchParams]);
 
   useEffect(() => {
@@ -602,12 +601,38 @@ export default function TeacherSubmissionsPage() {
     );
   }, [sortedSubmissions]);
 
+  const updateSearch = (value: string) => {
+    setSearch(value);
+    setPage(0);
+  };
+
+  const updateCourseId = (value: string) => {
+    setCourseId(value);
+    setPage(0);
+  };
+
+  const updateReviewStatus = (value: string) => {
+    setReviewStatus(value);
+    setPage(0);
+  };
+
+  const updateRiskLevel = (value: string) => {
+    setRiskLevel(value);
+    setPage(0);
+  };
+
+  const updateSortKey = (value: string) => {
+    setSortKey(value as SortKey);
+    setPage(0);
+  };
+
   const resetFilters = () => {
     setCourseId("ALL");
     setReviewStatus("ALL");
     setRiskLevel("ALL");
     setSearch("");
     setSortKey("oldest");
+    setPage(0);
   };
 
   if (isLoading && submissions.length === 0) return <InlineLoader />;
@@ -746,7 +771,7 @@ export default function TeacherSubmissionsPage() {
               </span>
               <input
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => updateSearch(event.target.value)}
                 placeholder="Student, title, email, course..."
                 className="h-9 w-full rounded-md border pl-9 pr-9 text-[12px] font-medium outline-none"
                 style={{
@@ -758,7 +783,7 @@ export default function TeacherSubmissionsPage() {
               {search && (
                 <button
                   type="button"
-                  onClick={() => setSearch("")}
+                  onClick={() => updateSearch("")}
                   className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md"
                   style={{ color: colors.text.secondary }}
                   aria-label="Clear search"
@@ -769,7 +794,11 @@ export default function TeacherSubmissionsPage() {
             </div>
           </div>
 
-          <SelectField label="Course" value={courseId} onChange={setCourseId}>
+          <SelectField
+            label="Course"
+            value={courseId}
+            onChange={updateCourseId}
+          >
             <option value="ALL">All courses</option>
             {courses.map((course) => (
               <option key={course.id} value={String(course.id)}>
@@ -781,7 +810,7 @@ export default function TeacherSubmissionsPage() {
           <SelectField
             label="Review"
             value={reviewStatus}
-            onChange={setReviewStatus}
+            onChange={updateReviewStatus}
           >
             <option value="ALL">All states</option>
             <option value="PENDING">Pending</option>
@@ -789,18 +818,18 @@ export default function TeacherSubmissionsPage() {
             <option value="FLAGGED">Flagged</option>
           </SelectField>
 
-          <SelectField label="Risk" value={riskLevel} onChange={setRiskLevel}>
+          <SelectField
+            label="Risk"
+            value={riskLevel}
+            onChange={updateRiskLevel}
+          >
             <option value="ALL">All risk</option>
             <option value="LOW">Low</option>
             <option value="MEDIUM">Medium</option>
             <option value="HIGH">High</option>
           </SelectField>
 
-          <SelectField
-            label="Sort"
-            value={sortKey}
-            onChange={(value) => setSortKey(value as SortKey)}
-          >
+          <SelectField label="Sort" value={sortKey} onChange={updateSortKey}>
             <option value="oldest">Needs review first</option>
             <option value="newest">Newest first</option>
             <option value="risk">Highest risk</option>
