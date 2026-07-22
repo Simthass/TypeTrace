@@ -1,6 +1,6 @@
 from typing import Union
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,6 +45,32 @@ def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
+def _validation_error_message(exc: ValidationError) -> str:
+    """Return a safe, JSON-serializable validation message.
+
+    Pydantic error dictionaries may contain exception objects and the rejected
+    input value. Neither should be returned by an authentication endpoint,
+    especially when the rejected field can contain a password.
+    """
+
+    messages: list[str] = []
+
+    for error in exc.errors():
+        location = ".".join(str(part) for part in error.get("loc", ()))
+        message = str(error.get("msg") or "Invalid value.")
+
+        if message.startswith("Value error, "):
+            message = message.removeprefix("Value error, ")
+
+        if location:
+            label = location.replace("_", " ").title()
+            messages.append(f"{label}: {message}")
+        else:
+            messages.append(message)
+
+    return " ".join(messages) or "The submitted registration data is invalid."
+
+
 def _serialize_user(user: User) -> UserResponse:
     return UserResponse(
         id=str(user.id),
@@ -77,6 +103,7 @@ async def _send_otp_email(email: str, otp: str) -> None:
 @limiter.limit(per_minute(settings.MAX_LOGIN_ATTEMPTS_PER_MINUTE))
 async def register_user(
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -103,7 +130,7 @@ async def register_user(
     except ValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=exc.errors(),
+            detail=_validation_error_message(exc),
         )
 
     email = _normalize_email(str(user_in.email))
@@ -161,6 +188,7 @@ async def register_user(
 @limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
 async def resend_registration_otp(
     request: Request,
+    response: Response,
     req: ResendOTPRequest,
 ):
     """
@@ -202,6 +230,7 @@ async def resend_registration_otp(
 @limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
 async def verify_otp(
     request: Request,
+    response: Response,
     otp_in: OTPVerify,
     db: AsyncSession = Depends(get_db),
 ):
@@ -298,6 +327,7 @@ async def verify_otp(
 @limiter.limit(per_minute(settings.MAX_LOGIN_ATTEMPTS_PER_MINUTE))
 async def login_user(
     request: Request,
+    response: Response,
     login_in: UserLogin,
     db: AsyncSession = Depends(get_db),
 ):
@@ -401,6 +431,7 @@ async def logout_user():
 @limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
 async def request_password_reset(
     request: Request,
+    response: Response,
     req: PasswordResetRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -435,6 +466,7 @@ async def request_password_reset(
 @limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
 async def verify_password_reset(
     request: Request,
+    response: Response,
     req: PasswordResetVerify,
 ):
     """
@@ -468,6 +500,7 @@ async def verify_password_reset(
 @limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
 async def confirm_password_reset(
     request: Request,
+    response: Response,
     req: PasswordResetConfirm,
     db: AsyncSession = Depends(get_db),
 ):

@@ -1,4 +1,3 @@
-
 import io
 import json
 import re
@@ -8,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse
 from reportlab.lib import colors as pdf_colors
@@ -468,6 +467,7 @@ def _pdf_public_record(record: Dict[str, Any]) -> Dict[str, Any]:
 @limiter.limit(per_minute(settings.MAX_PUBLIC_VERIFY_PER_MINUTE))
 async def verify_certificate_public(
     request: Request,
+    response: Response,
     cert_id: str,
 ):
     """
