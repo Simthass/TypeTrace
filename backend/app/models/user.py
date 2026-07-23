@@ -50,6 +50,7 @@ class User(Base):
 
     reviewed_sessions = relationship(
         "TypingSession",
+        back_populates="reviewer",
         foreign_keys="TypingSession.reviewed_by",
     )
 

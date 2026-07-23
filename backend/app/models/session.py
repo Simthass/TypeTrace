@@ -97,6 +97,7 @@ class TypingSession(Base):
 
     reviewer = relationship(
         "User",
+        back_populates="reviewed_sessions",
         foreign_keys=[reviewed_by],
     )
 
