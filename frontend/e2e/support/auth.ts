@@ -1,17 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import {
-  expect,
-  type APIRequestContext,
-  type Browser,
-} from "@playwright/test";
+import { expect, type APIRequestContext, type Browser } from "@playwright/test";
 
-import {
-  BACKEND_URL,
-  FRONTEND_URL,
-  type AuthRole,
-} from "./env";
+import { BACKEND_URL, FRONTEND_URL, type AuthRole } from "./env";
 
 interface LoginPayload {
   access_token: string;
@@ -80,11 +72,10 @@ export async function authenticateAndSaveState(options: {
               student_id: user.student_id ?? null,
               university_name: user.university_name ?? null,
               department: user.department ?? null,
-              is_verified: Boolean(user.is_verified ?? true),
+              is_verified: Boolean(user.is_verified ?? false),
             },
             token: accessToken,
             isAuthenticated: true,
-            pendingEmail: null,
           },
           version: 0,
         }),

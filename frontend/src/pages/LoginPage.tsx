@@ -11,6 +11,8 @@ import {
 import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
 import { useAuthStore, type AuthUser } from "../store/authStore";
+import { useRegistrationStore } from "../store/registrationStore";
+import { usePasswordResetStore } from "../store/passwordResetStore";
 import { colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
 import { useToast } from "../components/ui/ToastContext";
@@ -26,6 +28,10 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuthStore();
+  const clearRegistration = useRegistrationStore((state) => state.clearSession);
+  const clearPasswordReset = usePasswordResetStore(
+    (state) => state.clearSession,
+  );
   const { showToast } = useToast();
 
   const [email, setEmail] = useState("");
@@ -68,6 +74,8 @@ export default function LoginPage() {
       });
 
       login(response.data.user, response.data.access_token);
+      clearRegistration();
+      clearPasswordReset();
 
       showToast({
         type: "success",

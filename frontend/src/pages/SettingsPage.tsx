@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { api, getApiErrorMessage } from "../lib/api";
+import { isStrongEnoughPassword } from "../lib/edgeCases";
 import { useToast } from "../components/ui/ToastContext";
 import { ROUTES } from "../constants/routes";
 import { useAuthStore } from "../store/authStore";
@@ -248,6 +249,11 @@ export default function SettingsPage() {
     new_password: "",
     confirm_password: "",
   });
+  const [deleteForm, setDeleteForm] = useState({
+    password: "",
+    confirmation: "",
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // ── Handlers ──
   const saveProfile = async () => {
@@ -268,8 +274,11 @@ export default function SettingsPage() {
       toast.error("Password mismatch", "New passwords do not match.");
       return;
     }
-    if (passwordForm.new_password.length < 8) {
-      toast.warning("Password too short", "Minimum 8 characters required.");
+    if (!isStrongEnoughPassword(passwordForm.new_password)) {
+      toast.warning(
+        "Weak password",
+        "Use 8–128 characters with at least one letter and one number.",
+      );
       return;
     }
 
@@ -284,7 +293,12 @@ export default function SettingsPage() {
         new_password: "",
         confirm_password: "",
       });
-      toast.success("Password changed", "Your password has been updated.");
+      toast.success(
+        "Password changed",
+        "Sign in again. All previously issued sessions are now invalid.",
+      );
+      logout();
+      navigate(ROUTES.LOGIN, { replace: true });
     } catch (error) {
       toast.error("Update failed", getApiErrorMessage(error));
     } finally {
@@ -316,19 +330,47 @@ export default function SettingsPage() {
   };
 
   const deleteAccount = async () => {
+    if (!deleteForm.password) {
+      toast.warning(
+        "Password required",
+        "Enter your current password before anonymizing the account.",
+      );
+      return;
+    }
+    if (deleteForm.confirmation.trim().toUpperCase() !== "DELETE") {
+      toast.warning(
+        "Confirmation required",
+        "Type DELETE exactly to confirm account anonymization.",
+      );
+      return;
+    }
     if (
       !window.confirm(
-        "This action is permanent. Are you sure you want to delete your account?",
+        "Your login identity will be anonymized and access will be disabled. Academic evidence is retained for institutional integrity. Continue?",
       )
-    )
+    ) {
       return;
+    }
+
+    setIsDeleting(true);
     try {
-      await api.delete(API_ROUTES.user.account);
+      await api.delete(API_ROUTES.user.account, {
+        data: {
+          password: deleteForm.password,
+          confirmation: deleteForm.confirmation.trim().toUpperCase(),
+        },
+      });
+      setDeleteForm({ password: "", confirmation: "" });
       logout();
-      toast.success("Account deleted", "Your account has been removed.");
+      toast.success(
+        "Account anonymized",
+        "Your login identity was removed and all previous sessions are invalid.",
+      );
       navigate(ROUTES.LOGIN, { replace: true });
     } catch (error) {
-      toast.error("Delete failed", getApiErrorMessage(error));
+      toast.error("Anonymization failed", getApiErrorMessage(error));
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -603,7 +645,7 @@ export default function SettingsPage() {
                   backgroundColor: brand.aiBg,
                 }}
               >
-                <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
+                <div className="grid gap-6">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5" style={{ color: brand.aiText }}>
                       <Icon type="warning" size={18} />
@@ -613,27 +655,60 @@ export default function SettingsPage() {
                         className="text-[15px] font-bold"
                         style={{ color: brand.aiText }}
                       >
-                        Delete Account
+                        Anonymize Account
                       </h3>
                       <p
                         className="mt-0.5 text-[13px]"
                         style={{ color: brand.aiText }}
                       >
-                        Permanently delete your account and all associated data.
-                        This action is irreversible.
+                        Your login identity will be removed and access disabled.
+                        Existing academic evidence and audit relationships are
+                        retained for institutional integrity. This action is
+                        irreversible.
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={deleteAccount}
-                    className="shrink-0 rounded-lg border px-4 py-2 text-[13px] font-semibold text-white transition hover:opacity-90 shadow-sm"
-                    style={{
-                      backgroundColor: brand.aiAccent,
-                      borderColor: brand.aiAccent,
-                    }}
-                  >
-                    Delete Account
-                  </button>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <InputField
+                      label="Current password"
+                      type="password"
+                      value={deleteForm.password}
+                      onChange={(value) =>
+                        setDeleteForm((current) => ({
+                          ...current,
+                          password: value,
+                        }))
+                      }
+                      placeholder="Enter your current password"
+                    />
+                    <InputField
+                      label="Type DELETE to confirm"
+                      value={deleteForm.confirmation}
+                      onChange={(value) =>
+                        setDeleteForm((current) => ({
+                          ...current,
+                          confirmation: value,
+                        }))
+                      }
+                      placeholder="DELETE"
+                    />
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => void deleteAccount()}
+                      disabled={isDeleting}
+                      className="rounded-lg border px-4 py-2 text-[13px] font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{
+                        backgroundColor: brand.aiAccent,
+                        borderColor: brand.aiAccent,
+                      }}
+                    >
+                      {isDeleting ? "Processing…" : "Anonymize Account"}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

@@ -11,15 +11,18 @@ import {
 } from "../components/auth/AuthPanel";
 import { ROUTES } from "../constants/routes";
 import { api, getApiErrorMessage } from "../lib/api";
-import { useAuthStore, type UserRole } from "../store/authStore";
+import type { UserRole } from "../store/authStore";
+import { useRegistrationStore } from "../store/registrationStore";
 import { brand, colors } from "../styles/colors";
 import { API_ROUTES } from "../constants/apiRoutes";
 import { useToast } from "../components/ui/ToastContext";
 
 interface RegisterResponse {
   message: string;
+  registration_id: string;
   email: string;
   role: UserRole;
+  expires_in_seconds: number;
 }
 
 interface RegisterForm {
@@ -71,8 +74,8 @@ function validate(form: RegisterForm): string | null {
     return "Password must be at least 8 characters.";
   }
 
-  if (!/\d/.test(form.password) || !/[^A-Za-z0-9]/.test(form.password)) {
-    return "Password must contain at least one number and one special character.";
+  if (!/[A-Za-z]/.test(form.password) || !/\d/.test(form.password)) {
+    return "Password must contain at least one letter and one number.";
   }
 
   if (form.password !== form.confirm_password) {
@@ -88,7 +91,9 @@ function validate(form: RegisterForm): string | null {
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { setPendingEmail } = useAuthStore();
+  const setRegistrationSession = useRegistrationStore(
+    (state) => state.setSession,
+  );
   const { showToast } = useToast();
 
   const [form, setForm] = useState<RegisterForm>(initialForm);
@@ -158,7 +163,12 @@ export default function RegisterPage() {
         payload,
       );
 
-      setPendingEmail(response.data.email);
+      setRegistrationSession({
+        registrationId: response.data.registration_id,
+        email: response.data.email,
+        role: response.data.role,
+        expiresAt: Date.now() + response.data.expires_in_seconds * 1000,
+      });
 
       showToast({
         type: "success",

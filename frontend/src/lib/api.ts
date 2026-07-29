@@ -60,9 +60,12 @@ function formatValidationDetail(detail: unknown): string | null {
 
       if (item && typeof item === "object") {
         const record = item as Record<string, unknown>;
-        const path = Array.isArray(record.loc)
-          ? record.loc.filter(Boolean).join(".")
-          : "";
+        const rawLocation = Array.isArray(record.location)
+          ? record.location
+          : Array.isArray(record.loc)
+            ? record.loc
+            : [];
+        const path = rawLocation.filter(Boolean).join(".");
 
         const message = String(
           record.msg || record.message || "Validation error",
@@ -167,13 +170,13 @@ export function getApiErrorMessage(error: unknown): string {
   const status = error.response?.status;
   const data = error.response?.data;
 
-  if (
-    data?.error &&
-    typeof data.error === "object" &&
-    "message" in data.error &&
-    typeof data.error.message === "string"
-  ) {
-    return data.error.message;
+  if (data?.error && typeof data.error === "object") {
+    const validationMessage = formatValidationDetail(data.error.details);
+    if (validationMessage) return validationMessage;
+
+    if ("message" in data.error && typeof data.error.message === "string") {
+      return data.error.message;
+    }
   }
 
   if (error.code === "ECONNABORTED") {

@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import AuthRedirectGuard from "./components/guards/AuthRedirectGuard";
 import AuthSessionGate from "./components/guards/AuthSessionGate";
 import RoleGuard from "./components/guards/RoleGuard";
+import RegistrationSessionGuard from "./components/guards/RegistrationSessionGuard";
 
 import AuthLayout from "./components/layout/AuthLayout";
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -85,11 +86,16 @@ export default function App() {
                 <Route element={<AuthLayout />}>
                   <Route path={ROUTES.LOGIN} element={<LoginPage />} />
                   <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
-                  <Route path={ROUTES.VERIFY_OTP} element={<VerifyOtpPage />} />
                   <Route
                     path={ROUTES.FORGOT_PASSWORD}
                     element={<ForgotPasswordPage />}
                   />
+                  <Route element={<RegistrationSessionGuard />}>
+                    <Route
+                      path={ROUTES.VERIFY_OTP}
+                      element={<VerifyOtpPage />}
+                    />
+                  </Route>
                 </Route>
               </Route>
 

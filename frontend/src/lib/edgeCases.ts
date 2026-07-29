@@ -5,6 +5,7 @@ export const OTP_PATTERN = /^\d{6}$/;
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const MIN_PASSWORD_LENGTH = 8;
+export const MAX_PASSWORD_LENGTH = 128;
 export const MINIMUM_KEYSTROKES = 30;
 export const MAX_TITLE_LENGTH = 255;
 export const MAX_EDITOR_TEXT_LENGTH = 30000;
@@ -31,7 +32,12 @@ export function isValidCertificateId(value: string): boolean {
 }
 
 export function isStrongEnoughPassword(value: string): boolean {
-  return value.length >= MIN_PASSWORD_LENGTH;
+  return (
+    value.length >= MIN_PASSWORD_LENGTH &&
+    value.length <= MAX_PASSWORD_LENGTH &&
+    /[A-Za-z]/.test(value) &&
+    /\d/.test(value)
+  );
 }
 
 export function truncateTitle(value: string): string {

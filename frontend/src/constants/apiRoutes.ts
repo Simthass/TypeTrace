@@ -11,9 +11,17 @@ export const API_ROUTES = {
     logout: "/auth/logout",
     verifyOtp: "/auth/verify-otp",
     resendOtp: "/auth/resend-otp",
+    registrationStatus: (registrationId: string) =>
+      `/auth/pending-registration/${encodeURIComponent(registrationId)}`,
+    cancelRegistration: (registrationId: string) =>
+      `/auth/pending-registration/${encodeURIComponent(registrationId)}`,
     passwordResetRequest: "/auth/password-reset/request",
     passwordResetVerify: "/auth/password-reset/verify",
     passwordResetConfirm: "/auth/password-reset/confirm",
+    passwordResetStatus: (resetId: string) =>
+      `/auth/password-reset/${encodeURIComponent(resetId)}`,
+    cancelPasswordReset: (resetId: string) =>
+      `/auth/password-reset/${encodeURIComponent(resetId)}`,
   },
 
   student: {
