@@ -4,17 +4,22 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_student
-from app.core.config import settings
 from app.core.crypto import decrypt_text
 from app.models.user import User
+from app.repositories.student import StudentSessionFilters, list_student_session_rows
+from app.db.database import get_db
+from app.schemas.responses import (
+    StudentAnalyticsResponse, StudentDashboardResponse,
+    StudentSessionDetailResponse, StudentSessionsResponse,
+)
 
 
 router = APIRouter()
 
-sync_engine = create_engine(settings.sync_database_url, pool_pre_ping=True)
 
 
 def _format_datetime(value: Any) -> str:
@@ -103,15 +108,19 @@ def _session_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "word_count": int(row.get("word_count") or 0),
         "certificate_id": row.get("certificate_id"),
         "document_hash": row.get("document_hash"),
+        "decision_source": row.get("decision_source") or "LEGACY_UNKNOWN",
+        "model_available": bool(row.get("model_available")),
+        "degraded_analysis": bool(row.get("degraded_analysis")),
         "course_name": row.get("course_name"),
         "course_code": row.get("course_code"),
         "created_at": _format_datetime(row.get("created_at")),
     }
 
 
-@router.get("/student/dashboard")
+@router.get("/student/dashboard", response_model=StudentDashboardResponse)
 async def get_student_dashboard(
     current_user: User = Depends(require_student),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Student dashboard summary.
@@ -124,106 +133,108 @@ async def get_student_dashboard(
     """
     user_id = str(current_user.id)
 
-    with sync_engine.connect() as conn:
-        summary = conn.execute(
-            text(
-                """
-                SELECT
-                    COUNT(*) AS total_sessions,
-                    COALESCE(ROUND(AVG(wpm)::numeric, 1), 0) AS avg_wpm,
-                    COALESCE(ROUND(AVG(ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
-                    COALESCE(SUM(duration_seconds), 0) AS total_seconds,
-                    COALESCE(SUM(total_keystrokes), 0) AS total_keystrokes,
-                    COALESCE(SUM(deletions), 0) AS total_deletions,
-                    COALESCE(SUM(pauses), 0) AS total_pauses,
-                    COUNT(CASE WHEN classification_result = 'HUMAN' THEN 1 END) AS human_sessions,
-                    COUNT(CASE WHEN classification_result = 'SUSPICIOUS' THEN 1 END) AS suspicious_sessions,
-                    COUNT(CASE WHEN classification_result IN ('SYNTHETIC', 'AI-GENERATED', 'AI') THEN 1 END) AS synthetic_sessions,
-                    COUNT(CASE WHEN certificate_id IS NOT NULL THEN 1 END) AS certificate_count,
-                    COUNT(CASE WHEN review_status = 'APPROVED' THEN 1 END) AS approved_count,
-                    COUNT(CASE WHEN review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
-                    COUNT(CASE WHEN review_status IN ('PENDING', 'NEEDS_DISCUSSION') OR review_status IS NULL THEN 1 END) AS pending_count
-                FROM typing_sessions
-                WHERE user_id = :user_id
-                """
-            ),
-            {"user_id": user_id},
-        ).mappings().fetchone()
+    summary = (await db.execute(
+        text(
+            """
+            SELECT
+                COUNT(*) AS total_sessions,
+                COALESCE(ROUND(AVG(wpm)::numeric, 1), 0) AS avg_wpm,
+                COALESCE(ROUND(AVG(ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
+                COALESCE(SUM(duration_seconds), 0) AS total_seconds,
+                COALESCE(SUM(total_keystrokes), 0) AS total_keystrokes,
+                COALESCE(SUM(deletions), 0) AS total_deletions,
+                COALESCE(SUM(pauses), 0) AS total_pauses,
+                COUNT(CASE WHEN classification_result = 'HUMAN' THEN 1 END) AS human_sessions,
+                COUNT(CASE WHEN classification_result = 'SUSPICIOUS' THEN 1 END) AS suspicious_sessions,
+                COUNT(CASE WHEN classification_result IN ('SYNTHETIC', 'AI-GENERATED', 'AI') THEN 1 END) AS synthetic_sessions,
+                COUNT(CASE WHEN certificate_id IS NOT NULL THEN 1 END) AS certificate_count,
+                COUNT(CASE WHEN review_status = 'APPROVED' THEN 1 END) AS approved_count,
+                COUNT(CASE WHEN review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
+                COUNT(CASE WHEN review_status IN ('PENDING', 'NEEDS_DISCUSSION') OR review_status IS NULL THEN 1 END) AS pending_count
+            FROM typing_sessions
+            WHERE user_id = :user_id
+            """
+        ),
+        {"user_id": user_id},
+    )).mappings().first()
 
-        recent_rows = conn.execute(
-            text(
-                """
-                SELECT
-                    ts.id,
-                    ts.title,
-                    ts.classification_result AS classification,
-                    ts.ml_confidence_score AS confidence,
-                    ts.risk_level,
-                    ts.review_status,
-                    ts.review_notes,
-                    ts.wpm,
-                    ts.duration_seconds,
-                    ts.total_keystrokes,
-                    ts.deletions,
-                    ts.pauses,
-                    ts.avg_iki,
-                    ts.certificate_id,
-                    ts.document_hash,
-                    ts.created_at,
-                    c.course_name,
-                    c.course_code,
-                    ts.word_count AS word_count
-                FROM typing_sessions ts
-                LEFT JOIN courses c ON c.id = ts.course_id
-                WHERE ts.user_id = :user_id
-                ORDER BY ts.created_at DESC
-                LIMIT 5
-                """
-            ),
-            {"user_id": user_id},
-        ).mappings().fetchall()
+    recent_rows = (await db.execute(
+        text(
+            """
+            SELECT
+                ts.id,
+                ts.title,
+                ts.classification_result AS classification,
+                ts.ml_confidence_score AS confidence,
+                ts.risk_level,
+                ts.review_status,
+                ts.review_notes,
+                ts.wpm,
+                ts.duration_seconds,
+                ts.total_keystrokes,
+                ts.deletions,
+                ts.pauses,
+                ts.avg_iki,
+                ts.certificate_id,
+                ts.document_hash,
+                ts.decision_source,
+                ts.model_available,
+                ts.degraded_analysis,
+                ts.created_at,
+                c.course_name,
+                c.course_code,
+                ts.word_count AS word_count
+            FROM typing_sessions ts
+            LEFT JOIN courses c ON c.id = ts.course_id
+            WHERE ts.user_id = :user_id
+            ORDER BY ts.created_at DESC
+            LIMIT 5
+            """
+        ),
+        {"user_id": user_id},
+    )).mappings().all()
 
-        trend_rows = conn.execute(
-            text(
-                """
-                SELECT
-                    DATE(created_at) AS day,
-                    COUNT(*) AS session_count,
-                    COALESCE(ROUND(AVG(wpm)::numeric, 1), 0) AS avg_wpm,
-                    COALESCE(ROUND(AVG(ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
-                    COUNT(CASE WHEN classification_result = 'HUMAN' THEN 1 END) AS human_count,
-                    COUNT(CASE WHEN classification_result = 'SUSPICIOUS' THEN 1 END) AS suspicious_count,
-                    COUNT(CASE WHEN classification_result IN ('SYNTHETIC', 'AI-GENERATED', 'AI') THEN 1 END) AS synthetic_count
-                FROM typing_sessions
-                WHERE user_id = :user_id
-                  AND created_at >= NOW() - INTERVAL '14 days'
-                GROUP BY DATE(created_at)
-                ORDER BY day ASC
-                """
-            ),
-            {"user_id": user_id},
-        ).mappings().fetchall()
+    trend_rows = (await db.execute(
+        text(
+            """
+            SELECT
+                DATE(created_at) AS day,
+                COUNT(*) AS session_count,
+                COALESCE(ROUND(AVG(wpm)::numeric, 1), 0) AS avg_wpm,
+                COALESCE(ROUND(AVG(ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
+                COUNT(CASE WHEN classification_result = 'HUMAN' THEN 1 END) AS human_count,
+                COUNT(CASE WHEN classification_result = 'SUSPICIOUS' THEN 1 END) AS suspicious_count,
+                COUNT(CASE WHEN classification_result IN ('SYNTHETIC', 'AI-GENERATED', 'AI') THEN 1 END) AS synthetic_count
+            FROM typing_sessions
+            WHERE user_id = :user_id
+              AND created_at >= NOW() - INTERVAL '14 days'
+            GROUP BY DATE(created_at)
+            ORDER BY day ASC
+            """
+        ),
+        {"user_id": user_id},
+    )).mappings().all()
 
-        course_rows = conn.execute(
-            text(
-                """
-                SELECT
-                    COALESCE(c.course_name, 'Personal') AS course_name,
-                    COALESCE(c.course_code, '') AS course_code,
-                    COUNT(ts.id) AS session_count,
-                    COALESCE(ROUND(AVG(ts.wpm)::numeric, 1), 0) AS avg_wpm,
-                    COALESCE(ROUND(AVG(ts.ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
-                    COUNT(CASE WHEN ts.classification_result = 'HUMAN' THEN 1 END) AS human_count
-                FROM typing_sessions ts
-                LEFT JOIN courses c ON c.id = ts.course_id
-                WHERE ts.user_id = :user_id
-                GROUP BY COALESCE(c.course_name, 'Personal'), COALESCE(c.course_code, '')
-                ORDER BY session_count DESC
-                LIMIT 6
-                """
-            ),
-            {"user_id": user_id},
-        ).mappings().fetchall()
+    course_rows = (await db.execute(
+        text(
+            """
+            SELECT
+                COALESCE(c.course_name, 'Personal') AS course_name,
+                COALESCE(c.course_code, '') AS course_code,
+                COUNT(ts.id) AS session_count,
+                COALESCE(ROUND(AVG(ts.wpm)::numeric, 1), 0) AS avg_wpm,
+                COALESCE(ROUND(AVG(ts.ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
+                COUNT(CASE WHEN ts.classification_result = 'HUMAN' THEN 1 END) AS human_count
+            FROM typing_sessions ts
+            LEFT JOIN courses c ON c.id = ts.course_id
+            WHERE ts.user_id = :user_id
+            GROUP BY COALESCE(c.course_name, 'Personal'), COALESCE(c.course_code, '')
+            ORDER BY session_count DESC
+            LIMIT 6
+            """
+        ),
+        {"user_id": user_id},
+    )).mappings().all()
 
     summary_dict = dict(summary or {})
 
@@ -280,7 +291,7 @@ async def get_student_dashboard(
     }
 
 
-@router.get("/student/sessions")
+@router.get("/student/sessions", response_model=StudentSessionsResponse)
 async def get_student_sessions(
     classification: Optional[str] = Query(default=None),
     review_status: Optional[str] = Query(default=None),
@@ -288,138 +299,82 @@ async def get_student_sessions(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(require_student),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Full student writing session history with filtering.
     """
     user_id = str(current_user.id)
 
-    where_parts = ["ts.user_id = :user_id"]
-    params: Dict[str, Any] = {
-        "user_id": user_id,
-        "limit": limit,
-        "offset": offset,
-    }
-
-    if classification and classification.upper() != "ALL":
-        selected = classification.upper()
-
-        if selected == "SYNTHETIC":
-            where_parts.append("ts.classification_result IN ('SYNTHETIC', 'AI-GENERATED', 'AI')")
-        else:
-            where_parts.append("ts.classification_result = :classification")
-            params["classification"] = selected
-
-    if review_status and review_status.upper() != "ALL":
-        where_parts.append("COALESCE(ts.review_status, 'PENDING') = :review_status")
-        params["review_status"] = review_status.upper()
-
-    if search:
-        where_parts.append("(LOWER(ts.title) LIKE :search)")
-        params["search"] = f"%{search.lower()}%"
-
-    where_clause = " AND ".join(where_parts)
-
-    with sync_engine.connect() as conn:
-        total_row = conn.execute(
-            text(
-                f"""
-                SELECT COUNT(*) AS total
-                FROM typing_sessions ts
-                LEFT JOIN courses c ON c.id = ts.course_id
-                WHERE {where_clause}
-                """
-            ),
-            params,
-        ).mappings().fetchone()
-
-        rows = conn.execute(
-            text(
-                f"""
-                SELECT
-                    ts.id,
-                    ts.title,
-                    ts.classification_result AS classification,
-                    ts.ml_confidence_score AS confidence,
-                    ts.risk_level,
-                    ts.review_status,
-                    ts.review_notes,
-                    ts.wpm,
-                    ts.duration_seconds,
-                    ts.total_keystrokes,
-                    ts.deletions,
-                    ts.pauses,
-                    ts.avg_iki,
-                    ts.certificate_id,
-                    ts.document_hash,
-                    ts.created_at,
-                    c.course_name,
-                    c.course_code,
-                    ts.word_count AS word_count
-                FROM typing_sessions ts
-                LEFT JOIN courses c ON c.id = ts.course_id
-                WHERE {where_clause}
-                ORDER BY ts.created_at DESC
-                LIMIT :limit OFFSET :offset
-                """
-            ),
-            params,
-        ).mappings().fetchall()
+    total, rows = await list_student_session_rows(
+        db,
+        user_id=user_id,
+        filters=StudentSessionFilters(
+            classification=classification,
+            review_status=review_status,
+            search=search,
+        ),
+        limit=limit,
+        offset=offset,
+    )
 
     return {
         "status": "success",
-        "total": int(total_row["total"] if total_row else 0),
+        "total": total,
         "limit": limit,
         "offset": offset,
         "sessions": [_session_to_dict(dict(row)) for row in rows],
     }
 
 
-@router.get("/student/sessions/{session_id}")
+@router.get("/student/sessions/{session_id}", response_model=StudentSessionDetailResponse)
 async def get_student_session_detail(
     session_id: int,
     current_user: User = Depends(require_student),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Single session detail for the student.
     """
-    with sync_engine.connect() as conn:
-        row = conn.execute(
-            text(
-                """
-                SELECT
-                    ts.id,
-                    ts.title,
-                    ts.text_content,
-                    ts.classification_result AS classification,
-                    ts.ml_confidence_score AS confidence,
-                    ts.risk_level,
-                    ts.review_status,
-                    ts.review_notes,
-                    ts.wpm,
-                    ts.duration_seconds,
-                    ts.total_keystrokes,
-                    ts.deletions,
-                    ts.pauses,
-                    ts.avg_iki,
-                    ts.certificate_id,
-                    ts.document_hash,
-                    ts.created_at,
-                    c.course_name,
-                    c.course_code,
-                    ts.word_count AS word_count
-                FROM typing_sessions ts
-                LEFT JOIN courses c ON c.id = ts.course_id
-                WHERE ts.id = :session_id
-                  AND ts.user_id = :user_id
-                LIMIT 1
-                """
-            ),
-            {
-                "session_id": session_id,
-                "user_id": str(current_user.id),
-            },
-        ).mappings().fetchone()
+    row = (await db.execute(
+        text(
+            """
+            SELECT
+                ts.id,
+                ts.title,
+                ts.text_content,
+                ts.classification_result AS classification,
+                ts.ml_confidence_score AS confidence,
+                ts.risk_level,
+                ts.review_status,
+                ts.review_notes,
+                ts.wpm,
+                ts.duration_seconds,
+                ts.total_keystrokes,
+                ts.deletions,
+                ts.pauses,
+                ts.avg_iki,
+                ts.certificate_id,
+                ts.document_hash,
+                ts.decision_source,
+                ts.model_available,
+                ts.degraded_analysis,
+                ts.created_at,
+                c.course_name,
+                c.course_code,
+                ts.word_count AS word_count
+            FROM typing_sessions ts
+            LEFT JOIN courses c ON c.id = ts.course_id
+            WHERE ts.id = :session_id
+              AND ts.user_id = :user_id
+            LIMIT 1
+            """
+        ),
+        {
+            "session_id": session_id,
+            "user_id": str(current_user.id),
+        },
+    )).mappings().first()
 
     if row is None:
         raise HTTPException(
@@ -437,75 +392,75 @@ async def get_student_session_detail(
     }
 
 
-@router.get("/student/analytics")
+@router.get("/student/analytics", response_model=StudentAnalyticsResponse)
 async def get_student_analytics_clean(
     current_user: User = Depends(require_student),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Clean student analytics endpoint used by the analytics page.
     """
     user_id = str(current_user.id)
 
-    with sync_engine.connect() as conn:
-        daily_rows = conn.execute(
-            text(
-                """
-                SELECT
-                    DATE(created_at) AS day,
-                    COUNT(*) AS session_count,
-                    COALESCE(ROUND(AVG(wpm)::numeric, 1), 0) AS avg_wpm,
-                    COALESCE(ROUND(AVG(ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
-                    COALESCE(SUM(total_keystrokes), 0) AS total_keys,
-                    COALESCE(SUM(deletions), 0) AS deletions,
-                    COALESCE(SUM(pauses), 0) AS pauses
-                FROM typing_sessions
-                WHERE user_id = :user_id
-                  AND created_at >= NOW() - INTERVAL '30 days'
-                GROUP BY DATE(created_at)
-                ORDER BY day ASC
-                """
-            ),
-            {"user_id": user_id},
-        ).mappings().fetchall()
+    daily_rows = (await db.execute(
+        text(
+            """
+            SELECT
+                DATE(created_at) AS day,
+                COUNT(*) AS session_count,
+                COALESCE(ROUND(AVG(wpm)::numeric, 1), 0) AS avg_wpm,
+                COALESCE(ROUND(AVG(ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
+                COALESCE(SUM(total_keystrokes), 0) AS total_keys,
+                COALESCE(SUM(deletions), 0) AS deletions,
+                COALESCE(SUM(pauses), 0) AS pauses
+            FROM typing_sessions
+            WHERE user_id = :user_id
+              AND created_at >= NOW() - INTERVAL '30 days'
+            GROUP BY DATE(created_at)
+            ORDER BY day ASC
+            """
+        ),
+        {"user_id": user_id},
+    )).mappings().all()
 
-        course_rows = conn.execute(
-            text(
-                """
-                SELECT
-                    COALESCE(c.course_name, 'Personal') AS course_name,
-                    COALESCE(c.course_code, '') AS course_code,
-                    COUNT(ts.id) AS session_count,
-                    COALESCE(ROUND(AVG(ts.wpm)::numeric, 1), 0) AS avg_wpm,
-                    COALESCE(ROUND(AVG(ts.ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
-                    COUNT(CASE WHEN ts.classification_result = 'HUMAN' THEN 1 END) AS human_count,
-                    COUNT(CASE WHEN ts.classification_result = 'SUSPICIOUS' THEN 1 END) AS suspicious_count,
-                    COUNT(CASE WHEN ts.classification_result IN ('SYNTHETIC', 'AI-GENERATED', 'AI') THEN 1 END) AS synthetic_count
-                FROM typing_sessions ts
-                LEFT JOIN courses c ON c.id = ts.course_id
-                WHERE ts.user_id = :user_id
-                GROUP BY COALESCE(c.course_name, 'Personal'), COALESCE(c.course_code, '')
-                ORDER BY session_count DESC
-                """
-            ),
-            {"user_id": user_id},
-        ).mappings().fetchall()
+    course_rows = (await db.execute(
+        text(
+            """
+            SELECT
+                COALESCE(c.course_name, 'Personal') AS course_name,
+                COALESCE(c.course_code, '') AS course_code,
+                COUNT(ts.id) AS session_count,
+                COALESCE(ROUND(AVG(ts.wpm)::numeric, 1), 0) AS avg_wpm,
+                COALESCE(ROUND(AVG(ts.ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
+                COUNT(CASE WHEN ts.classification_result = 'HUMAN' THEN 1 END) AS human_count,
+                COUNT(CASE WHEN ts.classification_result = 'SUSPICIOUS' THEN 1 END) AS suspicious_count,
+                COUNT(CASE WHEN ts.classification_result IN ('SYNTHETIC', 'AI-GENERATED', 'AI') THEN 1 END) AS synthetic_count
+            FROM typing_sessions ts
+            LEFT JOIN courses c ON c.id = ts.course_id
+            WHERE ts.user_id = :user_id
+            GROUP BY COALESCE(c.course_name, 'Personal'), COALESCE(c.course_code, '')
+            ORDER BY session_count DESC
+            """
+        ),
+        {"user_id": user_id},
+    )).mappings().all()
 
-        bests = conn.execute(
-            text(
-                """
-                SELECT
-                    COALESCE(MAX(wpm), 0) AS best_wpm,
-                    COALESCE(MAX(ml_confidence_score), 0) AS best_confidence,
-                    COALESCE(MAX(duration_seconds), 0) AS longest_session,
-                    COALESCE(MIN(avg_iki), 0) AS best_iki,
-                    COUNT(*) AS total_sessions,
-                    COALESCE(SUM(duration_seconds), 0) AS total_seconds
-                FROM typing_sessions
-                WHERE user_id = :user_id
-                """
-            ),
-            {"user_id": user_id},
-        ).mappings().fetchone()
+    bests = (await db.execute(
+        text(
+            """
+            SELECT
+                COALESCE(MAX(wpm), 0) AS best_wpm,
+                COALESCE(MAX(ml_confidence_score), 0) AS best_confidence,
+                COALESCE(MAX(duration_seconds), 0) AS longest_session,
+                COALESCE(MIN(avg_iki), 0) AS best_iki,
+                COUNT(*) AS total_sessions,
+                COALESCE(SUM(duration_seconds), 0) AS total_seconds
+            FROM typing_sessions
+            WHERE user_id = :user_id
+            """
+        ),
+        {"user_id": user_id},
+    )).mappings().first()
 
     return {
         "status": "success",

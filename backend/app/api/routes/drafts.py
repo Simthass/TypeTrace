@@ -1,46 +1,58 @@
 # backend/app/api/routes/drafts.py
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_student
 from app.core.crypto import decrypt_json, decrypt_text, encrypt_json, encrypt_text
 from app.db.database import get_db
-from app.models.course import CourseStudent
+from app.models.course import Course, CourseStudent
 from app.models.draft import DraftSession
+from app.models.session import TypingSession
 from app.models.user import User
 from app.services.audit_log import create_audit_log
+from app.services.canonical_evidence import compute_canonical_evidence, normalize_title
+from app.schemas.evidence import (
+    MAX_ACTIVE_DURATION_MS,
+    MAX_ANALYSIS_EVENT_COUNT,
+    MAX_ANALYSIS_TEXT_CHARACTERS,
+)
+from app.schemas.responses import DraftListResponse, DraftResponse, MessageResponse
 
 
 router = APIRouter(prefix="/drafts")
 
 
-MAX_TEXT_LENGTH = 100_000
-MAX_EVENT_COUNT = 250_000
-
 
 class DraftUpsertRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     draft_id: Optional[str] = Field(default=None, max_length=120)
     title: str = Field(default="Untitled Document", max_length=255)
-    text_content: str = Field(default="", max_length=MAX_TEXT_LENGTH)
+    text_content: str = Field(default="", max_length=MAX_ANALYSIS_TEXT_CHARACTERS)
     course_id: Optional[int] = None
-    keystroke_array: List[Dict[str, Any]] = Field(default_factory=list)
-    active_duration_ms: int = Field(default=0, ge=0)
+    keystroke_array: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        max_length=MAX_ANALYSIS_EVENT_COUNT,
+    )
+    active_duration_ms: int = Field(default=0, ge=0, le=MAX_ACTIVE_DURATION_MS)
     started_at: Optional[int] = Field(default=None, ge=0)
     last_activity_at: Optional[int] = Field(default=None, ge=0)
     paused_at: Optional[int] = Field(default=None, ge=0)
     expected_version: Optional[int] = Field(default=None, ge=1)
     save_reason: str = Field(default="autosave", max_length=30)
-    lifecycle_status: str = Field(default="PAUSED", max_length=30)
-    sync_status: str = Field(default="SYNCED", max_length=30)
+    lifecycle_status: Literal["ACTIVE", "PAUSED"] = "PAUSED"
+    sync_status: Literal["LOCAL_ONLY", "SYNCED", "PENDING_SYNC", "CONFLICT"] = "SYNCED"
 
 
 class DraftSubmitLinkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     session_id: int = Field(ge=1)
 
 
@@ -64,13 +76,6 @@ def _datetime_to_ms(value: Optional[datetime]) -> Optional[int]:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return int(value.timestamp() * 1000)
-
-
-def _safe_lifecycle_status(value: str) -> str:
-    normalized = str(value or "PAUSED").upper()
-    if normalized in {"ACTIVE", "PAUSED", "SUBMITTED", "DELETED"}:
-        return normalized
-    return "PAUSED"
 
 
 def _safe_sync_status(value: str) -> str:
@@ -121,9 +126,12 @@ async def _ensure_student_can_link_course(
         return
 
     result = await db.execute(
-        select(CourseStudent.id).where(
+        select(CourseStudent.id)
+        .join(Course, Course.id == CourseStudent.course_id)
+        .where(
             CourseStudent.course_id == course_id,
             CourseStudent.student_id == student_id,
+            Course.is_archived.is_(False),
         )
     )
     if result.scalar_one_or_none() is None:
@@ -151,7 +159,7 @@ async def _find_draft(
     return result.scalars().first()
 
 
-@router.get("")
+@router.get("", response_model=DraftListResponse)
 async def list_drafts(
     current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
@@ -179,7 +187,7 @@ async def list_drafts(
     }
 
 
-@router.get("/{draft_id}")
+@router.get("/{draft_id}", response_model=DraftResponse)
 async def get_draft(
     draft_id: str,
     current_user: User = Depends(require_student),
@@ -206,14 +214,14 @@ async def get_draft(
     }
 
 
-@router.post("", status_code=status.HTTP_200_OK)
+@router.post("", status_code=status.HTTP_200_OK, response_model=DraftResponse)
 async def upsert_draft(
     payload: DraftUpsertRequest,
     request: Request,
     current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
-    if len(payload.keystroke_array) > MAX_EVENT_COUNT:
+    if len(payload.keystroke_array) > MAX_ANALYSIS_EVENT_COUNT:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail="Draft evidence stream is too large to sync in one request.",
@@ -273,7 +281,7 @@ async def upsert_draft(
     draft.started_at = _ms_to_datetime(payload.started_at)
     draft.last_activity_at = _ms_to_datetime(payload.last_activity_at)
     draft.paused_at = _ms_to_datetime(payload.paused_at)
-    draft.lifecycle_status = _safe_lifecycle_status(payload.lifecycle_status)
+    draft.lifecycle_status = payload.lifecycle_status
     draft.sync_status = _safe_sync_status(payload.sync_status)
     draft.save_reason = _safe_save_reason(payload.save_reason)
     draft.conflict_payload = None
@@ -315,7 +323,7 @@ async def upsert_draft(
     }
 
 
-@router.patch("/{draft_id}")
+@router.patch("/{draft_id}", response_model=DraftResponse)
 async def update_draft(
     draft_id: str,
     payload: DraftUpsertRequest,
@@ -327,7 +335,7 @@ async def update_draft(
     return await upsert_draft(payload, request, current_user, db)
 
 
-@router.delete("/{draft_id}")
+@router.delete("/{draft_id}", response_model=MessageResponse)
 async def delete_draft(
     draft_id: str,
     request: Request,
@@ -367,7 +375,7 @@ async def delete_draft(
     }
 
 
-@router.post("/{draft_id}/submit")
+@router.post("/{draft_id}/submit", response_model=MessageResponse)
 async def mark_draft_submitted(
     draft_id: str,
     payload: DraftSubmitLinkRequest,
@@ -375,9 +383,10 @@ async def mark_draft_submitted(
     current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
 ):
+    user_id = str(current_user.id)
     draft = await _find_draft(
         db=db,
-        user_id=str(current_user.id),
+        user_id=user_id,
         draft_id=draft_id,
     )
     if draft is None:
@@ -386,24 +395,72 @@ async def mark_draft_submitted(
             detail="Draft not found.",
         )
 
+    session = (
+        await db.execute(
+            select(TypingSession).where(
+                TypingSession.id == payload.session_id,
+                TypingSession.user_id == user_id,
+            )
+        )
+    ).scalars().first()
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Submitted session was not found for this student.",
+        )
+
+    if draft.submitted_session_id is not None:
+        if int(draft.submitted_session_id) == int(session.id):
+            return {
+                "status": "success",
+                "message": "Draft was already linked to this submitted session.",
+            }
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Draft is already linked to a different submitted session.",
+        )
+
+    draft_text = decrypt_text(draft.text_content) or ""
+    draft_events = decrypt_json(draft.keystroke_array) or []
+    if not isinstance(draft_events, list):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Draft evidence is malformed and cannot be linked.",
+        )
+
+    canonical = compute_canonical_evidence(
+        title=normalize_title(draft.title),
+        text_content=draft_text,
+        keystroke_array=draft_events,
+        user_id=user_id,
+        client_active_duration_ms=int(draft.active_duration_ms or 0),
+    )
+    if not session.evidence_hash or canonical.evidence_hash != session.evidence_hash:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Draft evidence does not match the submitted session. "
+                "The draft cannot be linked to an unrelated evidence record."
+            ),
+        )
+
     draft.lifecycle_status = "SUBMITTED"
     draft.sync_status = "SYNCED"
-    draft.conflict_payload = {
-        "submitted_session_id": payload.session_id,
-        "submitted_from": "drafts.submit",
-    }
+    draft.submitted_session_id = int(session.id)
+    draft.conflict_payload = None
     db.add(draft)
     db.add(
         create_audit_log(
             event_type="DRAFT_SUBMITTED",
             entity_type="draft_session",
             entity_id=str(draft.id),
-            actor_user_id=str(current_user.id),
-            target_user_id=str(current_user.id),
+            actor_user_id=user_id,
+            target_user_id=user_id,
             request=request,
             metadata={
                 "local_draft_id": draft.local_draft_id,
-                "session_id": payload.session_id,
+                "session_id": int(session.id),
+                "evidence_hash": session.evidence_hash,
             },
         )
     )

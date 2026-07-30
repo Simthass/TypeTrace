@@ -1,11 +1,10 @@
 export type CertificateStatus =
+  | "NOT_FOUND"
   | "VALID"
-  | "VALID_LEGACY"
   | "REVIEW_REQUIRED"
-  | "HIGH_RISK"
   | "REVOKED"
   | "INVALID_SIGNATURE"
-  | "INVALID";
+  | "LEGACY_UNSIGNED";
 
 export interface CertificateListItem {
   session_id: number;
@@ -23,6 +22,10 @@ export interface CertificateListItem {
   course_name: string | null;
   course_code: string | null;
   verify_url: string;
+  status: CertificateStatus;
+  certificate_active: boolean;
+  degraded_analysis: boolean;
+  decision_source?: string | null;
 }
 
 export interface CertificateListResponse {
@@ -38,8 +41,12 @@ export interface CertificateAuditTimelineItem {
 }
 
 export interface PublicCertificateVerification {
+  record_found: boolean;
+  ledger_verified: boolean;
+  certificate_active: boolean;
+  /** Compatibility field. Use certificate_active and status for UI decisions. */
   valid: boolean;
-  status: CertificateStatus | string;
+  status: CertificateStatus;
   certificate_id: string;
   reason?: string;
 
@@ -69,8 +76,10 @@ export interface PublicCertificateVerification {
   signature_status?: string;
   signature_valid?: boolean;
   payload_hash_matches?: boolean;
-  ledger_verified?: boolean;
   ledger_reason?: string;
+  decision_source?: string | null;
+  model_available?: boolean;
+  degraded_analysis?: boolean;
   revoked_at?: string | null;
   revocation_reason?: string | null;
   created_at?: string;

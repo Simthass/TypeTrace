@@ -2,7 +2,7 @@
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,13 +12,21 @@ from app.db.database import get_db
 from app.models.course import Course, CourseStudent
 from app.models.user import User
 from app.services.notifications import dispatch_notification
+from app.schemas.responses import EnrolledCoursesResponse, JoinCourseResponse
 
 
 router = APIRouter()
 
 
 class JoinCourseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     invite_code: str = Field(min_length=3, max_length=30)
+
+    @field_validator("invite_code")
+    @classmethod
+    def normalize_invite_code(cls, value: str) -> str:
+        return value.strip().upper()
 
 
 def _course_payload(course: Course) -> Dict[str, Any]:
@@ -26,11 +34,10 @@ def _course_payload(course: Course) -> Dict[str, Any]:
         "id": course.id,
         "course_name": course.course_name,
         "course_code": course.course_code,
-        "invite_code": course.invite_code,
     }
 
 
-@router.post("/courses/join", status_code=status.HTTP_200_OK)
+@router.post("/courses/join", status_code=status.HTTP_200_OK, response_model=JoinCourseResponse)
 async def join_course(
     payload: JoinCourseRequest,
     background_tasks: BackgroundTasks,
@@ -41,10 +48,16 @@ async def join_course(
     Allows a student to join a teacher-created course using an invite code.
     """
 
-    invite_code = payload.invite_code.strip().upper()
+    invite_code = payload.invite_code
 
     result = await db.execute(
-        select(Course).where(Course.invite_code == invite_code)
+        select(Course)
+        .where(
+            Course.invite_code == invite_code,
+            Course.invite_enabled.is_(True),
+            Course.is_archived.is_(False),
+        )
+        .with_for_update()
     )
     course = result.scalars().first()
 
@@ -103,7 +116,7 @@ async def join_course(
     }
 
 
-@router.get("/courses/enrolled")
+@router.get("/courses/enrolled", response_model=EnrolledCoursesResponse)
 async def get_enrolled_courses(
     current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
@@ -115,7 +128,10 @@ async def get_enrolled_courses(
     result = await db.execute(
         select(Course)
         .join(CourseStudent, CourseStudent.course_id == Course.id)
-        .where(CourseStudent.student_id == str(current_user.id))
+        .where(
+            CourseStudent.student_id == str(current_user.id),
+            Course.is_archived.is_(False),
+        )
         .order_by(Course.created_at.desc())
     )
 

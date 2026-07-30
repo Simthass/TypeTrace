@@ -45,6 +45,17 @@ class Settings(BaseSettings):
     REDIS_HOST: str = Field(default="localhost")
     REDIS_PORT: int = Field(default=6379)
     REDIS_DB: int = Field(default=0)
+    REDIS_URL: str = Field(default="")
+
+    MAIL_USERNAME: str = Field(default="")
+    MAIL_PASSWORD: str = Field(default="")
+    MAIL_FROM: str = Field(default="verify@typetrace.com")
+    MAIL_SERVER: str = Field(default="smtp.testmail.app")
+    MAIL_PORT: int = Field(default=465)
+    MAIL_STARTTLS: bool = False
+    MAIL_SSL_TLS: bool = True
+    MAIL_USE_CREDENTIALS: bool = True
+    MAIL_VALIDATE_CERTS: bool = True
 
     FRONTEND_URL: str = Field(default="http://localhost:5173")
     ALLOWED_ORIGINS: str = Field(
@@ -61,6 +72,7 @@ class Settings(BaseSettings):
     MAX_LOGIN_ATTEMPTS_PER_MINUTE: int = 8
     MAX_OTP_ATTEMPTS_PER_MINUTE: int = 6
     MAX_PUBLIC_VERIFY_PER_MINUTE: int = 30
+    MAX_REQUEST_BODY_BYTES: int = 32 * 1024 * 1024
     RATE_LIMIT_STORAGE_URI: str = Field(default="memory://")
 
     ENCRYPTION_MASTER_KEY: str = Field(default="")
@@ -83,14 +95,14 @@ class Settings(BaseSettings):
     @field_validator(
         "ENVIRONMENT",
         "LOG_LEVEL",
-        "SECRET_KEY",
         "ALLOWED_ORIGINS",
         "CERTIFICATE_SIGNING_KEY_ID",
-        "CERTIFICATE_SIGNING_PRIVATE_KEY",
         "CERTIFICATE_SIGNING_PUBLIC_KEY",
-        "CERTIFICATE_SIGNING_HMAC_SECRET",
-        "ENCRYPTION_MASTER_KEY",
         "RATE_LIMIT_STORAGE_URI",
+        "REDIS_URL",
+        "MAIL_USERNAME",
+        "MAIL_FROM",
+        "MAIL_SERVER",
     )
     @classmethod
     def strip_string_fields(cls, value: str) -> str:
@@ -126,15 +138,28 @@ class Settings(BaseSettings):
         "MAX_LOGIN_ATTEMPTS_PER_MINUTE",
         "MAX_OTP_ATTEMPTS_PER_MINUTE",
         "MAX_PUBLIC_VERIFY_PER_MINUTE",
+        "MAX_REQUEST_BODY_BYTES",
     )
     @classmethod
-    def validate_rate_limits(cls, value: int) -> int:
+    def validate_positive_limits(cls, value: int) -> int:
         if value <= 0:
-            raise ValueError("Rate limits must be positive integers.")
+            raise ValueError("Configured limits must be positive integers.")
+        return value
+
+    @field_validator("REDIS_PORT", "MAIL_PORT")
+    @classmethod
+    def validate_network_ports(cls, value: int) -> int:
+        if value <= 0 or value > 65535:
+            raise ValueError("Network ports must be between 1 and 65535.")
         return value
 
     @model_validator(mode="after")
     def validate_production_security(self):
+        if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+            raise ValueError(
+                "SECRET_KEY must be configured with at least 32 characters."
+            )
+
         if self.is_production:
             if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:
                 raise ValueError(
@@ -169,6 +194,19 @@ class Settings(BaseSettings):
 
             if not self.ALLOWED_ORIGINS.strip():
                 raise ValueError("Production ALLOWED_ORIGINS must be configured.")
+
+            if not self.MAIL_SERVER or not self.MAIL_FROM:
+                raise ValueError(
+                    "Production authentication email settings must be configured."
+                )
+
+            if self.MAIL_USE_CREDENTIALS and (
+                not self.MAIL_USERNAME or not self.MAIL_PASSWORD
+            ):
+                raise ValueError(
+                    "Production SMTP credentials are required when "
+                    "MAIL_USE_CREDENTIALS is enabled."
+                )
 
             if (
                 not self.CERTIFICATE_SIGNING_PRIVATE_KEY

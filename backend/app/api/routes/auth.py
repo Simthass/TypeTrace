@@ -1,22 +1,23 @@
-from typing import Union
+import logging
+from datetime import datetime, timezone
+from urllib.parse import quote
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import ValidationError
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, status
+from jose import JWTError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-
 from app.api.deps import get_current_user
 from app.core.config import settings
-from app.core.jwt import create_access_token, create_reset_token, verify_reset_token
-from app.core.rate_limit import limiter, per_minute
-from app.core.security import (
-    generate_otp,
-    get_password_hash,
-    secure_compare,
-    verify_password,
+from app.core.jwt import (
+    create_access_token,
+    create_reset_token,
+    decode_reset_token,
 )
+from app.core.rate_limit import limiter, per_minute
+from app.core.security import generate_otp, get_password_hash, verify_password
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.user import (
@@ -25,50 +26,44 @@ from app.schemas.user import (
     OTPVerify,
     PasswordResetConfirm,
     PasswordResetRequest,
+    PasswordResetRequestResponse,
+    PasswordResetStatusResponse,
     PasswordResetVerify,
     PasswordResetVerifyResponse,
     RegisterResponse,
+    RegistrationRequest,
+    RegistrationStatusResponse,
     ResendOTPRequest,
-    StudentRegister,
-    TeacherRegister,
     TokenVerifyResponse,
     UserLogin,
     UserResponse,
 )
 from app.services import redis_cache
+from app.services.audit_log import create_audit_log
+from app.services.email import EmailDeliveryError, send_otp_email
 
-
+logger = logging.getLogger("typetrace.auth")
 router = APIRouter()
+
+REGISTRATION_ID_PATH = Path(
+    min_length=36,
+    max_length=200,
+    pattern=r"^reg_[A-Za-z0-9_-]{32,160}$",
+)
+RESET_ID_PATH = Path(
+    min_length=36,
+    max_length=200,
+    pattern=r"^rst_[A-Za-z0-9_-]{32,160}$",
+)
 
 
 def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-def _validation_error_message(exc: ValidationError) -> str:
-    """Return a safe, JSON-serializable validation message.
-
-    Pydantic error dictionaries may contain exception objects and the rejected
-    input value. Neither should be returned by an authentication endpoint,
-    especially when the rejected field can contain a password.
-    """
-
-    messages: list[str] = []
-
-    for error in exc.errors():
-        location = ".".join(str(part) for part in error.get("loc", ()))
-        message = str(error.get("msg") or "Invalid value.")
-
-        if message.startswith("Value error, "):
-            message = message.removeprefix("Value error, ")
-
-        if location:
-            label = location.replace("_", " ").title()
-            messages.append(f"{label}: {message}")
-        else:
-            messages.append(message)
-
-    return " ".join(messages) or "The submitted registration data is invalid."
+def _frontend_recovery_url(path: str, key: str, value: str) -> str:
+    base = settings.FRONTEND_URL.rstrip("/")
+    return f"{base}{path}#{key}={quote(value, safe='')}"
 
 
 def _serialize_user(user: User) -> UserResponse:
@@ -85,15 +80,46 @@ def _serialize_user(user: User) -> UserResponse:
     )
 
 
-async def _send_otp_email(email: str, otp: str) -> None:
-    from app.services import email as email_service
+def _access_token(user: User) -> str:
+    return create_access_token(
+        data={
+            "sub": user.email,
+            "id": str(user.id),
+            "role": user.role,
+            "token_version": int(user.token_version or 0),
+        }
+    )
 
-    await email_service.send_otp_email(email=email, otp=otp)
+
+def _auth_response(
+    user: User,
+    *,
+    message: str,
+    already_completed: bool = False,
+) -> AuthTokenResponse:
+    return AuthTokenResponse(
+        message=message,
+        access_token=_access_token(user),
+        user=_serialize_user(user),
+        already_completed=already_completed,
+    )
 
 
-# =============================================================================
-# REGISTER
-# =============================================================================
+def _parse_consent_timestamp(value: object) -> datetime:
+    if not isinstance(value, str):
+        raise ValueError("Missing consent timestamp.")
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _required_pending_text(payload: dict[str, object], key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Missing pending registration field: {key}.")
+    return value.strip()
+
 
 @router.post(
     "/register",
@@ -104,123 +130,261 @@ async def _send_otp_email(email: str, otp: str) -> None:
 async def register_user(
     request: Request,
     response: Response,
+    user_in: RegistrationRequest,
     db: AsyncSession = Depends(get_db),
-):
-    """
-    Starts registration by validating role-specific payload,
-    storing pending user data in Redis, and sending an OTP.
-    """
-
-    body = await request.json()
-    role = str(body.get("role", "STUDENT")).upper()
-
-    if role not in {"STUDENT", "TEACHER"}:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Role must be STUDENT or TEACHER.",
-        )
-
-    try:
-        user_in: Union[StudentRegister, TeacherRegister]
-        if role == "TEACHER":
-            user_in = TeacherRegister(**body)
-        else:
-            user_in = StudentRegister(**body)
-
-    except ValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=_validation_error_message(exc),
-        )
-
+) -> RegisterResponse:
+    del response
     email = _normalize_email(str(user_in.email))
 
-    existing_email = await db.execute(select(User).where(User.email == email))
-    if existing_email.scalars().first():
+    existing_user = (
+        await db.execute(select(User.id).where(User.email == email))
+    ).scalar_one_or_none()
+    if existing_user is not None:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered.",
         )
 
-    if role == "STUDENT" and isinstance(user_in, StudentRegister):
-        existing_student_id = await db.execute(
-            select(User).where(User.student_id == user_in.student_id)
-        )
-        if existing_student_id.scalars().first():
+    student_id = getattr(user_in, "student_id", None)
+    if student_id:
+        existing_student = (
+            await db.execute(select(User.id).where(User.student_id == student_id))
+        ).scalar_one_or_none()
+        if existing_student is not None:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
                 detail="Student ID already registered.",
             )
 
-    hashed_password = get_password_hash(user_in.password)
     otp = generate_otp()
-
-    success = await redis_cache.store_pending_user(
-        user_data=user_in,
-        otp=otp,
-        hashed_password=hashed_password,
-    )
-
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to process registration. Please try again.",
+    try:
+        pending = await redis_cache.create_pending_registration(
+            user_data=user_in,
+            otp=otp,
+            hashed_password=get_password_hash(user_in.password),
         )
+    except redis_cache.ActiveRegistrationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "An active registration already exists for this email. "
+                "Complete it or wait for it to expire."
+            ),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unable to create pending registration")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Registration service is temporarily unavailable.",
+        ) from exc
 
-    await _send_otp_email(email=email, otp=otp)
+    try:
+        await send_otp_email(
+            email=user_in.email,
+            otp=otp,
+            purpose="verification",
+            action_url=_frontend_recovery_url(
+                "/verify-otp",
+                "registration_id",
+                str(pending["registration_id"]),
+            ),
+        )
+    except EmailDeliveryError as exc:
+        try:
+            cancelled = await redis_cache.cancel_pending_registration(
+                pending["registration_id"]
+            )
+            if cancelled.get("status") not in {"CANCELLED", "MISSING"}:
+                logger.error(
+                    "Registration cleanup after email failure returned %s",
+                    cancelled.get("status"),
+                )
+        except Exception:
+            logger.exception(
+                "Failed to remove registration after email delivery failure"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Verification email could not be delivered. "
+                "No account was created; please try again."
+            ),
+        ) from exc
 
     return RegisterResponse(
-        message="OTP sent to your email. Please verify to complete registration.",
+        message="Verification code sent.",
+        registration_id=str(pending["registration_id"]),
         email=email,
-        role=role,
+        role=user_in.role,
+        expires_in_seconds=redis_cache.REGISTRATION_TTL_SECONDS,
     )
 
 
-# =============================================================================
-# RESEND OTP
-# =============================================================================
-
-@router.post(
-    "/resend-otp",
-    status_code=status.HTTP_200_OK,
-    response_model=MessageResponse,
+@router.get(
+    "/pending-registration/{registration_id}",
+    response_model=RegistrationStatusResponse,
 )
+async def registration_status(
+    registration_id: str = REGISTRATION_ID_PATH,
+) -> RegistrationStatusResponse:
+    try:
+        result = await redis_cache.get_registration_status(registration_id)
+    except Exception as exc:
+        logger.exception("Unable to read registration status")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Verification service is temporarily unavailable.",
+        ) from exc
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Verification session expired. Please register again.",
+        )
+    return RegistrationStatusResponse.model_validate(result)
+
+
+@router.post("/resend-otp", response_model=MessageResponse)
 @limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
 async def resend_registration_otp(
     request: Request,
     response: Response,
     req: ResendOTPRequest,
-):
-    """
-    Resends OTP for an existing pending registration.
-    """
-
-    email = _normalize_email(str(req.email))
-    pending_user = await redis_cache.get_pending_user(email)
-
-    if not pending_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Verification session expired or invalid. Please register again.",
-        )
-
+) -> MessageResponse:
+    del request, response
     otp = generate_otp()
-    updated = await redis_cache.update_pending_user_otp(email=email, otp=otp)
-
-    if not updated:
+    try:
+        prepared = await redis_cache.prepare_registration_resend(
+            req.registration_id,
+            otp,
+        )
+    except Exception as exc:
+        logger.exception("Redis failure during registration resend")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to resend OTP. Please try again.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Verification service is temporarily unavailable.",
+        ) from exc
+
+    state = prepared["status"]
+    if state == "MISSING":
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Verification session expired. Please register again.",
+        )
+    if state == "LOCKED":
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Verification session is locked. Please register again.",
+        )
+    if state == "COOLDOWN":
+        retry_after = max(int(prepared.get("retry_after") or 1), 1)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"Please wait {retry_after} seconds before requesting another code."
+            ),
+            headers={"Retry-After": str(retry_after)},
+        )
+    if state == "LIMIT":
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Maximum resend limit reached. Please register again.",
+        )
+    if state != "READY":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Verification is already being processed.",
         )
 
-    await _send_otp_email(email=email, otp=otp)
+    reservation_token = str(prepared["reservation_token"])
+    try:
+        await send_otp_email(
+            email=prepared["email"],
+            otp=otp,
+            purpose="verification",
+        )
+    except EmailDeliveryError as exc:
+        try:
+            aborted = await redis_cache.abort_registration_resend(
+                req.registration_id,
+                reservation_token,
+            )
+            if not aborted:
+                logger.error(
+                    "Resend reservation could not be released after email failure"
+                )
+        except Exception:
+            logger.exception("Failed to release resend reservation")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "New code could not be delivered. "
+                "Your previous verification code remains valid."
+            ),
+        ) from exc
 
-    return MessageResponse(message="A new OTP has been sent to your email.")
+    try:
+        committed = await redis_cache.commit_registration_resend(
+            req.registration_id,
+            reservation_token,
+        )
+    except Exception as exc:
+        logger.exception("Redis failure after resend email delivery")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "The new email was sent but could not be activated. "
+                "Your previous code remains valid; retry later."
+            ),
+        ) from exc
+    if not committed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Verification session changed while resending. "
+                "Your previous code remains valid."
+            ),
+        )
+    return MessageResponse(message="A new verification code has been sent.")
 
 
-# =============================================================================
-# VERIFY OTP
-# =============================================================================
+@router.delete(
+    "/pending-registration/{registration_id}",
+    response_model=MessageResponse,
+)
+async def cancel_pending_registration(
+    registration_id: str = REGISTRATION_ID_PATH,
+) -> MessageResponse:
+    try:
+        result = await redis_cache.cancel_pending_registration(registration_id)
+    except Exception as exc:
+        logger.exception("Pending registration cancellation failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Could not cancel registration now. "
+                "The pending data will expire automatically."
+            ),
+        ) from exc
+
+    state = result["status"]
+    if state == "IN_PROGRESS":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Registration verification is already being processed.",
+        )
+    if state == "COMPLETED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Registration has already completed. Sign in instead.",
+        )
+    return MessageResponse(
+        message=(
+            "Pending registration cancelled."
+            if state == "CANCELLED"
+            else "Pending registration was already absent."
+        )
+    )
+
 
 @router.post(
     "/verify-otp",
@@ -233,200 +397,266 @@ async def verify_otp(
     response: Response,
     otp_in: OTPVerify,
     db: AsyncSession = Depends(get_db),
-):
-    """
-    Completes registration by verifying OTP and creating the user.
-    """
+) -> AuthTokenResponse:
+    del response
 
-    email = _normalize_email(str(otp_in.email))
-    pending_user = await redis_cache.get_pending_user(email)
-
-    if not pending_user:
+    # PostgreSQL is authoritative. A completed registration must not allow the
+    # original OTP to mint additional access tokens. A retry receives a stable,
+    # controlled result and the user signs in with the password they created.
+    committed_user = (
+        await db.execute(
+            select(User.id).where(User.registration_id == otp_in.registration_id)
+        )
+    ).scalar_one_or_none()
+    if committed_user is not None:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Verification session expired or invalid. Please register again.",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Account is already verified. Sign in to continue.",
         )
 
-    if not secure_compare(str(pending_user.get("otp") or ""), str(otp_in.otp)):
+    try:
+        claim = await redis_cache.claim_registration(
+            otp_in.registration_id,
+            otp_in.otp,
+        )
+    except Exception as exc:
+        logger.exception("Registration claim failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Verification service is temporarily unavailable.",
+        ) from exc
+
+    claim_status = claim["status"]
+    if claim_status == "MISSING":
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Verification session expired. Please register again.",
+        )
+    if claim_status == "INVALID":
+        attempts = int(claim.get("attempts") or 0)
+        remaining = max(redis_cache.MAX_OTP_ATTEMPTS - attempts, 0)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid OTP code.",
+            detail=f"Invalid verification code. {remaining} attempts remaining.",
         )
-
-    existing_email = await db.execute(select(User).where(User.email == email))
-    if existing_email.scalars().first():
-        await redis_cache.delete_pending_user(email)
+    if claim_status == "LOCKED":
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered.",
+            status_code=status.HTTP_423_LOCKED,
+            detail="Too many invalid attempts. Please register again.",
+        )
+    if claim_status == "IN_PROGRESS":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Verification is already being processed.",
+        )
+    if claim_status != "CLAIMED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Verification session is not available.",
         )
 
-    student_id = pending_user.get("student_id")
-
-    if student_id:
-        existing_student_id = await db.execute(
-            select(User).where(User.student_id == student_id)
-        )
-        if existing_student_id.scalars().first():
-            await redis_cache.delete_pending_user(email)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Student ID already registered.",
+    pending = claim.get("payload")
+    claim_token = str(claim["claim_token"])
+    if not isinstance(pending, dict):
+        try:
+            await redis_cache.release_registration_claim(
+                otp_in.registration_id,
+                claim_token,
             )
+        except Exception:
+            logger.exception("Failed to release malformed registration claim")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Verification session is invalid. Please register again.",
+        )
 
-    new_user = User(
-        first_name=pending_user["first_name"],
-        last_name=pending_user.get("last_name") or "",
-        email=email,
-        hashed_password=pending_user["hashed_password"],
-        role=pending_user.get("role", "STUDENT"),
-        student_id=student_id,
-        university_name=pending_user.get("university_name"),
-        department=pending_user.get("department"),
-        is_verified=True,
-    )
+    try:
+        email = _normalize_email(_required_pending_text(pending, "email"))
+        role = _required_pending_text(pending, "role")
+        if role not in {"STUDENT", "TEACHER"}:
+            raise ValueError("Invalid pending role.")
+        consent_accepted_at = _parse_consent_timestamp(
+            pending.get("consent_accepted_at")
+        )
+        new_user = User(
+            registration_id=otp_in.registration_id,
+            first_name=_required_pending_text(pending, "first_name"),
+            last_name=str(pending.get("last_name") or "").strip(),
+            email=email,
+            hashed_password=_required_pending_text(
+                pending,
+                "hashed_password",
+            ),
+            role=role,
+            student_id=(str(pending["student_id"]) if pending.get("student_id") else None),
+            university_name=(
+                str(pending["university_name"])
+                if pending.get("university_name")
+                else None
+            ),
+            department=(
+                str(pending["department"])
+                if pending.get("department")
+                else None
+            ),
+            is_verified=True,
+            token_version=0,
+            consent_accepted_at=consent_accepted_at,
+            consent_policy_version=_required_pending_text(
+                pending,
+                "consent_policy_version",
+            ),
+            consent_source=_required_pending_text(pending, "consent_source"),
+        )
+    except (TypeError, ValueError, KeyError) as exc:
+        try:
+            await redis_cache.release_registration_claim(
+                otp_in.registration_id,
+                claim_token,
+            )
+        except Exception:
+            logger.exception("Failed to release invalid registration claim")
+        logger.exception("Pending registration payload failed validation")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Verification session is invalid. Please register again.",
+        ) from exc
 
     try:
         db.add(new_user)
+        await db.flush()
+        db.add(
+            create_audit_log(
+                event_type="CONSENT_ACCEPTED",
+                entity_type="USER",
+                entity_id=str(new_user.id),
+                actor_user_id=str(new_user.id),
+                target_user_id=str(new_user.id),
+                request=request,
+                metadata={
+                    "policy_version": new_user.consent_policy_version,
+                    "accepted_at": consent_accepted_at.isoformat(),
+                    "source": new_user.consent_source,
+                    "registration_id": otp_in.registration_id,
+                },
+            )
+        )
         await db.commit()
-        await db.refresh(new_user)
-
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
+        # A concurrent transaction or a retry may already have committed the same
+        # registration. Resolve that case before reporting a uniqueness conflict.
+        existing = (
+            await db.execute(
+                select(User).where(
+                    User.registration_id == otp_in.registration_id
+                )
+            )
+        ).scalars().first()
+        if existing is not None:
+            return _auth_response(
+                existing,
+                message="Account was already verified.",
+                already_completed=True,
+            )
+        try:
+            await redis_cache.release_registration_claim(
+                otp_in.registration_id,
+                claim_token,
+            )
+        except Exception:
+            logger.exception("Failed to release registration after conflict")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="An account with this email or Student ID already exists.",
+        ) from exc
+    except Exception as exc:
+        await db.rollback()
+        try:
+            await redis_cache.release_registration_claim(
+                otp_in.registration_id,
+                claim_token,
+            )
+        except Exception:
+            logger.exception("Failed to release registration after DB failure")
+        logger.exception("Account creation failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Account could not be created. You may retry the same code.",
+        ) from exc
+
+    try:
+        completed = await redis_cache.complete_registration(
+            otp_in.registration_id,
+            claim_token,
+            user_id=str(new_user.id),
+            email=new_user.email,
+            role=new_user.role,
+        )
+        if not completed:
+            logger.error(
+                "Post-commit registration cleanup returned an unsuccessful state"
+            )
+    except Exception:
+        # PostgreSQL is authoritative after commit. Do not turn a created account
+        # into a user-visible failure because cache cleanup failed.
+        logger.exception(
+            "Post-commit registration cleanup failed; account remains created"
         )
 
-    await redis_cache.delete_pending_user(email)
-
-    access_token = create_access_token(
-        data={
-            "sub": new_user.email,
-            "id": str(new_user.id),
-            "role": new_user.role,
-        }
-    )
-
-    return AuthTokenResponse(
-        message="Account verified successfully.",
-        access_token=access_token,
-        user=_serialize_user(new_user),
-    )
+    return _auth_response(new_user, message="Account verified successfully.")
 
 
-# =============================================================================
-# LOGIN
-# =============================================================================
-
-@router.post(
-    "/login",
-    status_code=status.HTTP_200_OK,
-    response_model=AuthTokenResponse,
-)
+@router.post("/login", response_model=AuthTokenResponse)
 @limiter.limit(per_minute(settings.MAX_LOGIN_ATTEMPTS_PER_MINUTE))
 async def login_user(
     request: Request,
     response: Response,
     login_in: UserLogin,
     db: AsyncSession = Depends(get_db),
-):
-    """
-    Authenticates a verified user and returns a JWT.
-    """
-
+) -> AuthTokenResponse:
+    del request, response
     email = _normalize_email(str(login_in.email))
-
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
-
-    if not user or not verify_password(login_in.password, user.hashed_password):
+    user = (
+        await db.execute(select(User).where(User.email == email))
+    ).scalars().first()
+    if user is None or not verify_password(
+        login_in.password,
+        user.hashed_password,
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials.",
         )
-
     if not user.is_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is not verified.",
         )
-
-    access_token = create_access_token(
-        data={
-            "sub": user.email,
-            "id": str(user.id),
-            "role": user.role,
-        }
-    )
-
-    return AuthTokenResponse(
-        message="Login successful.",
-        access_token=access_token,
-        user=_serialize_user(user),
-    )
+    return _auth_response(user, message="Login successful.")
 
 
-# =============================================================================
-# CURRENT USER / TOKEN VERIFICATION
-# =============================================================================
-
-@router.get(
-    "/me",
-    status_code=status.HTTP_200_OK,
-    response_model=UserResponse,
-)
-async def get_me(
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Returns the authenticated user profile.
-    """
-
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_user)) -> UserResponse:
     return _serialize_user(current_user)
 
 
-@router.get(
-    "/verify-token",
-    status_code=status.HTTP_200_OK,
-    response_model=TokenVerifyResponse,
-)
+@router.get("/verify-token", response_model=TokenVerifyResponse)
 async def verify_token(
     current_user: User = Depends(get_current_user),
-):
-    """
-    Allows frontend to confirm that the persisted JWT is still valid.
-    """
-
-    return TokenVerifyResponse(
-        valid=True,
-        user=_serialize_user(current_user),
-    )
+) -> TokenVerifyResponse:
+    return TokenVerifyResponse(valid=True, user=_serialize_user(current_user))
 
 
-@router.post(
-    "/logout",
-    status_code=status.HTTP_200_OK,
-    response_model=MessageResponse,
-)
-async def logout_user():
-    """
-    Stateless JWT logout endpoint.
-
-    The frontend clears the token. Backend confirms the action.
-    """
-
+@router.post("/logout", response_model=MessageResponse)
+async def logout_user() -> MessageResponse:
     return MessageResponse(message="Logged out successfully.")
 
 
-# =============================================================================
-# PASSWORD RESET
-# =============================================================================
-
 @router.post(
     "/password-reset/request",
-    status_code=status.HTTP_200_OK,
-    response_model=MessageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=PasswordResetRequestResponse,
 )
 @limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
 async def request_password_reset(
@@ -434,33 +664,118 @@ async def request_password_reset(
     response: Response,
     req: PasswordResetRequest,
     db: AsyncSession = Depends(get_db),
-):
-    """
-    Sends password reset OTP if the account exists.
-
-    Always returns 200 to prevent email enumeration.
-    """
-
+) -> PasswordResetRequestResponse:
+    del request, response
     email = _normalize_email(str(req.email))
+    user = (
+        await db.execute(select(User).where(User.email == email))
+    ).scalars().first()
 
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
+    otp = generate_otp()
+    try:
+        reset = await redis_cache.create_password_reset(
+            email=email,
+            otp=otp,
+            user_id=str(user.id) if user is not None else None,
+        )
+    except Exception as exc:
+        logger.exception("Unable to create password-reset session")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Password-reset service is temporarily unavailable.",
+        ) from exc
 
-    if user:
-        otp = generate_otp()
-        stored = await redis_cache.store_reset_otp(email=email, otp=otp)
+    # Always return an opaque reset ID. Missing accounts receive an unusable
+    # decoy session so the normal response does not expose account existence.
+    if user is not None:
+        try:
+            await send_otp_email(
+                email=user.email,
+                otp=otp,
+                purpose="password reset",
+                action_url=_frontend_recovery_url(
+                    "/forgot-password",
+                    "reset_id",
+                    str(reset["reset_id"]),
+                ),
+            )
+        except EmailDeliveryError as exc:
+            try:
+                deleted = await redis_cache.delete_password_reset(reset["reset_id"])
+                if not deleted:
+                    logger.error(
+                        "Undelivered password-reset session was already absent"
+                    )
+            except Exception:
+                logger.exception("Failed to remove undelivered reset session")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Reset email could not be delivered. Please try again.",
+            ) from exc
 
-        if stored:
-            await _send_otp_email(email=email, otp=otp)
-
-    return MessageResponse(
+    return PasswordResetRequestResponse(
         message="If that email exists, a reset code has been sent.",
+        reset_id=str(reset["reset_id"]),
+        expires_in_seconds=redis_cache.RESET_TTL_SECONDS,
+    )
+
+
+@router.get(
+    "/password-reset/{reset_id}",
+    response_model=PasswordResetStatusResponse,
+)
+async def password_reset_status(
+    reset_id: str = RESET_ID_PATH,
+) -> PasswordResetStatusResponse:
+    try:
+        result = await redis_cache.get_password_reset_status(reset_id)
+    except Exception as exc:
+        logger.exception("Unable to read password-reset status")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Password-reset service is temporarily unavailable.",
+        ) from exc
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Password-reset session expired. Start again.",
+        )
+    return PasswordResetStatusResponse.model_validate(result)
+
+
+@router.delete("/password-reset/{reset_id}", response_model=MessageResponse)
+async def cancel_password_reset(
+    reset_id: str = RESET_ID_PATH,
+) -> MessageResponse:
+    try:
+        result = await redis_cache.cancel_password_reset(reset_id)
+    except Exception as exc:
+        logger.exception("Password-reset cancellation failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not cancel the reset session. It will expire automatically.",
+        ) from exc
+    if result["status"] == "IN_PROGRESS":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Password update is already being processed.",
+        )
+    if result["status"] == "COMPLETED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Password reset has already completed.",
+        )
+    return MessageResponse(
+        message=(
+            "Password-reset session cancelled."
+            if result["status"] == "CANCELLED"
+            else "Password-reset session was already absent."
+        )
     )
 
 
 @router.post(
     "/password-reset/verify",
-    status_code=status.HTTP_200_OK,
     response_model=PasswordResetVerifyResponse,
 )
 @limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
@@ -468,33 +783,74 @@ async def verify_password_reset(
     request: Request,
     response: Response,
     req: PasswordResetVerify,
-):
-    """
-    Verifies reset OTP and returns a short-lived reset token.
-    """
-
-    email = _normalize_email(str(req.email))
-
-    saved_otp = await redis_cache.get_reset_otp(email)
-
-    if not saved_otp or not secure_compare(str(saved_otp), str(req.otp)):
+) -> PasswordResetVerifyResponse:
+    del request, response
+    proposed_jti = str(uuid4())
+    try:
+        result = await redis_cache.verify_password_reset_otp(
+            req.reset_id,
+            req.otp,
+            proposed_jti=proposed_jti,
+        )
+    except Exception as exc:
+        logger.exception("Password-reset OTP verification failed")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Password-reset service is temporarily unavailable.",
+        ) from exc
+
+    state = result["status"]
+    if state == "MISSING":
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Invalid or expired reset code.",
+        )
+    if state == "INVALID":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired reset code.",
+        )
+    if state == "LOCKED":
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Too many invalid attempts. Start password reset again.",
+        )
+    if state in {"COMPLETED", "IN_PROGRESS"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Password reset is no longer available.",
+        )
+    if state != "ISSUED" or not isinstance(result.get("payload"), dict):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Password-reset session is not available.",
+        )
+
+    payload = result["payload"]
+    user_id = payload.get("user_id")
+    email = payload.get("email")
+    token_jti = payload.get("token_jti")
+    if not user_id or not email or not token_jti:
+        # Decoy sessions and malformed state receive the same generic result.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired reset code.",
         )
 
-    reset_token = create_reset_token(email)
-    await redis_cache.delete_reset_otp(email)
-
+    token, _ = create_reset_token(
+        str(email),
+        user_id=str(user_id),
+        reset_id=req.reset_id,
+        jti=str(token_jti),
+    )
     return PasswordResetVerifyResponse(
-        reset_token=reset_token,
+        reset_token=token,
         message="Code verified.",
     )
 
 
 @router.post(
     "/password-reset/confirm",
-    status_code=status.HTTP_200_OK,
     response_model=MessageResponse,
 )
 @limiter.limit(per_minute(settings.MAX_OTP_ATTEMPTS_PER_MINUTE))
@@ -503,31 +859,165 @@ async def confirm_password_reset(
     response: Response,
     req: PasswordResetConfirm,
     db: AsyncSession = Depends(get_db),
-):
-    """
-    Updates password after reset token verification.
-    """
+) -> MessageResponse:
+    del response
+    try:
+        payload = decode_reset_token(req.reset_token)
+    except JWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired reset session.",
+        ) from exc
 
-    email = _normalize_email(str(req.email))
+    try:
+        claim = await redis_cache.claim_password_reset(
+            str(payload["reset_id"]),
+            str(payload["jti"]),
+        )
+    except Exception as exc:
+        logger.exception("Password-reset token claim failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Password-reset service is temporarily unavailable.",
+        ) from exc
 
-    if not verify_reset_token(req.reset_token, email):
+    claim_state = claim["status"]
+    if claim_state in {"MISSING", "INVALID", "COMPLETED"}:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Reset session has already been used or expired.",
+        )
+    if claim_state == "IN_PROGRESS":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Password reset is already being processed.",
+        )
+    if claim_state != "CLAIMED" or not isinstance(claim.get("payload"), dict):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired reset session.",
         )
 
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
-
-    if not user:
+    reset_state = claim["payload"]
+    claim_token = str(claim["claim_token"])
+    reset_id = str(payload["reset_id"])
+    state_user_id = str(reset_state.get("user_id") or "")
+    state_email = _normalize_email(str(reset_state.get("email") or ""))
+    token_user_id = str(payload["user_id"])
+    token_email = _normalize_email(str(payload["sub"]))
+    if state_user_id != token_user_id or state_email != token_email:
+        try:
+            await redis_cache.release_password_reset_claim(
+                reset_id,
+                claim_token,
+            )
+        except Exception:
+            logger.exception("Failed to release mismatched reset claim")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired reset session.",
         )
 
-    user.hashed_password = get_password_hash(req.new_password)
+    user = (
+        await db.execute(
+            select(User)
+            .where(
+                User.id == token_user_id,
+                User.email == token_email,
+            )
+            .with_for_update()
+        )
+    ).scalars().first()
+    if user is None or not user.is_verified:
+        try:
+            await redis_cache.release_password_reset_claim(
+                reset_id,
+                claim_token,
+            )
+        except Exception:
+            logger.exception("Failed to release reset claim for absent user")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired reset session.",
+        )
 
-    db.add(user)
-    await db.commit()
+    if user.last_password_reset_id == reset_id:
+        try:
+            completed = await redis_cache.complete_password_reset(
+                reset_id,
+                claim_token,
+            )
+            if not completed:
+                logger.error(
+                    "Idempotent password-reset finalization returned false"
+                )
+        except Exception:
+            logger.exception("Failed to finalize idempotent password reset")
+        return MessageResponse(
+            message="Password was already updated successfully. Sign in again."
+        )
 
-    return MessageResponse(message="Password updated successfully.")
+    if verify_password(req.new_password, user.hashed_password):
+        try:
+            await redis_cache.release_password_reset_claim(
+                reset_id,
+                claim_token,
+            )
+        except Exception:
+            logger.exception("Failed to release unchanged-password reset claim")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from the current password.",
+        )
+
+    try:
+        user.hashed_password = get_password_hash(req.new_password)
+        user.token_version = int(user.token_version or 0) + 1
+        user.last_password_reset_id = reset_id
+        db.add(user)
+        db.add(
+            create_audit_log(
+                event_type="PASSWORD_RESET",
+                entity_type="USER",
+                entity_id=str(user.id),
+                actor_user_id=str(user.id),
+                target_user_id=str(user.id),
+                request=request,
+                metadata={"reset_id": reset_id},
+            )
+        )
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        try:
+            await redis_cache.release_password_reset_claim(
+                reset_id,
+                claim_token,
+            )
+        except Exception:
+            logger.exception("Failed to restore reset token after DB failure")
+        logger.exception("Password-reset database commit failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Password could not be updated. You may retry this reset session.",
+        ) from exc
+
+    try:
+        completed = await redis_cache.complete_password_reset(
+            reset_id,
+            claim_token,
+        )
+        if not completed:
+            logger.error(
+                "Post-commit password-reset cleanup returned an unsuccessful state"
+            )
+    except Exception:
+        # The password and token_version are already committed. A cache failure
+        # must not turn the completed security change into an apparent failure.
+        logger.exception(
+            "Post-commit password-reset cleanup failed; reset remains successful"
+        )
+
+    return MessageResponse(
+        message="Password updated successfully. Sign in again on all devices."
+    )

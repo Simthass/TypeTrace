@@ -48,8 +48,7 @@ describe("AuthRedirectGuard", () => {
       user: null,
       token: null,
       isAuthenticated: false,
-      pendingEmail: null,
-      hasHydrated: true,
+        hasHydrated: true,
     });
   });
 

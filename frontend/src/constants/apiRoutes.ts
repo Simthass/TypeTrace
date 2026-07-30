@@ -66,6 +66,7 @@ export const API_ROUTES = {
     profile: "/user/profile",
     changePassword: "/user/change-password",
     dataExport: "/user/data-export",
+    sensitiveDataExport: "/user/data-export/sensitive",
     account: "/user/account",
   },
 

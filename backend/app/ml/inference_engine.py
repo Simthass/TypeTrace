@@ -379,6 +379,18 @@ def _build_score_diagnostics(
     }
 
 
+class InferenceFailure(RuntimeError):
+    """Base class for controlled analysis failures."""
+
+
+class InferenceInputError(InferenceFailure):
+    """The submitted feature stream cannot be evaluated safely."""
+
+
+class InferenceInternalError(InferenceFailure):
+    """Unexpected inference implementation or numerical failure."""
+
+
 @dataclass
 class InferenceResult:
     classification: str
@@ -434,7 +446,7 @@ def _fallback_result(
         MODEL_FEATURE_COLUMNS,
     )
     score_diagnostics = _build_score_diagnostics(
-        decision_source="fallback_rules",
+        decision_source="FALLBACK_RULES",
         model_decision_score=None,
         model_decision_threshold=None,
         model_human_score=None,
@@ -464,10 +476,11 @@ def _fallback_result(
         behavioral_summary=behavioral_summary,
         advanced_stats={
             **behavioral_summary,
-            "decision_source": "fallback_rules",
+            "decision_source": "FALLBACK_RULES",
             "model_available": False,
             "model_name": MODEL_NAME,
             "model_version": "fallback-rules",
+            "degraded_analysis": True,
             "model_error": reason,
             "model_feature_family": MODEL_FEATURE_FAMILY,
             "model_feature_columns": MODEL_FEATURE_COLUMNS,
@@ -504,7 +517,7 @@ def _fallback_result(
                 "proof of authorship or misconduct."
             ),
         },
-        decision_source="fallback_rules",
+        decision_source="FALLBACK_RULES",
         risk_level=labels["risk_level"],
         risk_score=final_risk_score,
         human_score=human_score,
@@ -769,6 +782,7 @@ class ModelArtifacts:
             self.metadata = {
                 "model_name": MODEL_NAME,
                 "model_version": "fallback-rules",
+                "degraded_analysis": True,
                 "algorithm": "fallback_rules",
                 "feature_family": MODEL_FEATURE_FAMILY,
             }
@@ -1008,7 +1022,7 @@ class TypeTraceInferenceEngine:
             risk_level = str(fusion["risk_level"])
             confidence = human_score
 
-            decision_source = "weighted_timing_behavioral_fusion"
+            decision_source = "MODEL_FUSION"
             risk_signals = list(
                 behavioral_summary.get("risk_signals") or []
             )
@@ -1077,6 +1091,7 @@ class TypeTraceInferenceEngine:
                 **behavioral_summary,
                 "decision_source": decision_source,
                 "model_available": True,
+                "degraded_analysis": False,
                 "model_name": self.artifacts.metadata.get(
                     "model_name",
                     MODEL_NAME,
@@ -1166,16 +1181,18 @@ class TypeTraceInferenceEngine:
                 risk_score=risk_score,
                 human_score=human_score,
             )
+        except (FloatingPointError, OverflowError) as exc:
+            log.warning("Inference numerical validation failed: %s", exc)
+            raise InferenceInputError(
+                "Submitted evidence produced invalid numerical features."
+            ) from exc
+        except InferenceFailure:
+            raise
         except Exception as exc:
-            log.exception("ML inference failed completely: %s", exc)
-            return _fallback_result(
-                text_content=text_content or "",
-                keystroke_array=clean_events,
-                stats=stats,
-                reason=(
-                    "ML inference failed. Fallback behavioral rules were used."
-                ),
-            )
+            log.exception("Unexpected ML inference failure: %s", exc)
+            raise InferenceInternalError(
+                "The analysis engine encountered an unexpected internal failure."
+            ) from exc
 
 
 inference_engine = TypeTraceInferenceEngine()

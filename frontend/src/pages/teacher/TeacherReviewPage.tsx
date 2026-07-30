@@ -45,6 +45,9 @@ interface TeacherSubmissionDetail {
   word_count: number;
   certificate_id: string;
   document_hash: string;
+  decision_source: string;
+  model_available: boolean;
+  degraded_analysis: boolean;
   created_at: string;
   text_content: string;
   text_preview: string;
@@ -506,6 +509,25 @@ export default function TeacherReviewPage() {
         </div>
       </div>
 
+      {submission.degraded_analysis && (
+        <div
+          role="status"
+          className="rounded-md border px-4 py-3"
+          style={{
+            borderColor: colors.amber,
+            background: `${colors.amber}12`,
+            color: colors.text.primary,
+          }}
+        >
+          <p className="text-[13px] font-bold">Degraded analysis record</p>
+          <p className="mt-1 text-[12px] leading-5" style={{ color: colors.text.secondary }}>
+            The trained model was unavailable for this submission. The result was
+            produced by documented fallback rules ({submission.decision_source || "FALLBACK_RULES"})
+            and must not be treated as model-backed evidence.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Main Decrypted Essay Content (66% space allocation) */}
         <div className="lg:col-span-2 space-y-6">
@@ -658,7 +680,7 @@ export default function TeacherReviewPage() {
                     className="mt-1 text-[12px] leading-5"
                     style={{ color: colors.text.secondary }}
                   >
-                    Model confidence and capture behavior for this submission.
+                    Behavioral score and capture evidence for this submission.
                   </p>
                 </div>
                 <Badge tone={tone}>{classificationLabel}</Badge>
@@ -749,6 +771,22 @@ export default function TeacherReviewPage() {
                     style={{ color: colors.text.primary }}
                   >
                     {durationMins} minutes
+                  </p>
+                </div>
+                <div className="col-span-2 pt-2">
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-[0.12em]"
+                    style={{ color: colors.text.muted }}
+                  >
+                    Analysis source
+                  </p>
+                  <p
+                    className="mt-1 text-[13px] font-bold"
+                    style={{ color: submission.degraded_analysis ? colors.amber : colors.text.primary }}
+                  >
+                    {submission.model_available
+                      ? submission.decision_source || "MODEL_FUSION"
+                      : `${submission.decision_source || "FALLBACK_RULES"} · model unavailable`}
                   </p>
                 </div>
               </div>

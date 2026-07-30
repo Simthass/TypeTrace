@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.rate_limit import limiter
 
 from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.middleware.request_body_limit import RequestBodyLimitMiddleware
 
 
 logging.basicConfig(
@@ -55,6 +56,50 @@ def _error_payload(
     return payload
 
 
+
+
+_SENSITIVE_VALIDATION_FIELDS = {
+    "password",
+    "current_password",
+    "new_password",
+    "confirm_password",
+    "otp",
+    "reset_token",
+    "token",
+    "text",
+    "document_text",
+    "text_content",
+    "events",
+    "keystroke_array",
+    "raw_keystroke_data",
+    "keystroke_data",
+    "keystrokes",
+}
+
+
+def _sanitize_validation_errors(exc: RequestValidationError) -> list[Dict[str, Any]]:
+    safe_errors: list[Dict[str, Any]] = []
+    # FastAPI's RequestValidationError does not expose Pydantic's keyword
+    # controls consistently across supported versions. Read the structured
+    # errors, then copy only the explicit allow-listed fields below.
+    for error in exc.errors():
+        location = [str(part) for part in error.get("loc", ())]
+        leaf = location[-1].lower() if location else ""
+        message = (
+            "Invalid value."
+            if leaf in _SENSITIVE_VALIDATION_FIELDS
+            else str(error.get("msg") or "Invalid value.")
+        )
+        safe_errors.append(
+            {
+                "location": location,
+                "message": message,
+                "type": str(error.get("type") or "validation_error"),
+            }
+        )
+    return safe_errors
+
+
 def create_application() -> FastAPI:
     app = FastAPI(
         title=settings.APP_NAME,
@@ -67,6 +112,10 @@ def create_application() -> FastAPI:
     app.state.limiter = limiter
 
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_bytes=settings.MAX_REQUEST_BODY_BYTES,
+    )
 
     app.add_middleware(
         CORSMiddleware,
@@ -119,7 +168,7 @@ def create_application() -> FastAPI:
                 message="Some submitted fields are invalid.",
                 path=str(request.url.path),
                 status_code=422,
-                details=exc.errors(),
+                details=_sanitize_validation_errors(exc),
             ),
         )
 

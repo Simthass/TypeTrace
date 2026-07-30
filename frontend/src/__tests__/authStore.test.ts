@@ -15,7 +15,6 @@ function resetStore() {
     user: null,
     token: null,
     isAuthenticated: false,
-    pendingEmail: null,
     hasHydrated: true,
   });
 }
@@ -53,13 +52,5 @@ describe("authStore", () => {
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
   });
 
-  it("tracks pending registration email independently", () => {
-    useAuthStore
-      .getState()
-      .setPendingEmail("pending@example.com");
 
-    expect(useAuthStore.getState().pendingEmail).toBe(
-      "pending@example.com",
-    );
-  });
 });

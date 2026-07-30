@@ -20,7 +20,7 @@ class Certificate(Base):
     )
 
     certificate_id = Column(String(50), unique=True, nullable=False, index=True)
-    document_hash = Column(String(64), unique=True, nullable=False, index=True)
+    document_hash = Column(String(64), nullable=False, index=True)
 
     pdf_url = Column(String(500), nullable=True)
     blockchain_txn = Column(String(100), nullable=True)

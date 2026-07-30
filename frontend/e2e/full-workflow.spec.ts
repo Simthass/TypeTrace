@@ -265,7 +265,7 @@ test("student submits evidence, teacher reviews it, and the certificate verifies
     );
 
     await expect(
-      publicPage.getByText("Certificate verified", {
+      publicPage.getByText("Certificate record verified", {
         exact: true,
       }),
     ).toBeVisible();

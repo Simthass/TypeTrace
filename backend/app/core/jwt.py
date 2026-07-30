@@ -1,4 +1,4 @@
-# backend/app/core/jwt.py
+from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
@@ -7,7 +7,6 @@ from uuid import uuid4
 from jose import JWTError, jwt
 
 from app.core.config import settings
-
 
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
@@ -21,24 +20,12 @@ def create_access_token(
     data: Dict[str, Any],
     expires_delta: Optional[timedelta] = None,
 ) -> str:
-    """
-    Create a signed JWT access token.
-
-    Required payload fields:
-    - sub: user email
-    - id: user id
-    - role: STUDENT or TEACHER
-    """
-
     to_encode = data.copy()
-
     issued_at = _now()
     expire = issued_at + (
         expires_delta
-        if expires_delta is not None
-        else timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-
     to_encode.update(
         {
             "exp": expire,
@@ -48,69 +35,57 @@ def create_access_token(
             "type": "access",
         }
     )
-
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def create_reset_token(email: str) -> str:
-    """
-    Create a short-lived password reset token.
-    """
-
+def create_reset_token(
+    email: str,
+    *,
+    user_id: str,
+    reset_id: str,
+    jti: Optional[str] = None,
+) -> tuple[str, str]:
     issued_at = _now()
-    expire = issued_at + timedelta(
-        minutes=settings.RESET_TOKEN_EXPIRE_MINUTES
-    )
-
+    token_jti = jti or str(uuid4())
     payload = {
         "sub": email,
-        "exp": expire,
+        "user_id": user_id,
+        "reset_id": reset_id,
+        "exp": issued_at
+        + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES),
         "iat": issued_at,
-        "jti": str(uuid4()),
+        "jti": token_jti,
         "iss": settings.JWT_ISSUER,
         "type": "password_reset",
     }
-
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def verify_reset_token(token: str, email: str) -> bool:
-    """
-    Verify password reset token validity.
-    """
-
-    try:
-        payload = jwt.decode(
-            token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM],
-            issuer=settings.JWT_ISSUER,
-        )
-
-        return (
-            payload.get("type") == "password_reset"
-            and payload.get("sub") == email
-        )
-
-    except JWTError:
-        return False
+    return (
+        jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM),
+        token_jti,
+    )
 
 
-def decode_access_token(token: str) -> Dict[str, Any]:
-    """
-    Decode a JWT access token.
-
-    Raises JWTError if invalid, expired, wrong issuer, or wrong token type.
-    """
-
+def decode_reset_token(token: str) -> Dict[str, Any]:
     payload = jwt.decode(
         token,
         SECRET_KEY,
         algorithms=[ALGORITHM],
         issuer=settings.JWT_ISSUER,
     )
+    if payload.get("type") != "password_reset":
+        raise JWTError("Invalid token type.")
+    required = ("sub", "user_id", "jti", "reset_id")
+    if any(not payload.get(field) for field in required):
+        raise JWTError("Incomplete reset token.")
+    return payload
 
+
+def decode_access_token(token: str) -> Dict[str, Any]:
+    payload = jwt.decode(
+        token,
+        SECRET_KEY,
+        algorithms=[ALGORITHM],
+        issuer=settings.JWT_ISSUER,
+    )
     if payload.get("type") != "access":
         raise JWTError("Invalid token type.")
-
     return payload

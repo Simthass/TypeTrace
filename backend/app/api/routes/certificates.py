@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import re
 import uuid
 from datetime import datetime, timezone
@@ -18,24 +19,40 @@ from reportlab.pdfgen import canvas
 from PIL import Image, ImageDraw
 import qrcode
 from qrcode.constants import ERROR_CORRECT_H
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_teacher
 from app.core.config import PROJECT_ROOT, settings
+from app.db.database import get_db
 from app.core.rate_limit import limiter, per_minute
 from app.models.user import User
+from app.repositories.certificates import (
+    fetch_certificate_record_row,
+    fetch_owned_session_certificate_id,
+    list_user_certificate_ids,
+    lock_certificate_for_revocation,
+)
 from app.core.privacy import safe_public_certificate_identity
 from app.services.certificate_signing import verify_certificate_record
+from app.services.certificate_status import resolve_public_certificate_state
 from app.services.notifications import bump_unread_cache
+from app.schemas.responses import (
+    CertificateListResponse,
+    CertificateRevocationResponse,
+    PublicCertificateResponse,
+)
 
 
 router = APIRouter()
+logger = logging.getLogger("typetrace.certificates")
 
-sync_engine = create_engine(settings.sync_database_url, pool_pre_ping=True)
 
 
 class CertificateRevocationRequest(BaseModel):
     reason: str = Field(min_length=8, max_length=500)
+
+    model_config = {"extra": "forbid"}
 
 
 CERT_ID_PATTERN = re.compile(r"^[A-Za-z0-9\-_]{8,80}$")
@@ -129,79 +146,42 @@ def _review_outcome(status: Optional[str]) -> str:
     return "Awaiting teacher review"
 
 
-def _ledger_display_status(*, ledger_status: Optional[str], classification: Optional[str], risk_level: Optional[str], revoked_at: Any) -> str:
+def _ledger_display_status(
+    *,
+    ledger_status: Optional[str],
+    classification: Optional[str],
+    risk_level: Optional[str],
+    revoked_at: Any,
+) -> str:
     if revoked_at is not None:
         return "REVOKED"
 
     normalized = str(ledger_status or "").upper()
-    if normalized in {"VALID", "VALID_LEGACY", "REVIEW_REQUIRED", "HIGH_RISK", "INVALID_SIGNATURE"}:
-        return normalized
+    if normalized in {"VALID_LEGACY", "LEGACY_UNSIGNED"}:
+        return "LEGACY_UNSIGNED"
+    if normalized == "REVOKED":
+        return "REVOKED"
+    if normalized == "INVALID_SIGNATURE":
+        return "INVALID_SIGNATURE"
+    if normalized == "VALID":
+        return "VALID"
+    if normalized in {"REVIEW_REQUIRED", "HIGH_RISK"}:
+        return "REVIEW_REQUIRED"
 
-    return _certificate_status(classification, risk_level)
+    inferred = _certificate_status(classification, risk_level)
+    return "VALID" if inferred == "VALID" else "REVIEW_REQUIRED"
 
 
-def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
+async def _fetch_certificate_record(
+    db: AsyncSession,
+    cert_id: str,
+) -> Optional[Dict[str, Any]]:
     cert_id = _validate_certificate_id(cert_id)
 
-    with sync_engine.connect() as conn:
-        row = conn.execute(
-            text(
-                """
-                SELECT
-                    ts.id AS session_id,
-                    ts.title AS title,
-                    ts.word_count AS word_count,
-                    ts.wpm AS wpm,
-                    ts.total_keystrokes AS total_keystrokes,
-                    ts.deletions AS deletions,
-                    ts.pauses AS pauses,
-                    ts.avg_iki AS avg_iki,
-                    ts.duration_seconds AS duration_seconds,
-                    ts.classification_result AS classification_result,
-                    ts.ml_confidence_score AS ml_confidence_score,
-                    ts.certificate_id AS certificate_id,
-                    ts.document_hash AS document_hash,
-                    ts.risk_level AS risk_level,
-                    ts.review_status AS review_status,
-                    ts.created_at AS created_at,
-                    ts.evidence_hash AS session_evidence_hash,
-                    ts.model_version AS model_version,
-                    ts.model_score AS model_score,
-                    ts.course_id AS course_id,
-
-                    u.id AS user_id,
-                    u.first_name AS first_name,
-                    u.last_name AS last_name,
-                    u.student_id AS student_id,
-                    u.university_name AS university_name,
-                    u.department AS department,
-
-                    c.course_name AS course_name,
-                    c.course_code AS course_code,
-                    c.teacher_id AS teacher_id,
-
-                    cert.id AS ledger_id,
-                    cert.generated_at AS ledger_generated_at,
-                    cert.verification_notes AS verification_notes,
-                    cert.evidence_hash AS certificate_evidence_hash,
-                    cert.signed_payload_hash AS signed_payload_hash,
-                    cert.signature AS signature,
-                    cert.signature_algorithm AS signature_algorithm,
-                    cert.signing_key_id AS signing_key_id,
-                    cert.signed_at AS signed_at,
-                    cert.verification_status AS verification_status,
-                    cert.revoked_at AS revoked_at,
-                    cert.revocation_reason AS revocation_reason
-                FROM typing_sessions ts
-                JOIN users u ON u.id = ts.user_id
-                LEFT JOIN courses c ON c.id = ts.course_id
-                LEFT JOIN certificates cert ON cert.certificate_id = ts.certificate_id
-                WHERE ts.certificate_id = :cert_id
-                LIMIT 1
-                """
-            ),
-            {"cert_id": cert_id},
-        ).mappings().fetchone()
+    row = await fetch_certificate_record_row(
+        db,
+        certificate_id=cert_id,
+    )
 
     if row is None:
         return None
@@ -242,6 +222,9 @@ def _fetch_certificate_record(cert_id: str) -> Optional[Dict[str, Any]]:
         "evidence_hash": row["certificate_evidence_hash"] or row["session_evidence_hash"],
         "model_version": row["model_version"],
         "model_score": round(float(row["model_score"] or 0), 4),
+        "decision_source": row["decision_source"],
+        "model_available": bool(row["model_available"]),
+        "degraded_analysis": bool(row["degraded_analysis"]),
         "wpm_raw": row["wpm"],
         "avg_iki_raw": row["avg_iki"],
         "duration_seconds_raw": row["duration_seconds"],
@@ -288,6 +271,11 @@ def _authorize_certificate_audit(record: Dict[str, Any], user: User) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied for this certificate.",
         )
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Access denied for this certificate.",
+    )
 
 
 def _frontend_verify_url(cert_id: str) -> str:
@@ -351,10 +339,17 @@ def _certificate_audit_timeline(record: Dict[str, Any], signature_result: Any) -
             }
         )
 
+    verification_tone = (
+        "complete"
+        if signature_result.status == "VALID"
+        else "legacy"
+        if signature_result.status == "VALID_LEGACY"
+        else "warning"
+    )
     timeline.append(
         {
             "label": "Public verification checked",
-            "status": "complete" if signature_result.valid else "warning",
+            "status": verification_tone,
             "timestamp": _format_datetime(datetime.now(timezone.utc)),
             "description": signature_result.reason,
         }
@@ -383,7 +378,8 @@ def _certificate_audit_timeline(record: Dict[str, Any], signature_result: Any) -
 
     return timeline
 
-def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dict[str, Any]:
+def _public_certificate_payload(record: Dict[str, Any], request: Optional[Request]) -> Dict[str, Any]:
+    del request
     verify_url = _frontend_verify_url(record["certificate_id"])
     signature_result = verify_certificate_record(record)
 
@@ -394,16 +390,24 @@ def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dic
         show_student_id=settings.PUBLIC_CERTIFICATE_SHOW_STUDENT_ID,
     )
 
-    public_status = record["status"]
-    if record.get("revoked_at"):
-        public_status = "REVOKED"
-    elif not signature_result.valid and signature_result.status != "VALID_LEGACY":
-        public_status = "INVALID_SIGNATURE"
+    public_state = resolve_public_certificate_state(
+        record_found=True,
+        ledger_status=record.get("ledger_status"),
+        revoked=record.get("revoked_at") is not None,
+        signature_valid=bool(signature_result.valid),
+        signature_status=signature_result.status,
+        signature_algorithm=record.get("signature_algorithm"),
+    )
 
     return {
-        "valid": True,
-        "status": public_status,
+        "record_found": public_state.record_found,
+        "ledger_verified": public_state.ledger_verified,
+        "certificate_active": public_state.certificate_active,
+        # Compatibility only. New clients must use status and certificate_active.
+        "valid": public_state.compatibility_valid,
+        "status": public_state.status,
         "certificate_id": record["certificate_id"],
+        "reason": None,
         "verify_url": verify_url,
         "title": record["title"],
         "student_name": identity["student_name"],
@@ -433,10 +437,12 @@ def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dic
         "signature_status": signature_result.status,
         "signature_valid": signature_result.signature_valid,
         "payload_hash_matches": signature_result.payload_hash_matches,
-        "ledger_verified": signature_result.valid,
         "ledger_reason": signature_result.reason,
         "revoked_at": record.get("revoked_at"),
         "revocation_reason": record.get("revocation_reason"),
+        "decision_source": record.get("decision_source"),
+        "model_available": bool(record.get("model_available")),
+        "degraded_analysis": bool(record.get("degraded_analysis")),
         "audit_timeline": _certificate_audit_timeline(record, signature_result),
         "public_exposure": {
             "essay_text_exposed": False,
@@ -447,6 +453,7 @@ def _public_certificate_payload(record: Dict[str, Any], request: Request) -> Dic
             "Public verification does not expose essay text or raw keystroke evidence."
         ),
     }
+
     
 def _pdf_public_record(record: Dict[str, Any]) -> Dict[str, Any]:
     identity = safe_public_certificate_identity(
@@ -463,106 +470,100 @@ def _pdf_public_record(record: Dict[str, Any]) -> Dict[str, Any]:
     return safe_record
 
 
-@router.get("/verify/{cert_id}", name="verify_certificate_public")
+async def _safe_bump_unread_cache(recipient_id: str) -> None:
+    try:
+        await bump_unread_cache(recipient_id=recipient_id)
+    except Exception:
+        logger.exception(
+            "Notification cache update failed after committed certificate operation",
+            extra={"recipient_id": recipient_id},
+        )
+
+
+@router.get(
+    "/verify/{cert_id}",
+    name="verify_certificate_public",
+    response_model=PublicCertificateResponse,
+)
 @limiter.limit(per_minute(settings.MAX_PUBLIC_VERIFY_PER_MINUTE))
 async def verify_certificate_public(
     request: Request,
     response: Response,
     cert_id: str,
-):
-    """
-    Public endpoint used by instructors/universities to verify a certificate.
-
-    No authentication required.
-    """
-    record = _fetch_certificate_record(cert_id)
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    response.headers.update({"Cache-Control": "no-store", "Pragma": "no-cache"})
+    record = await _fetch_certificate_record(db, cert_id)
 
     if record is None:
         return {
+            "record_found": False,
+            "ledger_verified": False,
+            "certificate_active": False,
             "valid": False,
-            "status": "INVALID",
-            "certificate_id": cert_id,
+            "status": "NOT_FOUND",
+            "certificate_id": cert_id.strip(),
             "reason": "Certificate ID was not found in the TypeTrace ledger.",
         }
 
     return _public_certificate_payload(record, request)
 
 
-@router.get("/certificates")
+@router.get("/certificates", response_model=CertificateListResponse)
 async def list_my_certificates(
     current_user: User = Depends(get_current_user),
-):
-    """
-    Authenticated student certificate list.
-    """
-    with sync_engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                """
-                SELECT
-                    ts.id AS session_id,
-                    ts.title AS title,
-                    ts.wpm AS wpm,
-                    ts.duration_seconds AS duration_seconds,
-                    ts.classification_result AS classification,
-                    ts.ml_confidence_score AS confidence,
-                    ts.created_at AS created_at,
-                    ts.certificate_id AS certificate_id,
-                    ts.document_hash AS document_hash,
-                    ts.risk_level AS risk_level,
-                    c.course_name AS course_name,
-                    c.course_code AS course_code
-                FROM typing_sessions ts
-                LEFT JOIN courses c ON c.id = ts.course_id
-                WHERE ts.user_id = :user_id
-                  AND ts.certificate_id IS NOT NULL
-                ORDER BY ts.created_at DESC
-                """
-            ),
-            {"user_id": str(current_user.id)},
-        ).mappings().fetchall()
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    certificate_ids = await list_user_certificate_ids(
+        db,
+        user_id=str(current_user.id),
+    )
 
-    certificates = []
-
-    for row in rows:
+    certificates: list[Dict[str, Any]] = []
+    for certificate_id in certificate_ids:
+        record = await _fetch_certificate_record(db, certificate_id)
+        if record is None:
+            logger.error(
+                "Session references missing certificate ledger record",
+                extra={"certificate_id": certificate_id},
+            )
+            continue
+        public = _public_certificate_payload(record, request=None)
         certificates.append(
             {
-                "session_id": row["session_id"],
-                "title": row["title"] or "Untitled Document",
-                "wpm": round(float(row["wpm"] or 0), 1),
-                "duration_seconds": round(float(row["duration_seconds"] or 0), 1),
-                "classification": row["classification"] or "UNKNOWN",
-                "confidence": round(float(row["confidence"] or 0), 2),
-                "created_at": _format_datetime(row["created_at"]),
-                "certificate_id": row["certificate_id"],
-                "document_hash": row["document_hash"],
-                "risk_level": row["risk_level"] or "LOW",
-                "course_name": row["course_name"],
-                "course_code": row["course_code"],
-                "verify_url": f"/verify/{row['certificate_id']}",
+                "session_id": int(record["session_id"]),
+                "title": record["title"],
+                "wpm": record["wpm"],
+                "duration_seconds": record["duration_seconds"],
+                "classification": record["classification"],
+                "confidence": record["confidence"],
+                "created_at": record["created_at"],
+                "certificate_id": record["certificate_id"],
+                "document_hash": record["document_hash"],
+                "risk_level": record["risk_level"],
+                "review_status": record["review_status"],
+                "review_outcome": _review_outcome(record["review_status"]),
+                "course_name": record["course_name"],
+                "course_code": record["course_code"],
+                "verify_url": f"/verify/{record['certificate_id']}",
+                "status": public["status"],
+                "certificate_active": public["certificate_active"],
+                "degraded_analysis": bool(record.get("degraded_analysis")),
+                "decision_source": record.get("decision_source"),
             }
         )
 
-    return {
-        "status": "success",
-        "certificates": certificates,
-    }
+    return {"status": "success", "certificates": certificates}
 
 
-@router.get("/certificates/{cert_id}")
+@router.get("/certificates/{cert_id}", response_model=PublicCertificateResponse)
 async def get_certificate_audit(
     request: Request,
     cert_id: str,
     current_user: User = Depends(get_current_user),
-):
-    """
-    Authenticated certificate audit endpoint.
-
-    Students can access their own certificates.
-    Teachers can access certificates only for sessions in their own courses.
-    """
-    record = _fetch_certificate_record(cert_id)
-
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    record = await _fetch_certificate_record(db, cert_id)
     if record is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -570,7 +571,6 @@ async def get_certificate_audit(
         )
 
     _authorize_certificate_audit(record, current_user)
-
     payload = _public_certificate_payload(record, request)
     payload.update(
         {
@@ -583,38 +583,46 @@ async def get_certificate_audit(
             "verification_notes": record["verification_notes"],
         }
     )
-
     return payload
 
 
-@router.post("/certificates/{cert_id}/revoke")
+@router.post(
+    "/certificates/{cert_id}/revoke",
+    response_model=CertificateRevocationResponse,
+)
 async def revoke_certificate(
     cert_id: str,
     payload: CertificateRevocationRequest,
     request: Request,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Revoke a certificate without deleting its signed evidence record.
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    cert_id = _validate_certificate_id(cert_id)
+    reason = " ".join(payload.reason.split())
 
-    The original signature remains verifiable, while the public verification
-    state changes to REVOKED. This mirrors real ledger behaviour: records are
-    appended/invalidated, not silently erased.
-    """
-    record = _fetch_certificate_record(cert_id)
+    locked = await lock_certificate_for_revocation(
+        db,
+        certificate_id=cert_id,
+    )
 
-    if record is None:
+    if locked is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Certificate not found.",
         )
+    if not locked["teacher_id"] or str(locked["teacher_id"]) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the owning course teacher may revoke this certificate.",
+        )
 
-    _authorize_certificate_audit(record, current_user)
-
-    reason = " ".join(payload.reason.split())
-    with sync_engine.begin() as conn:
-        conn.execute(
+    already_revoked = (
+        locked["revoked_at"] is not None
+        or str(locked.get("verification_status") or "").upper() == "REVOKED"
+    )
+    if not already_revoked:
+        await db.execute(
             text(
                 """
                 UPDATE certificates
@@ -624,16 +632,15 @@ async def revoke_certificate(
                 WHERE certificate_id = :cert_id
                 """
             ),
-            {"cert_id": record["certificate_id"], "reason": reason},
+            {"cert_id": cert_id, "reason": reason},
         )
-        conn.execute(
+        await db.execute(
             text(
                 """
                 INSERT INTO audit_logs (
                     actor_user_id, target_user_id, event_type, entity_type, entity_id,
                     request_id, ip_address, user_agent, metadata
-                )
-                VALUES (
+                ) VALUES (
                     :actor_user_id, :target_user_id, 'CERTIFICATE_REVOKED',
                     'certificate', :entity_id, :request_id, :ip_address, :user_agent,
                     CAST(:metadata AS JSONB)
@@ -642,99 +649,103 @@ async def revoke_certificate(
             ),
             {
                 "actor_user_id": str(current_user.id),
-                "target_user_id": str(record.get("user_id")),
-                "entity_id": str(record["certificate_id"]),
+                "target_user_id": str(locked["user_id"]),
+                "entity_id": cert_id,
                 "request_id": request.headers.get("x-request-id"),
                 "ip_address": request.client.host if request.client else None,
                 "user_agent": request.headers.get("user-agent"),
                 "metadata": json.dumps(
                     {
                         "reason": reason,
-                        "session_id": int(record["session_id"]),
-                        "signed_payload_hash": record.get("signed_payload_hash"),
+                        "session_id": int(locked["session_id"]),
                     }
                 ),
             },
         )
-
-        notif_id = str(uuid.uuid4())
-        conn.execute(
+        await db.execute(
             text(
                 """
                 INSERT INTO notifications (
                     id, recipient_id, actor_id, event_type, entity_type, entity_id,
                     title, body, action_url, is_read, created_at
                 ) VALUES (
-                    :notif_id, :recipient_id, :actor_id, :event_type, :entity_type, :entity_id,
-                    :title, :body, :action_url, false, NOW()
+                    :id, :recipient_id, :actor_id, 'CERTIFICATE_REVOKED',
+                    'certificate', :entity_id, 'Certificate Revoked', :body,
+                    :action_url, false, NOW()
                 )
                 """
             ),
             {
-                "notif_id": notif_id,
-                "recipient_id": str(record.get("user_id")),
+                "id": str(uuid.uuid4()),
+                "recipient_id": str(locked["user_id"]),
                 "actor_id": str(current_user.id),
-                "event_type": "CERTIFICATE_REVOKED",
-                "entity_type": "certificate",
-                "entity_id": str(record["certificate_id"]),
-                "title": "Certificate Revoked",
-                "body": f"Your certificate for '{record.get('title')}' has been revoked by your instructor.",
-                "action_url": f"/verify/{record['certificate_id']}",
-            }
+                "entity_id": cert_id,
+                "body": f"Your certificate for '{locked['title']}' has been revoked by your instructor.",
+                "action_url": f"/verify/{cert_id}",
+            },
         )
 
-    background_tasks.add_task(bump_unread_cache, recipient_id=str(record.get("user_id")))
+    # Reload inside the same transaction. A failed reload prevents commit, so a
+    # committed revocation is never followed by a misleading server error.
+    record = await _fetch_certificate_record(db, cert_id)
+    if record is None:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Certificate could not be reloaded; no revocation was committed.",
+        )
 
-    updated = _fetch_certificate_record(record["certificate_id"])
+    if already_revoked:
+        await db.rollback()
+    else:
+        await db.commit()
+        background_tasks.add_task(
+            _safe_bump_unread_cache,
+            str(locked["user_id"]),
+        )
     return {
         "status": "success",
-        "message": "Certificate revoked.",
-        "certificate": _public_certificate_payload(updated, request) if updated else None,
+        "message": (
+            "Certificate was already revoked."
+            if already_revoked
+            else "Certificate revoked."
+        ),
+        "already_revoked": already_revoked,
+        "certificate": _public_certificate_payload(record, request),
     }
 
 
-@router.get("/sessions/{session_id}/certificate-data")
+@router.get(
+    "/sessions/{session_id}/certificate-data",
+    response_model=PublicCertificateResponse,
+)
 async def get_certificate_data_by_session(
     request: Request,
     session_id: int,
     current_user: User = Depends(get_current_user),
-):
-    """
-    Authenticated endpoint for frontend certificate export by session ID.
-    """
-    with sync_engine.connect() as conn:
-        row = conn.execute(
-            text(
-                """
-                SELECT certificate_id
-                FROM typing_sessions
-                WHERE id = :session_id
-                  AND user_id = :user_id
-                LIMIT 1
-                """
-            ),
-            {
-                "session_id": session_id,
-                "user_id": str(current_user.id),
-            },
-        ).mappings().fetchone()
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    certificate_id = await fetch_owned_session_certificate_id(
+        db,
+        session_id=session_id,
+        user_id=str(current_user.id),
+    )
 
-    if row is None or not row["certificate_id"]:
+    if not certificate_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No certificate exists for this session.",
         )
 
-    record = _fetch_certificate_record(row["certificate_id"])
-
+    record = await _fetch_certificate_record(db, certificate_id)
     if record is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Certificate record not found.",
         )
 
-    payload = _public_certificate_payload(record, request)
-    payload.update(
+    result = _public_certificate_payload(record, request)
+    result.update(
         {
             "session_id": record["session_id"],
             "total_keystrokes": record["total_keystrokes"],
@@ -743,8 +754,7 @@ async def get_certificate_data_by_session(
             "avg_iki": record["avg_iki"],
         }
     )
-
-    return payload
+    return result
 
 
 def _find_existing_asset(candidates: tuple[Path, ...]) -> Optional[Path]:
@@ -945,8 +955,11 @@ def _draw_brand_logo(pdf: canvas.Canvas, x: float, y: float, max_width: float = 
                 anchor="w",
             )
             return
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "Certificate logo could not be rendered; using text fallback: %s",
+                exc,
+            )
 
     # Fallback wordmark if the backend container does not include frontend assets.
     pdf.setFont("Helvetica-Bold", 18)
@@ -1028,7 +1041,7 @@ def _build_certificate_pdf(record: Dict[str, Any], verify_url: str) -> bytes:
     pdf.drawCentredString(width / 2, y, "Behavioral keystroke evidence for academic authorship review")
 
     y -= 32
-    status = str(record.get("status") or "UNKNOWN")
+    status = str(record.get("public_status") or record.get("status") or "UNKNOWN")
     status_fill = _status_color(status)
     _draw_pill(pdf, width / 2 - 63, y, 126, 24, status.replace("_", " "), fill=status_fill)
 
@@ -1043,7 +1056,7 @@ def _build_certificate_pdf(record: Dict[str, Any], verify_url: str) -> bytes:
 
     pdf.setFont("Helvetica-Bold", 11)
     pdf.setFillColor(pdf_colors.HexColor(PDF_BLUE_DARK))
-    pdf.drawString(panel_x + 18, y - 18, "Verified session details")
+    pdf.drawString(panel_x + 18, y - 18, "Recorded session details")
 
     left_x = panel_x + 18
     right_x = panel_x + content_width / 2 + 12
@@ -1216,17 +1229,21 @@ def _build_certificate_pdf(record: Dict[str, Any], verify_url: str) -> bytes:
     return buffer.read()
 
 
-@router.get("/certificates/{cert_id}/pdf")
+@router.get(
+    "/certificates/{cert_id}/pdf",
+    response_class=StreamingResponse,
+)
 async def download_certificate_pdf(
     request: Request,
     cert_id: str,
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Public PDF download endpoint.
 
     Public by design: anyone with a certificate ID can verify or download the signed record.
     """
-    record = _fetch_certificate_record(cert_id)
+    record = await _fetch_certificate_record(db, cert_id)
 
     if record is None:
         raise HTTPException(
@@ -1234,8 +1251,12 @@ async def download_certificate_pdf(
             detail="Certificate not found.",
         )
 
+    public = _public_certificate_payload(record, request)
+    pdf_record = _pdf_public_record(record)
+    pdf_record["public_status"] = public["status"]
+    pdf_record["certificate_active"] = public["certificate_active"]
     verify_url = _frontend_verify_url(record["certificate_id"])
-    pdf_bytes = _build_certificate_pdf(_pdf_public_record(record), verify_url)
+    pdf_bytes = _build_certificate_pdf(pdf_record, verify_url)
 
     filename = f"TypeTrace_Certificate_{record['certificate_id']}.pdf"
 

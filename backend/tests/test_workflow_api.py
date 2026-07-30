@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -134,13 +134,14 @@ class WorkflowApiTests(unittest.TestCase):
     def test_unknown_public_certificate_returns_invalid_not_exception(self) -> None:
         with patch(
             "app.api.routes.certificates._fetch_certificate_record",
+            new_callable=AsyncMock,
             return_value=None,
         ):
             response = self.client.get("/api/v1/verify/TT-UNKNOWN1")
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()["valid"])
-        self.assertEqual(response.json()["status"], "INVALID")
+        self.assertEqual(response.json()["status"], "NOT_FOUND")
 
 
 if __name__ == "__main__":

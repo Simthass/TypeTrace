@@ -382,12 +382,20 @@ export default function VerifyCertificatePage() {
         );
         if (!mounted) return;
         setResult(response.data);
-        if (!response.data.valid) {
+        if (!response.data.record_found) {
           showToast({
             type: "warning",
             title: "Certificate not found",
             message:
               response.data.reason || "This certificate ID was not found.",
+          });
+        } else if (!response.data.certificate_active) {
+          showToast({
+            type: "warning",
+            title: response.data.status.replaceAll("_", " "),
+            message:
+              response.data.ledger_reason ||
+              "This certificate record is not currently active.",
           });
         }
       } catch (error) {
@@ -414,7 +422,7 @@ export default function VerifyCertificatePage() {
         ? `Verifying Certificate ${displayId}`
         : "Verifying Certificate";
     }
-    if (apiError || !result || !result.valid) {
+    if (apiError || !result || !result.record_found) {
       return displayId
         ? `Certificate Not Found ${displayId}`
         : "Certificate Not Found";
@@ -437,7 +445,7 @@ export default function VerifyCertificatePage() {
   const pageDescription = useMemo(() => {
     if (isLoading)
       return "TypeTrace is checking the public certificate ledger for this authorship evidence record.";
-    if (apiError || !result || !result.valid)
+    if (apiError || !result || !result.record_found)
       return "This certificate ID could not be verified in the TypeTrace public ledger.";
     return `${result.classification_label || "Writing evidence"} for ${result.title || "Untitled Document"}. Public verification does not expose essay text or raw keystroke evidence.`;
   }, [apiError, isLoading, result]);
@@ -512,7 +520,7 @@ export default function VerifyCertificatePage() {
       : ("warning" as const);
 
   // Invalid state
-  if (!result.valid) {
+  if (!result.record_found) {
     return (
       <PublicShell>
         <div className="mx-auto max-w-lg px-[75px] py-32 text-center">
@@ -635,7 +643,11 @@ export default function VerifyCertificatePage() {
 
         {/* Hero header */}
         <div className="mb-12">
-          <SectionEyebrow>Certificate verified</SectionEyebrow>
+          <SectionEyebrow>
+            {result.certificate_active
+              ? "Certificate record verified"
+              : result.status.replaceAll("_", " ")}
+          </SectionEyebrow>
           <h1
             className="mt-3 text-[2.8rem] font-bold leading-[1.05] tracking-[-0.05em] md:text-[3.8rem]"
             style={{ color: colors.text.primary }}
@@ -646,11 +658,32 @@ export default function VerifyCertificatePage() {
             className="mt-4 max-w-2xl text-[15px] leading-7"
             style={{ color: colors.text.secondary }}
           >
-            This cryptographic record confirms the authorship evidence for the
-            session below. No essay text or raw keystroke data is exposed
-            publicly.
+            {result.certificate_active
+              ? "The signed ledger record is active and its integrity checks passed."
+              : result.status === "REVOKED"
+                ? "This record exists, but the owning course teacher revoked it. It must not be treated as verified evidence."
+                : result.status === "INVALID_SIGNATURE"
+                  ? "This record exists, but its signature or signed payload integrity check failed."
+                  : "This legacy record exists without an enforceable cryptographic signature and requires manual review."}{" "}
+            No essay text or raw keystroke data is exposed publicly.
           </p>
         </div>
+
+        {result.degraded_analysis && (
+          <div
+            role="status"
+            className="mb-6 rounded-xl border px-5 py-4 text-[13px] leading-6"
+            style={{
+              borderColor: withAlpha(colors.amber, "0.35"),
+              background: withAlpha(colors.amber, "0.08"),
+              color: colors.text.primary,
+            }}
+          >
+            <strong>Degraded analysis:</strong> the trained model was not used.
+            This record was produced by documented fallback rules and requires
+            manual academic review.
+          </div>
+        )}
 
         {/* Two-column layout */}
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">

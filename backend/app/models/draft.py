@@ -44,6 +44,14 @@ class DraftSession(Base):
         nullable=False,
         index=True,
     )
+    submitted_session_id = Column(
+        Integer,
+        ForeignKey("typing_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
     course_id = Column(
         Integer,
         ForeignKey("courses.id", ondelete="SET NULL"),
@@ -77,6 +85,7 @@ class DraftSession(Base):
 
     user = relationship("User")
     course = relationship("Course")
+    submitted_session = relationship("TypingSession")
 
     __table_args__ = (
         CheckConstraint(

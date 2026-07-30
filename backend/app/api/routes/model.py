@@ -4,6 +4,11 @@ from app.api.deps import require_teacher
 from app.core.config import settings
 from app.ml.inference_engine import inference_engine
 from app.models.user import User
+from app.schemas.responses import (
+    ModelFeaturesResponse,
+    ModelMetricsResponse,
+    ModelStatusResponse,
+)
 
 
 router = APIRouter()
@@ -27,14 +32,14 @@ def _public_model_status() -> dict[str, object]:
     }
 
 
-@router.get("/model/status")
+@router.get("/model/status", response_model=ModelStatusResponse)
 async def get_model_status():
     """Return only public, review-safe model status fields."""
 
     return _public_model_status()
 
 
-@router.get("/model/metrics")
+@router.get("/model/metrics", response_model=ModelMetricsResponse)
 async def get_model_metrics():
     """Return aggregate evaluation metrics without local artifact details."""
 
@@ -46,7 +51,7 @@ async def get_model_metrics():
     }
 
 
-@router.get("/model/features")
+@router.get("/model/features", response_model=ModelFeaturesResponse)
 async def get_model_features():
     """Return the public timing-only feature schema."""
 
@@ -60,7 +65,7 @@ async def get_model_features():
     }
 
 
-@router.post("/model/reload")
+@router.post("/model/reload", response_model=ModelStatusResponse)
 async def reload_model(
     current_user: User = Depends(require_teacher),
 ):

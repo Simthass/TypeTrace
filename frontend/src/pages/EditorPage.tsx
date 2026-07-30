@@ -40,6 +40,11 @@ interface AnalysisResult {
   kill_switch_reason?: string | null;
   risk_level?: string;
   risk_score?: number;
+  submission_id?: string;
+  idempotent_replay?: boolean;
+  decision_source?: string;
+  model_available?: boolean;
+  degraded_analysis?: boolean;
   advanced_stats?: {
     paste_count?: number;
     paste_ratio?: number;
@@ -895,6 +900,23 @@ function AnalysisResultModal({
                 </svg>
               </div>
 
+              {(result.degraded_analysis ||
+                result.advanced_stats?.degraded_analysis === true) && (
+                <div
+                  role="status"
+                  className="mt-4 rounded-md border px-4 py-3 text-[12px] leading-6"
+                  style={{
+                    borderColor: colors.amber,
+                    background: colors.amberTint,
+                    color: colors.text.primary,
+                  }}
+                >
+                  <strong>Degraded analysis:</strong> the trained model was not
+                  available. TypeTrace used documented fallback rules. Treat this
+                  result as supplementary evidence requiring teacher review.
+                </div>
+              )}
+
               <div className="mt-5 grid grid-cols-2 gap-3">
                 {[
                   [
@@ -1174,6 +1196,7 @@ export default function EditorPage() {
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const suspendingDraftRef = useRef(false);
+  const submissionIdRef = useRef<string>(crypto.randomUUID());
 
   const {
     liveStats,
@@ -1675,7 +1698,11 @@ export default function EditorPage() {
     setIsSubmitting(true);
 
     try {
+      const submissionId = activeDraftId
+        ? `draft:${activeDraftId}`
+        : submissionIdRef.current;
       const response = await api.post(API_ROUTES.sessions.analyze, {
+        submission_id: submissionId,
         title: finalTitle,
         text_content: finalText,
         keystroke_array: evidence,
@@ -1712,7 +1739,20 @@ export default function EditorPage() {
         session_id: data.session_id,
         risk_level: data.risk_level,
         risk_score: data.risk_score,
-        advanced_stats: data.advanced_stats,
+        submission_id: data.submission_id,
+        idempotent_replay: Boolean(data.idempotent_replay),
+        decision_source: data.decision_source,
+        model_available: Boolean(data.model_available),
+        degraded_analysis: Boolean(data.degraded_analysis),
+        advanced_stats: {
+          ...data.advanced_stats,
+          decision_source:
+            data.decision_source ?? data.advanced_stats?.decision_source,
+          model_available:
+            data.model_available ?? data.advanced_stats?.model_available,
+          degraded_analysis:
+            data.degraded_analysis ?? data.advanced_stats?.degraded_analysis,
+        },
       });
 
       setShowCourseModal(false);
@@ -1722,9 +1762,13 @@ export default function EditorPage() {
       setSearchParams({}, { replace: true });
 
       showToast({
-        type: "success",
-        title: "Analysis complete",
-        message: "Your behavioral evidence trail has been processed.",
+        type: data.degraded_analysis ? "warning" : "success",
+        title: data.degraded_analysis
+          ? "Analysis complete in degraded mode"
+          : "Analysis complete",
+        message: data.degraded_analysis
+          ? "The trained model was unavailable. Fallback rules were used and the certificate is labelled for manual review."
+          : "Your behavioral evidence trail has been processed.",
       });
     } catch (error) {
       showToast({
@@ -1752,6 +1796,7 @@ export default function EditorPage() {
   };
 
   const newSession = () => {
+    submissionIdRef.current = crypto.randomUUID();
     setTitle("");
     setText("");
     setSelectedCourseId(null);

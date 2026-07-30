@@ -39,6 +39,12 @@ class FakeExecuteResult:
     def scalar_one_or_none(self) -> Any:
         return self._value
 
+    def scalar_one(self) -> Any:
+        return self._value
+
+    def fetchone(self) -> Any:
+        return self._value
+
     def fetchall(self) -> list[Any]:
         if self._value is None:
             return []
@@ -50,22 +56,38 @@ class FakeExecuteResult:
 class FakeAsyncSession:
     """Small AsyncSession-compatible double with queued execute results."""
 
-    def __init__(self, execute_results: Optional[Iterable[Any]] = None) -> None:
+    def __init__(
+        self,
+        execute_results: Optional[Iterable[Any]] = None,
+        *,
+        commit_exception: Optional[Exception] = None,
+    ) -> None:
         self._execute_results = list(execute_results or [])
+        self._commit_exception = commit_exception
         self.added: list[Any] = []
         self.commits = 0
         self.rollbacks = 0
         self.refreshes = 0
+        self.flushes = 0
 
-    async def execute(self, _statement: Any) -> FakeExecuteResult:
+    async def execute(
+        self,
+        _statement: Any,
+        _parameters: Any = None,
+    ) -> FakeExecuteResult:
         value = self._execute_results.pop(0) if self._execute_results else None
         return FakeExecuteResult(value)
 
     def add(self, value: Any) -> None:
         self.added.append(value)
 
+    async def flush(self) -> None:
+        self.flushes += 1
+
     async def commit(self) -> None:
         self.commits += 1
+        if self._commit_exception is not None:
+            raise self._commit_exception
 
     async def rollback(self) -> None:
         self.rollbacks += 1
@@ -92,4 +114,7 @@ def make_user(
         department="Computer Science" if role == "TEACHER" else None,
         is_verified=verified,
         hashed_password="stored-password-hash",
+        token_version=0,
+        registration_id=None,
+        last_password_reset_id=None,
     )

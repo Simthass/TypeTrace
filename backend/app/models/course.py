@@ -1,6 +1,6 @@
 # backend/app/models/course.py
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, false
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -22,6 +22,9 @@ class Course(Base):
     course_name = Column(String(200), nullable=False)
     course_code = Column(String(100), nullable=False)
     invite_code = Column(String(30), unique=True, nullable=False, index=True)
+    is_archived = Column(Boolean, nullable=False, default=False, server_default=false(), index=True)
+    invite_enabled = Column(Boolean, nullable=False, default=True, server_default="true")
+    archived_at = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(

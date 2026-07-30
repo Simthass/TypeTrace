@@ -6,17 +6,18 @@ from statistics import mean
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
-from app.core.config import settings
 from app.core.crypto import decrypt_json, decrypt_text
 from app.models.user import User
+from app.db.database import get_db
+from app.schemas.responses import ReplayResponse
 
 
 router = APIRouter()
 
-sync_engine = create_engine(settings.sync_database_url, pool_pre_ping=True)
 
 
 LONG_PAUSE_THRESHOLD_MS = 2000
@@ -335,42 +336,24 @@ def _build_timeline_markers(events: List[Dict[str, Any]]) -> List[Dict[str, Any]
     return markers
 
 
-def _fetch_replay_row(session_id: int) -> Optional[Dict[str, Any]]:
-    with sync_engine.connect() as conn:
-        row = conn.execute(
+async def _fetch_replay_row(
+    db: AsyncSession,
+    session_id: int,
+) -> Optional[Dict[str, Any]]:
+    row = (
+        await db.execute(
             text(
                 """
                 SELECT
-                    ts.id,
-                    ts.user_id,
-                    ts.course_id,
-                    ts.title,
-                    ts.text_content,
-                    ts.word_count,
-                    ts.wpm,
-                    ts.total_keystrokes,
-                    ts.deletions,
-                    ts.pauses,
-                    ts.avg_iki,
-                    ts.duration_seconds,
-                    ts.classification_result,
-                    ts.ml_confidence_score,
-                    ts.raw_keystroke_data,
-                    ts.certificate_id,
-                    ts.document_hash,
-                    ts.review_status,
-                    ts.review_notes,
-                    ts.risk_level,
-                    ts.created_at,
-
-                    u.first_name,
-                    u.last_name,
-                    u.email,
-                    u.student_id,
-
-                    c.course_name,
-                    c.course_code,
-                    c.teacher_id
+                    ts.id, ts.user_id, ts.course_id, ts.title, ts.text_content,
+                    ts.word_count, ts.wpm, ts.total_keystrokes, ts.deletions,
+                    ts.pauses, ts.avg_iki, ts.duration_seconds,
+                    ts.classification_result, ts.ml_confidence_score,
+                    ts.raw_keystroke_data, ts.certificate_id, ts.document_hash,
+                    ts.review_status, ts.review_notes, ts.risk_level, ts.created_at,
+                    ts.decision_source, ts.model_available, ts.degraded_analysis,
+                    u.first_name, u.last_name, u.email, u.student_id,
+                    c.course_name, c.course_code, c.teacher_id
                 FROM typing_sessions ts
                 JOIN users u ON u.id = ts.user_id
                 LEFT JOIN courses c ON c.id = ts.course_id
@@ -379,8 +362,8 @@ def _fetch_replay_row(session_id: int) -> Optional[Dict[str, Any]]:
                 """
             ),
             {"session_id": session_id},
-        ).mappings().fetchone()
-
+        )
+    ).mappings().first()
     return dict(row) if row else None
 
 
@@ -400,11 +383,12 @@ def _authorize_replay_access(row: Dict[str, Any], user: User) -> None:
     )
 
 
-@router.get("/replay/{session_id}")
+@router.get("/replay/{session_id}", response_model=ReplayResponse)
 async def get_replay_audit(
     session_id: int,
     response: Response,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Clean replay/audit endpoint for both students and teachers.
@@ -421,7 +405,7 @@ async def get_replay_audit(
             detail="Invalid session ID.",
         )
 
-    row = _fetch_replay_row(session_id)
+    row = await _fetch_replay_row(db, session_id)
 
     if row is None:
         raise HTTPException(
@@ -471,6 +455,9 @@ async def get_replay_audit(
             "review_status": row.get("review_status") or "PENDING",
             "review_notes": row.get("review_notes") or "",
             "created_at": _format_datetime(row.get("created_at")),
+            "decision_source": row.get("decision_source"),
+            "model_available": bool(row.get("model_available")),
+            "degraded_analysis": bool(row.get("degraded_analysis")),
         },
         "metrics": metrics,
         "events": events,
@@ -488,11 +475,12 @@ async def get_replay_audit(
     }
 
 
-@router.get("/sessions/{session_id}/replay")
+@router.get("/sessions/{session_id}/replay", response_model=ReplayResponse)
 async def get_session_replay_compatible(
     session_id: int,
     response: Response,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Compatibility route for frontend replay links.
@@ -503,4 +491,5 @@ async def get_session_replay_compatible(
         session_id=session_id,
         response=response,
         current_user=current_user,
+        db=db,
     )

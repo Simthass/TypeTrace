@@ -236,6 +236,11 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isSensitiveExporting, setIsSensitiveExporting] = useState(false);
+  const [sensitiveExportForm, setSensitiveExportForm] = useState({
+    current_password: "",
+    confirmation: "",
+  });
 
   const [profile, setProfile] = useState({
     first_name: user?.first_name || "",
@@ -260,7 +265,10 @@ export default function SettingsPage() {
     setIsSaving(true);
     try {
       const response = await api.patch(API_ROUTES.user.profile, profile);
-      setUser(response.data.user || response.data);
+      if (!response.data.profile) {
+        throw new Error("Profile update response did not include the updated profile.");
+      }
+      setUser(response.data.profile);
       toast.success("Profile updated", "Your account details were saved.");
     } catch (error) {
       toast.error("Update failed", getApiErrorMessage(error));
@@ -326,6 +334,51 @@ export default function SettingsPage() {
       toast.error("Export failed", getApiErrorMessage(error));
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const exportSensitiveData = async () => {
+    if (!sensitiveExportForm.current_password) {
+      toast.warning(
+        "Password required",
+        "Enter your current password before exporting essay text and raw keystroke evidence.",
+      );
+      return;
+    }
+    if (sensitiveExportForm.confirmation.trim().toUpperCase() !== "EXPORT") {
+      toast.warning(
+        "Confirmation required",
+        "Type EXPORT exactly to confirm the sensitive data export.",
+      );
+      return;
+    }
+
+    setIsSensitiveExporting(true);
+    try {
+      const response = await api.post(API_ROUTES.user.sensitiveDataExport, {
+        current_password: sensitiveExportForm.current_password,
+        confirmation: "EXPORT",
+      });
+      const blob = new Blob([JSON.stringify(response.data, null, 2)], {
+        type: "application/json",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "typetrace-sensitive-export.json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setSensitiveExportForm({ current_password: "", confirmation: "" });
+      toast.success(
+        "Sensitive export ready",
+        "Essay text and raw evidence were exported after re-authentication.",
+      );
+    } catch (error) {
+      toast.error("Sensitive export failed", getApiErrorMessage(error));
+    } finally {
+      setIsSensitiveExporting(false);
     }
   };
 
@@ -631,6 +684,63 @@ export default function SettingsPage() {
                     }}
                   >
                     {isExporting ? "Preparing..." : "Download JSON"}
+                  </button>
+                </div>
+
+                <div
+                  className="mt-6 border-t pt-6"
+                  style={{ borderColor: colors.surface[200] }}
+                >
+                  <h3
+                    className="text-[14px] font-semibold"
+                    style={{ color: colors.text.primary }}
+                  >
+                    Sensitive evidence export
+                  </h3>
+                  <p
+                    className="mt-1 text-[12px] leading-6"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    Includes decrypted essay text and raw keystroke events. This
+                    action requires password re-authentication, is audited, and
+                    excludes course invite codes and third-party email addresses.
+                  </p>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <InputField
+                      label="Current password"
+                      type="password"
+                      value={sensitiveExportForm.current_password}
+                      onChange={(value) =>
+                        setSensitiveExportForm((current) => ({
+                          ...current,
+                          current_password: value,
+                        }))
+                      }
+                    />
+                    <InputField
+                      label="Type EXPORT to confirm"
+                      value={sensitiveExportForm.confirmation}
+                      onChange={(value) =>
+                        setSensitiveExportForm((current) => ({
+                          ...current,
+                          confirmation: value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={exportSensitiveData}
+                    disabled={isSensitiveExporting}
+                    className="mt-4 rounded-lg border bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-gray-50 disabled:opacity-50"
+                    style={{
+                      borderColor: colors.surface[200],
+                      color: colors.text.primary,
+                    }}
+                  >
+                    {isSensitiveExporting
+                      ? "Preparing sensitive export..."
+                      : "Download sensitive JSON"}
                   </button>
                 </div>
               </SectionCard>

@@ -1,37 +1,67 @@
 # backend/app/api/routes/teacher.py
 
 from app.core.privacy import summarize_keystroke_events
+import logging
 import secrets
 import string
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
-from sqlalchemy import create_engine, text
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import require_teacher
-from app.core.config import settings
 from app.core.crypto import decrypt_text, decrypt_json
 from app.models.user import User
+from app.repositories.teacher import (
+    TeacherSubmissionFilters,
+    list_teacher_submission_rows,
+)
+from app.db.database import get_db
+from app.schemas.responses import (
+    TeacherCourseCreateResponse,
+    TeacherCourseDetailResponse,
+    TeacherCourseListResponse,
+    TeacherDashboardResponse,
+    TeacherReviewResponse,
+    TeacherStudentsResponse,
+    TeacherSubmissionDetailResponse,
+    TeacherSubmissionsResponse,
+)
 from app.services.notifications import bump_unread_cache
 
 
 router = APIRouter()
+logger = logging.getLogger("typetrace.teacher")
 
-sync_engine = create_engine(settings.sync_database_url, pool_pre_ping=True)
+
+async def _safe_bump_unread_cache(recipient_id: str) -> None:
+    try:
+        await bump_unread_cache(recipient_id=recipient_id)
+    except Exception:
+        logger.exception(
+            "Notification cache update failed after committed teacher operation",
+            extra={"recipient_id": recipient_id},
+        )
+
 
 
 class TeacherCourseCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     course_name: str = Field(min_length=2, max_length=120)
     course_code: str = Field(min_length=2, max_length=40)
 
 
 class TeacherReviewUpdate(BaseModel):
-    status: str
-    notes: Optional[str] = None
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["PENDING", "APPROVED", "FLAGGED", "NEEDS_DISCUSSION"]
+    notes: Optional[str] = Field(default=None, max_length=2_000)
 
 
 def _format_datetime(value: Any) -> str:
@@ -106,6 +136,9 @@ def _submission_payload(row: Dict[str, Any]) -> Dict[str, Any]:
         "word_count": int(row.get("word_count") or 0),
         "certificate_id": row.get("certificate_id"),
         "document_hash": row.get("document_hash"),
+        "decision_source": row.get("decision_source") or "LEGACY_UNKNOWN",
+        "model_available": bool(row.get("model_available")),
+        "degraded_analysis": bool(row.get("degraded_analysis")),
         "created_at": _format_datetime(row.get("created_at")),
     }
 
@@ -127,132 +160,135 @@ def _course_payload(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@router.get("/teacher/dashboard")
+@router.get("/teacher/dashboard", response_model=TeacherDashboardResponse)
 async def get_teacher_dashboard(
     current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
 ):
     teacher_id = str(current_user.id)
 
-    with sync_engine.connect() as conn:
-        summary = conn.execute(
-            text(
-                """
+    summary = (await db.execute(
+        text(
+            """
+            SELECT
+                COUNT(DISTINCT c.id) AS total_courses,
+                COUNT(DISTINCT cs.student_id) AS total_students,
+                COALESCE(SUM(ts.submission_count), 0) AS total_submissions,
+                COALESCE(SUM(ts.pending_count), 0) AS pending_reviews,
+                COALESCE(SUM(ts.approved_count), 0) AS approved_reviews,
+                COALESCE(SUM(ts.flagged_count), 0) AS flagged_reviews,
+                COALESCE(SUM(ts.human_count), 0) AS human_submissions,
+                COALESCE(SUM(ts.suspicious_count), 0) AS suspicious_submissions,
+                COALESCE(SUM(ts.synthetic_count), 0) AS synthetic_submissions,
+                COALESCE(ROUND(AVG(ts.avg_confidence)::numeric, 1), 0) AS avg_confidence,
+                COALESCE(ROUND(AVG(ts.avg_wpm)::numeric, 1), 0) AS avg_wpm
+            FROM courses c
+            LEFT JOIN course_students cs ON cs.course_id = c.id
+            LEFT JOIN (
                 SELECT
-                    COUNT(DISTINCT c.id) AS total_courses,
-                    COUNT(DISTINCT cs.student_id) AS total_students,
-                    COALESCE(SUM(ts.submission_count), 0) AS total_submissions,
-                    COALESCE(SUM(ts.pending_count), 0) AS pending_reviews,
-                    COALESCE(SUM(ts.approved_count), 0) AS approved_reviews,
-                    COALESCE(SUM(ts.flagged_count), 0) AS flagged_reviews,
-                    COALESCE(SUM(ts.human_count), 0) AS human_submissions,
-                    COALESCE(SUM(ts.suspicious_count), 0) AS suspicious_submissions,
-                    COALESCE(SUM(ts.synthetic_count), 0) AS synthetic_submissions,
-                    COALESCE(ROUND(AVG(ts.avg_confidence)::numeric, 1), 0) AS avg_confidence,
-                    COALESCE(ROUND(AVG(ts.avg_wpm)::numeric, 1), 0) AS avg_wpm
-                FROM courses c
-                LEFT JOIN course_students cs ON cs.course_id = c.id
-                LEFT JOIN (
-                    SELECT
-                        course_id,
-                        COUNT(id) AS submission_count,
-                        COUNT(CASE WHEN COALESCE(review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
-                        COUNT(CASE WHEN review_status = 'APPROVED' THEN 1 END) AS approved_count,
-                        COUNT(CASE WHEN review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
-                        COUNT(CASE WHEN classification_result = 'HUMAN' THEN 1 END) AS human_count,
-                        COUNT(CASE WHEN classification_result = 'SUSPICIOUS' THEN 1 END) AS suspicious_count,
-                        COUNT(CASE WHEN classification_result IN ('SYNTHETIC', 'AI-GENERATED', 'AI') THEN 1 END) AS synthetic_count,
-                        AVG(ml_confidence_score) AS avg_confidence,
-                        AVG(wpm) AS avg_wpm
-                    FROM typing_sessions
-                    GROUP BY course_id
-                ) ts ON ts.course_id = c.id
-                WHERE c.teacher_id = :teacher_id
-                """
-            ),
-            {"teacher_id": teacher_id},
-        ).mappings().fetchone()
+                    course_id,
+                    COUNT(id) AS submission_count,
+                    COUNT(CASE WHEN COALESCE(review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
+                    COUNT(CASE WHEN review_status = 'APPROVED' THEN 1 END) AS approved_count,
+                    COUNT(CASE WHEN review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
+                    COUNT(CASE WHEN classification_result = 'HUMAN' THEN 1 END) AS human_count,
+                    COUNT(CASE WHEN classification_result = 'SUSPICIOUS' THEN 1 END) AS suspicious_count,
+                    COUNT(CASE WHEN classification_result IN ('SYNTHETIC', 'AI-GENERATED', 'AI') THEN 1 END) AS synthetic_count,
+                    AVG(ml_confidence_score) AS avg_confidence,
+                    AVG(wpm) AS avg_wpm
+                FROM typing_sessions
+                GROUP BY course_id
+            ) ts ON ts.course_id = c.id
+            WHERE c.teacher_id = :teacher_id
+            """
+        ),
+        {"teacher_id": teacher_id},
+    )).mappings().fetchone()
 
-        recent_submissions = conn.execute(
-            text(
-                """
-                SELECT
-                    ts.id,
-                    ts.title,
-                    ts.course_id,
-                    ts.classification_result AS classification,
-                    ts.ml_confidence_score AS confidence,
-                    ts.risk_level,
-                    ts.review_status,
-                    ts.review_notes,
-                    ts.wpm,
-                    ts.duration_seconds,
-                    ts.total_keystrokes,
-                    ts.deletions,
-                    ts.pauses,
-                    ts.avg_iki,
-                    ts.certificate_id,
-                    ts.document_hash,
-                    ts.created_at,
-                    ts.updated_at AS review_saved_at,
-                    c.course_name,
-                    c.course_code,
-                    u.first_name,
-                    u.last_name,
-                    u.email,
-                    u.student_id,
-                    ts.word_count AS word_count
-                FROM typing_sessions ts
-                JOIN courses c ON c.id = ts.course_id
-                JOIN users u ON u.id = ts.user_id
-                WHERE c.teacher_id = :teacher_id
-                ORDER BY ts.created_at DESC
-                LIMIT 8
-                """
-            ),
-            {"teacher_id": teacher_id},
-        ).mappings().fetchall()
+    recent_submissions = (await db.execute(
+        text(
+            """
+            SELECT
+                ts.id,
+                ts.title,
+                ts.course_id,
+                ts.classification_result AS classification,
+                ts.ml_confidence_score AS confidence,
+                ts.risk_level,
+                ts.review_status,
+                ts.review_notes,
+                ts.wpm,
+                ts.duration_seconds,
+                ts.total_keystrokes,
+                ts.deletions,
+                ts.pauses,
+                ts.avg_iki,
+                ts.certificate_id,
+                ts.document_hash,
+                ts.decision_source,
+                ts.model_available,
+                ts.degraded_analysis,
+                ts.created_at,
+                ts.updated_at AS review_saved_at,
+                c.course_name,
+                c.course_code,
+                u.first_name,
+                u.last_name,
+                u.email,
+                u.student_id,
+                ts.word_count AS word_count
+            FROM typing_sessions ts
+            JOIN courses c ON c.id = ts.course_id
+            JOIN users u ON u.id = ts.user_id
+            WHERE c.teacher_id = :teacher_id
+            ORDER BY ts.created_at DESC
+            LIMIT 8
+            """
+        ),
+        {"teacher_id": teacher_id},
+    )).mappings().fetchall()
 
-        course_rows = conn.execute(
-            text(
-                """
+    course_rows = (await db.execute(
+        text(
+            """
+            SELECT
+                c.id,
+                c.course_name,
+                c.course_code,
+                c.invite_code,
+                c.created_at,
+                COUNT(DISTINCT cs.student_id) AS student_count,
+                COALESCE(ts.submission_count, 0) AS submission_count,
+                COALESCE(ts.pending_count, 0) AS pending_count,
+                COALESCE(ts.approved_count, 0) AS approved_count,
+                COALESCE(ts.flagged_count, 0) AS flagged_count,
+                COALESCE(ROUND(ts.avg_confidence::numeric, 1), 0) AS avg_confidence,
+                COALESCE(ROUND(ts.avg_wpm::numeric, 1), 0) AS avg_wpm
+            FROM courses c
+            LEFT JOIN course_students cs ON cs.course_id = c.id
+            LEFT JOIN (
                 SELECT
-                    c.id,
-                    c.course_name,
-                    c.course_code,
-                    c.invite_code,
-                    c.created_at,
-                    COUNT(DISTINCT cs.student_id) AS student_count,
-                    COALESCE(ts.submission_count, 0) AS submission_count,
-                    COALESCE(ts.pending_count, 0) AS pending_count,
-                    COALESCE(ts.approved_count, 0) AS approved_count,
-                    COALESCE(ts.flagged_count, 0) AS flagged_count,
-                    COALESCE(ROUND(ts.avg_confidence::numeric, 1), 0) AS avg_confidence,
-                    COALESCE(ROUND(ts.avg_wpm::numeric, 1), 0) AS avg_wpm
-                FROM courses c
-                LEFT JOIN course_students cs ON cs.course_id = c.id
-                LEFT JOIN (
-                    SELECT
-                        course_id,
-                        COUNT(id) AS submission_count,
-                        COUNT(CASE WHEN COALESCE(review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
-                        COUNT(CASE WHEN review_status = 'APPROVED' THEN 1 END) AS approved_count,
-                        COUNT(CASE WHEN review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
-                        AVG(ml_confidence_score) AS avg_confidence,
-                        AVG(wpm) AS avg_wpm
-                    FROM typing_sessions
-                    GROUP BY course_id
-                ) ts ON ts.course_id = c.id
-                WHERE c.teacher_id = :teacher_id
-                GROUP BY
-                    c.id, c.course_name, c.course_code, c.invite_code, c.created_at,
-                    ts.submission_count, ts.pending_count, ts.approved_count,
-                    ts.flagged_count, ts.avg_confidence, ts.avg_wpm
-                ORDER BY c.created_at DESC
-                LIMIT 6
-                """
-            ),
-            {"teacher_id": teacher_id},
-        ).mappings().fetchall()
+                    course_id,
+                    COUNT(id) AS submission_count,
+                    COUNT(CASE WHEN COALESCE(review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
+                    COUNT(CASE WHEN review_status = 'APPROVED' THEN 1 END) AS approved_count,
+                    COUNT(CASE WHEN review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
+                    AVG(ml_confidence_score) AS avg_confidence,
+                    AVG(wpm) AS avg_wpm
+                FROM typing_sessions
+                GROUP BY course_id
+            ) ts ON ts.course_id = c.id
+            WHERE c.teacher_id = :teacher_id
+            GROUP BY
+                c.id, c.course_name, c.course_code, c.invite_code, c.created_at,
+                ts.submission_count, ts.pending_count, ts.approved_count,
+                ts.flagged_count, ts.avg_confidence, ts.avg_wpm
+            ORDER BY c.created_at DESC
+            LIMIT 6
+            """
+        ),
+        {"teacher_id": teacher_id},
+    )).mappings().fetchall()
 
     summary_dict = dict(summary or {})
 
@@ -284,10 +320,11 @@ async def get_teacher_dashboard(
     }
 
 
-@router.post("/teacher/courses", status_code=status.HTTP_201_CREATED)
+@router.post("/teacher/courses", status_code=status.HTTP_201_CREATED, response_model=TeacherCourseCreateResponse)
 async def create_teacher_course(
     payload: TeacherCourseCreate,
     current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
 ):
     teacher_id = str(current_user.id)
     course_name = payload.course_name.strip()
@@ -302,37 +339,38 @@ async def create_teacher_course(
     invite_code = _generate_invite_code()
 
     try:
-        with sync_engine.begin() as conn:
-            row = conn.execute(
-                text(
-                    """
-                    INSERT INTO courses (
-                        teacher_id,
-                        course_name,
-                        course_code,
-                        invite_code
-                    ) VALUES (
-                        :teacher_id,
-                        :course_name,
-                        :course_code,
-                        :invite_code
-                    )
-                    RETURNING id, course_name, course_code, invite_code, created_at
-                    """
-                ),
-                {
-                    "teacher_id": teacher_id,
-                    "course_name": course_name,
-                    "course_code": course_code,
-                    "invite_code": invite_code,
-                },
-            ).mappings().fetchone()
+        row = (await db.execute(
+            text(
+                """
+                INSERT INTO courses (
+                    teacher_id,
+                    course_name,
+                    course_code,
+                    invite_code
+                ) VALUES (
+                    :teacher_id,
+                    :course_name,
+                    :course_code,
+                    :invite_code
+                )
+                RETURNING id, course_name, course_code, invite_code, created_at
+                """
+            ),
+            {
+                "teacher_id": teacher_id,
+                "course_name": course_name,
+                "course_code": course_code,
+                "invite_code": invite_code,
+            },
+        )).mappings().fetchone()
+        await db.commit()
 
-    except IntegrityError:
+    except IntegrityError as exc:
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A course with this code already exists under your account.",
-        )
+        ) from exc
 
     return {
         "status": "success",
@@ -354,53 +392,53 @@ async def create_teacher_course(
     }
 
 
-@router.get("/teacher/courses")
+@router.get("/teacher/courses", response_model=TeacherCourseListResponse)
 async def list_teacher_courses(
     current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
 ):
     teacher_id = str(current_user.id)
 
-    with sync_engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                """
+    rows = (await db.execute(
+        text(
+            """
+            SELECT
+                c.id,
+                c.course_name,
+                c.course_code,
+                c.invite_code,
+                c.created_at,
+                COUNT(DISTINCT cs.student_id) AS student_count,
+                COALESCE(ts.submission_count, 0) AS submission_count,
+                COALESCE(ts.pending_count, 0) AS pending_count,
+                COALESCE(ts.approved_count, 0) AS approved_count,
+                COALESCE(ts.flagged_count, 0) AS flagged_count,
+                COALESCE(ROUND(ts.avg_confidence::numeric, 1), 0) AS avg_confidence,
+                COALESCE(ROUND(ts.avg_wpm::numeric, 1), 0) AS avg_wpm
+            FROM courses c
+            LEFT JOIN course_students cs ON cs.course_id = c.id
+            LEFT JOIN (
                 SELECT
-                    c.id,
-                    c.course_name,
-                    c.course_code,
-                    c.invite_code,
-                    c.created_at,
-                    COUNT(DISTINCT cs.student_id) AS student_count,
-                    COALESCE(ts.submission_count, 0) AS submission_count,
-                    COALESCE(ts.pending_count, 0) AS pending_count,
-                    COALESCE(ts.approved_count, 0) AS approved_count,
-                    COALESCE(ts.flagged_count, 0) AS flagged_count,
-                    COALESCE(ROUND(ts.avg_confidence::numeric, 1), 0) AS avg_confidence,
-                    COALESCE(ROUND(ts.avg_wpm::numeric, 1), 0) AS avg_wpm
-                FROM courses c
-                LEFT JOIN course_students cs ON cs.course_id = c.id
-                LEFT JOIN (
-                    SELECT
-                        course_id,
-                        COUNT(id) AS submission_count,
-                        COUNT(CASE WHEN COALESCE(review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
-                        COUNT(CASE WHEN review_status = 'APPROVED' THEN 1 END) AS approved_count,
-                        COUNT(CASE WHEN review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
-                        COALESCE(ROUND(AVG(ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
-                        COALESCE(ROUND(AVG(wpm)::numeric, 1), 0) AS avg_wpm
-                    FROM typing_sessions
-                    GROUP BY course_id
-                ) ts ON ts.course_id = c.id
-                WHERE c.teacher_id = :teacher_id
-                GROUP BY
-                    c.id, c.course_name, c.course_code, c.invite_code, c.created_at,
-                    ts.submission_count, ts.pending_count, ts.approved_count,
-                    ts.flagged_count, ts.avg_confidence, ts.avg_wpm
-                ORDER BY c.created_at DESC
-                """
-            ),
-            {"teacher_id": teacher_id},
-        ).mappings().fetchall()
+                    course_id,
+                    COUNT(id) AS submission_count,
+                    COUNT(CASE WHEN COALESCE(review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
+                    COUNT(CASE WHEN review_status = 'APPROVED' THEN 1 END) AS approved_count,
+                    COUNT(CASE WHEN review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
+                    COALESCE(ROUND(AVG(ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
+                    COALESCE(ROUND(AVG(wpm)::numeric, 1), 0) AS avg_wpm
+                FROM typing_sessions
+                GROUP BY course_id
+            ) ts ON ts.course_id = c.id
+            WHERE c.teacher_id = :teacher_id
+            GROUP BY
+                c.id, c.course_name, c.course_code, c.invite_code, c.created_at,
+                ts.submission_count, ts.pending_count, ts.approved_count,
+                ts.flagged_count, ts.avg_confidence, ts.avg_wpm
+            ORDER BY c.created_at DESC
+            """
+        ),
+        {"teacher_id": teacher_id},
+    )).mappings().fetchall()
 
     return {
         "status": "success",
@@ -408,133 +446,136 @@ async def list_teacher_courses(
     }
 
 
-@router.get("/teacher/courses/{course_id}")
+@router.get("/teacher/courses/{course_id}", response_model=TeacherCourseDetailResponse)
 async def get_teacher_course_detail(
     course_id: int,
     current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
 ):
     teacher_id = str(current_user.id)
 
-    with sync_engine.connect() as conn:
-        course_row = conn.execute(
-            text(
-                """
+    course_row = (await db.execute(
+        text(
+            """
+            SELECT
+                c.id,
+                c.course_name,
+                c.course_code,
+                c.invite_code,
+                c.created_at,
+                COUNT(DISTINCT cs.student_id) AS student_count,
+                COALESCE(ts.submission_count, 0) AS submission_count,
+                COALESCE(ts.pending_count, 0) AS pending_count,
+                COALESCE(ts.approved_count, 0) AS approved_count,
+                COALESCE(ts.flagged_count, 0) AS flagged_count,
+                COALESCE(ROUND(ts.avg_confidence::numeric, 1), 0) AS avg_confidence,
+                COALESCE(ROUND(ts.avg_wpm::numeric, 1), 0) AS avg_wpm
+            FROM courses c
+            LEFT JOIN course_students cs ON cs.course_id = c.id
+            LEFT JOIN (
                 SELECT
-                    c.id,
-                    c.course_name,
-                    c.course_code,
-                    c.invite_code,
-                    c.created_at,
-                    COUNT(DISTINCT cs.student_id) AS student_count,
-                    COALESCE(ts.submission_count, 0) AS submission_count,
-                    COALESCE(ts.pending_count, 0) AS pending_count,
-                    COALESCE(ts.approved_count, 0) AS approved_count,
-                    COALESCE(ts.flagged_count, 0) AS flagged_count,
-                    COALESCE(ROUND(ts.avg_confidence::numeric, 1), 0) AS avg_confidence,
-                    COALESCE(ROUND(ts.avg_wpm::numeric, 1), 0) AS avg_wpm
-                FROM courses c
-                LEFT JOIN course_students cs ON cs.course_id = c.id
-                LEFT JOIN (
-                    SELECT
-                        course_id,
-                        COUNT(id) AS submission_count,
-                        COUNT(CASE WHEN COALESCE(review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
-                        COUNT(CASE WHEN review_status = 'APPROVED' THEN 1 END) AS approved_count,
-                        COUNT(CASE WHEN review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
-                        AVG(ml_confidence_score) AS avg_confidence,
-                        AVG(wpm) AS avg_wpm
-                    FROM typing_sessions
-                    GROUP BY course_id
-                ) ts ON ts.course_id = c.id
-                WHERE c.id = :course_id
-                  AND c.teacher_id = :teacher_id
-                GROUP BY
-                    c.id, c.course_name, c.course_code, c.invite_code, c.created_at,
-                    ts.submission_count, ts.pending_count, ts.approved_count,
-                    ts.flagged_count, ts.avg_confidence, ts.avg_wpm
-                LIMIT 1
-                """
-            ),
-            {
-                "course_id": course_id,
-                "teacher_id": teacher_id,
-            },
-        ).mappings().fetchone()
+                    course_id,
+                    COUNT(id) AS submission_count,
+                    COUNT(CASE WHEN COALESCE(review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
+                    COUNT(CASE WHEN review_status = 'APPROVED' THEN 1 END) AS approved_count,
+                    COUNT(CASE WHEN review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
+                    AVG(ml_confidence_score) AS avg_confidence,
+                    AVG(wpm) AS avg_wpm
+                FROM typing_sessions
+                GROUP BY course_id
+            ) ts ON ts.course_id = c.id
+            WHERE c.id = :course_id
+              AND c.teacher_id = :teacher_id
+            GROUP BY
+                c.id, c.course_name, c.course_code, c.invite_code, c.created_at,
+                ts.submission_count, ts.pending_count, ts.approved_count,
+                ts.flagged_count, ts.avg_confidence, ts.avg_wpm
+            LIMIT 1
+            """
+        ),
+        {
+            "course_id": course_id,
+            "teacher_id": teacher_id,
+        },
+    )).mappings().fetchone()
 
-        if course_row is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Course not found.",
-            )
+    if course_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found.",
+        )
 
-        student_rows = conn.execute(
-            text(
-                """
-                SELECT
-                    u.id,
-                    u.first_name,
-                    u.last_name,
-                    u.email,
-                    u.student_id,
-                    cs.joined_at,
-                    COUNT(ts.id) AS submission_count,
-                    COALESCE(ROUND(AVG(ts.ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
-                    COALESCE(ROUND(AVG(ts.wpm)::numeric, 1), 0) AS avg_wpm,
-                    MAX(ts.created_at) AS last_submission_at
-                FROM course_students cs
-                JOIN users u ON u.id = cs.student_id
-                LEFT JOIN typing_sessions ts ON ts.user_id = u.id AND ts.course_id = cs.course_id
-                WHERE cs.course_id = :course_id
-                GROUP BY u.id, u.first_name, u.last_name, u.email, u.student_id, cs.joined_at
-                ORDER BY cs.joined_at DESC
-                """
-            ),
-            {"course_id": course_id},
-        ).mappings().fetchall()
+    student_rows = (await db.execute(
+        text(
+            """
+            SELECT
+                u.id,
+                u.first_name,
+                u.last_name,
+                u.email,
+                u.student_id,
+                cs.joined_at,
+                COUNT(ts.id) AS submission_count,
+                COALESCE(ROUND(AVG(ts.ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
+                COALESCE(ROUND(AVG(ts.wpm)::numeric, 1), 0) AS avg_wpm,
+                MAX(ts.created_at) AS last_submission_at
+            FROM course_students cs
+            JOIN users u ON u.id = cs.student_id
+            LEFT JOIN typing_sessions ts ON ts.user_id = u.id AND ts.course_id = cs.course_id
+            WHERE cs.course_id = :course_id
+            GROUP BY u.id, u.first_name, u.last_name, u.email, u.student_id, cs.joined_at
+            ORDER BY cs.joined_at DESC
+            """
+        ),
+        {"course_id": course_id},
+    )).mappings().fetchall()
 
-        submission_rows = conn.execute(
-            text(
-                """
-                SELECT
-                    ts.id,
-                    ts.title,
-                    ts.course_id,
-                    ts.classification_result AS classification,
-                    ts.ml_confidence_score AS confidence,
-                    ts.risk_level,
-                    ts.review_status,
-                    ts.review_notes,
-                    ts.wpm,
-                    ts.duration_seconds,
-                    ts.total_keystrokes,
-                    ts.deletions,
-                    ts.pauses,
-                    ts.avg_iki,
-                    ts.certificate_id,
-                    ts.document_hash,
-                    ts.created_at,
-                    ts.updated_at AS review_saved_at,
-                    c.course_name,
-                    c.course_code,
-                    u.first_name,
-                    u.last_name,
-                    u.email,
-                    u.student_id,
-                    ts.word_count AS word_count
-                FROM typing_sessions ts
-                JOIN users u ON u.id = ts.user_id
-                JOIN courses c ON c.id = ts.course_id
-                WHERE ts.course_id = :course_id
-                  AND c.teacher_id = :teacher_id
-                ORDER BY ts.created_at DESC
-                LIMIT 20
-                """
-            ),
-            {
-                "course_id": course_id,
-                "teacher_id": teacher_id,
-            },
-        ).mappings().fetchall()
+    submission_rows = (await db.execute(
+        text(
+            """
+            SELECT
+                ts.id,
+                ts.title,
+                ts.course_id,
+                ts.classification_result AS classification,
+                ts.ml_confidence_score AS confidence,
+                ts.risk_level,
+                ts.review_status,
+                ts.review_notes,
+                ts.wpm,
+                ts.duration_seconds,
+                ts.total_keystrokes,
+                ts.deletions,
+                ts.pauses,
+                ts.avg_iki,
+                ts.certificate_id,
+                ts.document_hash,
+                ts.decision_source,
+                ts.model_available,
+                ts.degraded_analysis,
+                ts.created_at,
+                ts.updated_at AS review_saved_at,
+                c.course_name,
+                c.course_code,
+                u.first_name,
+                u.last_name,
+                u.email,
+                u.student_id,
+                ts.word_count AS word_count
+            FROM typing_sessions ts
+            JOIN users u ON u.id = ts.user_id
+            JOIN courses c ON c.id = ts.course_id
+            WHERE ts.course_id = :course_id
+              AND c.teacher_id = :teacher_id
+            ORDER BY ts.created_at DESC
+            LIMIT 20
+            """
+        ),
+        {
+            "course_id": course_id,
+            "teacher_id": teacher_id,
+        },
+    )).mappings().fetchall()
 
     return {
         "status": "success",
@@ -557,46 +598,46 @@ async def get_teacher_course_detail(
     }
 
 
-@router.get("/teacher/students")
+@router.get("/teacher/students", response_model=TeacherStudentsResponse)
 async def list_teacher_students(
     current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
 ):
     teacher_id = str(current_user.id)
 
-    with sync_engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                """
-                SELECT
-                    u.id,
-                    u.first_name,
-                    u.last_name,
-                    u.email,
-                    u.student_id,
-                    u.university_name,
-                    c.id AS course_id,
-                    c.course_name,
-                    c.course_code,
-                    cs.joined_at,
-                    COUNT(ts.id) AS submission_count,
-                    COALESCE(ROUND(AVG(ts.ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
-                    COALESCE(ROUND(AVG(ts.wpm)::numeric, 1), 0) AS avg_wpm,
-                    COUNT(CASE WHEN ts.id IS NOT NULL AND COALESCE(ts.review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
-                    COUNT(CASE WHEN ts.review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
-                    MAX(ts.created_at) AS last_submission_at
-                FROM course_students cs
-                JOIN users u ON u.id = cs.student_id
-                JOIN courses c ON c.id = cs.course_id
-                LEFT JOIN typing_sessions ts ON ts.user_id = u.id AND ts.course_id = c.id
-                WHERE c.teacher_id = :teacher_id
-                GROUP BY
-                    u.id, u.first_name, u.last_name, u.email, u.student_id,
-                    u.university_name, c.id, c.course_name, c.course_code, cs.joined_at
-                ORDER BY cs.joined_at DESC
-                """
-            ),
-            {"teacher_id": teacher_id},
-        ).mappings().fetchall()
+    rows = (await db.execute(
+        text(
+            """
+            SELECT
+                u.id,
+                u.first_name,
+                u.last_name,
+                u.email,
+                u.student_id,
+                u.university_name,
+                c.id AS course_id,
+                c.course_name,
+                c.course_code,
+                cs.joined_at,
+                COUNT(ts.id) AS submission_count,
+                COALESCE(ROUND(AVG(ts.ml_confidence_score)::numeric, 1), 0) AS avg_confidence,
+                COALESCE(ROUND(AVG(ts.wpm)::numeric, 1), 0) AS avg_wpm,
+                COUNT(CASE WHEN ts.id IS NOT NULL AND COALESCE(ts.review_status, 'PENDING') IN ('PENDING', 'NEEDS_DISCUSSION') THEN 1 END) AS pending_count,
+                COUNT(CASE WHEN ts.review_status = 'FLAGGED' THEN 1 END) AS flagged_count,
+                MAX(ts.created_at) AS last_submission_at
+            FROM course_students cs
+            JOIN users u ON u.id = cs.student_id
+            JOIN courses c ON c.id = cs.course_id
+            LEFT JOIN typing_sessions ts ON ts.user_id = u.id AND ts.course_id = c.id
+            WHERE c.teacher_id = :teacher_id
+            GROUP BY
+                u.id, u.first_name, u.last_name, u.email, u.student_id,
+                u.university_name, c.id, c.course_name, c.course_code, cs.joined_at
+            ORDER BY cs.joined_at DESC
+            """
+        ),
+        {"teacher_id": teacher_id},
+    )).mappings().fetchall()
 
     return {
         "status": "success",
@@ -623,7 +664,7 @@ async def list_teacher_students(
     }
 
 
-@router.get("/teacher/sessions")
+@router.get("/teacher/sessions", response_model=TeacherSubmissionsResponse)
 async def list_teacher_submissions(
     course_id: Optional[int] = Query(default=None),
     review_status: Optional[str] = Query(default=None),
@@ -632,160 +673,87 @@ async def list_teacher_submissions(
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
 ):
     teacher_id = str(current_user.id)
-
-    where_parts = ["c.teacher_id = :teacher_id"]
-    params: Dict[str, Any] = {
-        "teacher_id": teacher_id,
-        "limit": limit,
-        "offset": offset,
-    }
-
-    if course_id is not None:
-        where_parts.append("c.id = :course_id")
-        params["course_id"] = course_id
-
-    if review_status and review_status.upper() != "ALL":
-        where_parts.append("COALESCE(ts.review_status, 'PENDING') = :review_status")
-        params["review_status"] = review_status.upper()
-
-    if risk_level and risk_level.upper() != "ALL":
-        where_parts.append("COALESCE(ts.risk_level, 'LOW') = :risk_level")
-        params["risk_level"] = risk_level.upper()
-
-    if search:
-        where_parts.append(
-            """
-            (
-                LOWER(ts.title) LIKE :search
-                OR LOWER(u.first_name) LIKE :search
-                OR LOWER(u.last_name) LIKE :search
-                OR LOWER(u.email) LIKE :search
-                OR LOWER(c.course_name) LIKE :search
-                OR LOWER(c.course_code) LIKE :search
-            )
-            """
-        )
-        params["search"] = f"%{search.lower()}%"
-
-    where_clause = " AND ".join(where_parts)
-
-    with sync_engine.connect() as conn:
-        total_row = conn.execute(
-            text(
-                f"""
-                SELECT COUNT(*) AS total
-                FROM typing_sessions ts
-                JOIN courses c ON c.id = ts.course_id
-                JOIN users u ON u.id = ts.user_id
-                WHERE {where_clause}
-                """
-            ),
-            params,
-        ).mappings().fetchone()
-
-        rows = conn.execute(
-            text(
-                f"""
-                SELECT
-                    ts.id,
-                    ts.title,
-                    ts.course_id,
-                    ts.classification_result AS classification,
-                    ts.ml_confidence_score AS confidence,
-                    ts.risk_level,
-                    ts.review_status,
-                    ts.review_notes,
-                    ts.wpm,
-                    ts.duration_seconds,
-                    ts.total_keystrokes,
-                    ts.deletions,
-                    ts.pauses,
-                    ts.avg_iki,
-                    ts.certificate_id,
-                    ts.document_hash,
-                    ts.created_at,
-                    ts.updated_at AS review_saved_at,
-                    c.course_name,
-                    c.course_code,
-                    u.first_name,
-                    u.last_name,
-                    u.email,
-                    u.student_id,
-                    ts.word_count AS word_count
-                FROM typing_sessions ts
-                JOIN courses c ON c.id = ts.course_id
-                JOIN users u ON u.id = ts.user_id
-                WHERE {where_clause}
-                ORDER BY ts.created_at DESC
-                LIMIT :limit OFFSET :offset
-                """
-            ),
-            params,
-        ).mappings().fetchall()
+    total, rows = await list_teacher_submission_rows(
+        db,
+        teacher_id=teacher_id,
+        filters=TeacherSubmissionFilters(
+            course_id=course_id,
+            review_status=review_status,
+            risk_level=risk_level,
+            search=search,
+        ),
+        limit=limit,
+        offset=offset,
+    )
 
     return {
         "status": "success",
-        "total": int(total_row["total"] if total_row else 0),
+        "total": total,
         "limit": limit,
         "offset": offset,
-        "sessions": [_submission_payload(dict(row)) for row in rows],
+        "sessions": [_submission_payload(row) for row in rows],
     }
 
 
-@router.get("/teacher/sessions/{session_id}")
+
+@router.get("/teacher/sessions/{session_id}", response_model=TeacherSubmissionDetailResponse)
 async def get_teacher_submission_detail(
     session_id: int,
     current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
 ):
     teacher_id = str(current_user.id)
 
-    with sync_engine.connect() as conn:
-        row = conn.execute(
-            text(
-                """
-                SELECT
-                    ts.id,
-                    ts.title,
-                    ts.text_content,
-                    ts.raw_keystroke_data,
-                    ts.course_id,
-                    ts.classification_result AS classification,
-                    ts.ml_confidence_score AS confidence,
-                    ts.risk_level,
-                    ts.review_status,
-                    ts.review_notes,
-                    ts.wpm,
-                    ts.duration_seconds,
-                    ts.total_keystrokes,
-                    ts.deletions,
-                    ts.pauses,
-                    ts.avg_iki,
-                    ts.certificate_id,
-                    ts.document_hash,
-                    ts.created_at,
-                    ts.updated_at AS review_saved_at,
-                    c.course_name,
-                    c.course_code,
-                    u.first_name,
-                    u.last_name,
-                    u.email,
-                    u.student_id,
-                    ts.word_count AS word_count
-                FROM typing_sessions ts
-                JOIN courses c ON c.id = ts.course_id
-                JOIN users u ON u.id = ts.user_id
-                WHERE ts.id = :session_id
-                  AND c.teacher_id = :teacher_id
-                LIMIT 1
-                """
-            ),
-            {
-                "session_id": session_id,
-                "teacher_id": teacher_id,
-            },
-        ).mappings().fetchone()
+    row = (await db.execute(
+        text(
+            """
+            SELECT
+                ts.id,
+                ts.title,
+                ts.text_content,
+                ts.raw_keystroke_data,
+                ts.course_id,
+                ts.classification_result AS classification,
+                ts.ml_confidence_score AS confidence,
+                ts.risk_level,
+                ts.review_status,
+                ts.review_notes,
+                ts.wpm,
+                ts.duration_seconds,
+                ts.total_keystrokes,
+                ts.deletions,
+                ts.pauses,
+                ts.avg_iki,
+                ts.certificate_id,
+                ts.document_hash,
+                ts.decision_source,
+                ts.model_available,
+                ts.degraded_analysis,
+                ts.created_at,
+                ts.updated_at AS review_saved_at,
+                c.course_name,
+                c.course_code,
+                u.first_name,
+                u.last_name,
+                u.email,
+                u.student_id,
+                ts.word_count AS word_count
+            FROM typing_sessions ts
+            JOIN courses c ON c.id = ts.course_id
+            JOIN users u ON u.id = ts.user_id
+            WHERE ts.id = :session_id
+              AND c.teacher_id = :teacher_id
+            LIMIT 1
+            """
+        ),
+        {
+            "session_id": session_id,
+            "teacher_id": teacher_id,
+        },
+    )).mappings().fetchone()
 
     if row is None:
         raise HTTPException(
@@ -816,96 +784,96 @@ async def get_teacher_submission_detail(
         ),
     }
 
-@router.patch("/teacher/sessions/{session_id}/review")
+@router.patch("/teacher/sessions/{session_id}/review", response_model=TeacherReviewResponse)
 async def review_teacher_submission(
     session_id: int,
     payload: TeacherReviewUpdate,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
 ):
     teacher_id = str(current_user.id)
-    review_status = payload.status.strip().upper()
-
-    if review_status not in {"PENDING", "APPROVED", "FLAGGED", "NEEDS_DISCUSSION"}:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Review status must be PENDING, APPROVED, FLAGGED, or NEEDS_DISCUSSION.",
-        )
+    review_status = payload.status
 
     notes = (payload.notes or "").strip()
 
-    with sync_engine.begin() as conn:
-        existing = conn.execute(
-            text(
-                """
-                SELECT ts.id, ts.user_id, ts.title
-                FROM typing_sessions ts
-                JOIN courses c ON c.id = ts.course_id
-                WHERE ts.id = :session_id
-                  AND c.teacher_id = :teacher_id
-                LIMIT 1
-                """
-            ),
-            {
-                "session_id": session_id,
-                "teacher_id": teacher_id,
-            },
-        ).mappings().fetchone()
+    existing = (await db.execute(
+        text(
+            """
+            SELECT ts.id, ts.user_id, ts.title
+            FROM typing_sessions ts
+            JOIN courses c ON c.id = ts.course_id
+            WHERE ts.id = :session_id
+              AND c.teacher_id = :teacher_id
+            LIMIT 1
+            """
+        ),
+        {
+            "session_id": session_id,
+            "teacher_id": teacher_id,
+        },
+    )).mappings().fetchone()
 
-        if existing is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Submission not found.",
-            )
-
-        updated = conn.execute(
-            text(
-                """
-                UPDATE typing_sessions
-                SET
-                    review_status = :review_status,
-                    review_notes = :review_notes,
-                    reviewed_by = :teacher_id,
-                    updated_at = NOW()
-                WHERE id = :session_id
-                RETURNING updated_at
-                """
-            ),
-            {
-                "review_status": review_status,
-                "review_notes": notes,
-                "teacher_id": teacher_id,
-                "session_id": session_id,
-            },
-        ).mappings().fetchone()
-
-        notif_id = str(uuid.uuid4())
-        conn.execute(
-            text(
-                """
-                INSERT INTO notifications (
-                    id, recipient_id, actor_id, event_type, entity_type, entity_id,
-                    title, body, action_url, is_read, created_at
-                ) VALUES (
-                    :id, :recipient_id, :actor_id, :event_type, :entity_type, :entity_id,
-                    :title, :body, :action_url, false, NOW()
-                )
-                """
-            ),
-            {
-                "id": notif_id,
-                "recipient_id": existing["user_id"],
-                "actor_id": teacher_id,
-                "event_type": "REVIEW_COMPLETED",
-                "entity_type": "typing_session",
-                "entity_id": str(session_id),
-                "title": f"Review Updated: {review_status.replace('_', ' ').title()}",
-                "body": f"Your instructor updated the review status for '{existing['title']}'.",
-                "action_url": f"/sessions",
-            }
+    if existing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Submission not found.",
         )
 
-    background_tasks.add_task(bump_unread_cache, recipient_id=existing["user_id"])
+    updated = (await db.execute(
+        text(
+            """
+            UPDATE typing_sessions
+            SET
+                review_status = :review_status,
+                review_notes = :review_notes,
+                reviewed_by = :teacher_id,
+                updated_at = NOW()
+            WHERE id = :session_id
+            RETURNING updated_at
+            """
+        ),
+        {
+            "review_status": review_status,
+            "review_notes": notes,
+            "teacher_id": teacher_id,
+            "session_id": session_id,
+        },
+    )).mappings().fetchone()
+
+    notif_id = str(uuid.uuid4())
+    (await db.execute(
+        text(
+            """
+            INSERT INTO notifications (
+                id, recipient_id, actor_id, event_type, entity_type, entity_id,
+                title, body, action_url, is_read, created_at
+            ) VALUES (
+                :id, :recipient_id, :actor_id, :event_type, :entity_type, :entity_id,
+                :title, :body, :action_url, false, NOW()
+            )
+            """
+        ),
+        {
+            "id": notif_id,
+            "recipient_id": existing["user_id"],
+            "actor_id": teacher_id,
+            "event_type": "REVIEW_COMPLETED",
+            "entity_type": "typing_session",
+            "entity_id": str(session_id),
+            "title": f"Review Updated: {review_status.replace('_', ' ').title()}",
+            "body": f"Your instructor updated the review status for '{existing['title']}'.",
+            "action_url": f"/sessions",
+        }
+    ))
+
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    background_tasks.add_task(_safe_bump_unread_cache, str(existing["user_id"]))
 
     return {
         "status": "success",

@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Query, status
@@ -11,8 +12,10 @@ from app.models.notification import Notification
 from app.models.user import User
 from app.services.notifications import get_unread_count
 from app.services.redis_cache import redis_client
+from app.schemas.responses import NotificationListResponse, StatusOnlyResponse, UnreadCountResponse
 
 router = APIRouter()
+logger = logging.getLogger("typetrace.notifications")
 
 def _serialize_notification(notif: Notification) -> Dict[str, Any]:
     return {
@@ -27,7 +30,7 @@ def _serialize_notification(notif: Notification) -> Dict[str, Any]:
         "created_at": notif.created_at.isoformat() if notif.created_at else None,
     }
 
-@router.get("", status_code=status.HTTP_200_OK)
+@router.get("", status_code=status.HTTP_200_OK, response_model=NotificationListResponse)
 async def list_notifications(
     limit: int = Query(20, le=50),
     unread_only: bool = False,
@@ -47,7 +50,7 @@ async def list_notifications(
         "notifications": [_serialize_notification(n) for n in notifications],
     }
 
-@router.get("/unread-count", status_code=status.HTTP_200_OK)
+@router.get("/unread-count", status_code=status.HTTP_200_OK, response_model=UnreadCountResponse)
 async def get_unread_count_route(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -55,7 +58,7 @@ async def get_unread_count_route(
     count = await get_unread_count(str(current_user.id), db)
     return {"status": "success", "unread_count": count}
 
-@router.patch("/{notification_id}/read", status_code=status.HTTP_200_OK)
+@router.patch("/{notification_id}/read", status_code=status.HTTP_200_OK, response_model=StatusOnlyResponse)
 async def mark_read(
     notification_id: str,
     current_user: User = Depends(get_current_user),
@@ -74,13 +77,19 @@ async def mark_read(
         await db.commit()
         # Safely decrement cache without dropping below 0
         cache_key = f"unread_notif:{current_user.id}"
-        current_cache = await redis_client.get(cache_key)
-        if current_cache is not None and int(current_cache) > 0:
-            await redis_client.decr(cache_key)
+        try:
+            current_cache = await redis_client.get(cache_key)
+            if current_cache is not None and int(current_cache) > 0:
+                await redis_client.decr(cache_key)
+        except Exception:
+            logger.exception(
+                "Unread notification cache decrement failed after database commit",
+                extra={"user_id": str(current_user.id)},
+            )
     
     return {"status": "success"}
 
-@router.post("/mark-all-read", status_code=status.HTTP_200_OK)
+@router.post("/mark-all-read", status_code=status.HTTP_200_OK, response_model=StatusOnlyResponse)
 async def mark_all_read(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -94,6 +103,12 @@ async def mark_all_read(
         .values(is_read=True, read_at=func.now())
     )
     await db.commit()
-    await redis_client.set(f"unread_notif:{current_user.id}", 0)
+    try:
+        await redis_client.set(f"unread_notif:{current_user.id}", 0)
+    except Exception:
+        logger.exception(
+            "Unread notification cache reset failed after database commit",
+            extra={"user_id": str(current_user.id)},
+        )
     
     return {"status": "success"}

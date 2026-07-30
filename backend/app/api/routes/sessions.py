@@ -1,17 +1,21 @@
+from __future__ import annotations
+
 import secrets
 import string
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_student
-from app.core.crypto import encrypt_json, encrypt_text
+from app.core.crypto import decrypt_json, decrypt_text, encrypt_json, encrypt_text
 from app.db.database import get_db
 from app.ml.inference_engine import (
     SCORING_ENGINE_VERSION,
+    InferenceInputError,
+    InferenceInternalError,
     inference_engine,
 )
 from app.ml.paste_policy import (
@@ -24,6 +28,11 @@ from app.models.course import Course, CourseStudent
 from app.models.draft import DraftSession
 from app.models.session import TypingSession
 from app.models.user import User
+from app.schemas.evidence import (
+    AnalysisResponse,
+    KeystrokeSessionAnalyzeRequest,
+    SessionStats,
+)
 from app.services.audit_log import create_audit_log
 from app.services.canonical_evidence import compute_canonical_evidence, normalize_title
 from app.services.certificate_signing import sign_certificate_for_session
@@ -31,51 +40,6 @@ from app.services.notifications import dispatch_notification
 
 
 router = APIRouter()
-
-
-
-
-class SessionStats(BaseModel):
-    wpm: float = Field(ge=0)
-    keystrokes: int = Field(ge=0)
-    deletions: int = Field(default=0, ge=0)
-    deletedCharacters: int = Field(default=0, ge=0)
-    bulkDeletionEvents: int = Field(default=0, ge=0)
-    largestDeletionChars: int = Field(default=0, ge=0)
-    selectionDeletionEvents: int = Field(default=0, ge=0)
-    wordDeletionEvents: int = Field(default=0, ge=0)
-    cutEvents: int = Field(default=0, ge=0)
-    pauses: int = Field(ge=0)
-    avgIki: float = Field(ge=0)
-    sessionSeconds: float = Field(ge=0)
-
-
-class KeystrokeSessionAnalyzeRequest(BaseModel):
-    title: str = Field(default="Untitled Document", max_length=255)
-    text_content: str = Field(min_length=1)
-    keystroke_array: List[Dict[str, Any]] = Field(default_factory=list)
-    stats: SessionStats
-    course_id: Optional[int] = None
-
-    active_duration_ms: Optional[int] = Field(default=None, ge=0)
-    draft_id: Optional[str] = Field(default=None, max_length=120)
-    client_metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class AnalysisResponse(BaseModel):
-    classification: str
-    confidence_score: float
-    kill_switch_triggered: bool
-    kill_switch_reason: Optional[str]
-    advanced_stats: Dict[str, Any]
-    stats: SessionStats
-    session_id: int
-    certificate_id: str
-    document_hash: str
-    risk_level: str
-    risk_score: float
-    evidence_hash: Optional[str] = None
-    canonical_stats: Dict[str, Any] = Field(default_factory=dict)
 
 
 def _stats_from_dict(value: Dict[str, Any]) -> SessionStats:
@@ -95,11 +59,7 @@ def _stats_from_dict(value: Dict[str, Any]) -> SessionStats:
     )
 
 
-def _validate_event_stream(
-    *,
-    event_counts: Dict[str, int],
-    text_content: str,
-) -> None:
+def _validate_event_stream(*, event_counts: Dict[str, int], text_content: str) -> None:
     has_typing_evidence = event_counts.get("keydown_count", 0) >= MINIMUM_KEYSTROKES
     has_paste_evidence = event_counts.get("paste_count", 0) > 0 and bool(
         (text_content or "").strip()
@@ -147,28 +107,32 @@ async def _ensure_student_can_submit_to_course(
     db: AsyncSession,
     student_id: str,
     course_id: Optional[int],
-) -> None:
+) -> Optional[Course]:
     if course_id is None:
-        return
+        return None
 
     result = await db.execute(
-        select(CourseStudent.id).where(
-            CourseStudent.course_id == course_id,
+        select(Course)
+        .join(CourseStudent, CourseStudent.course_id == Course.id)
+        .where(
+            Course.id == course_id,
             CourseStudent.student_id == student_id,
+            Course.is_archived.is_(False),
         )
     )
-
-    if result.scalar_one_or_none() is None:
+    course = result.scalars().first()
+    if course is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not enrolled in this course.",
+            detail="You are not enrolled in an active course.",
         )
+    return course
 
 
 def _clamp_score(value: Any) -> float:
     try:
         score = float(value)
-        if score != score:
+        if score != score or score in {float("inf"), float("-inf")}:
             return 0.0
         return round(max(0.0, min(100.0, score)), 2)
     except (TypeError, ValueError):
@@ -209,15 +173,99 @@ def _certificate_status_for(classification: str, risk_level: str) -> str:
     return "HIGH_RISK"
 
 
-async def _mark_draft_submitted(
+async def _load_idempotent_response(
+    *,
+    db: AsyncSession,
+    user_id: str,
+    submission_id: str,
+    expected_evidence_hash: Optional[str] = None,
+) -> Optional[AnalysisResponse]:
+    result = await db.execute(
+        select(TypingSession).where(
+            TypingSession.user_id == user_id,
+            TypingSession.submission_id == submission_id,
+        )
+    )
+    session = result.scalars().first()
+    if session is None:
+        return None
+
+    if (
+        expected_evidence_hash
+        and session.evidence_hash
+        and str(session.evidence_hash) != expected_evidence_hash
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This submission_id was already used for different evidence. "
+                "Generate a new submission identifier before submitting again."
+            ),
+        )
+
+    certificate_result = await db.execute(
+        select(Certificate).where(Certificate.session_id == session.id)
+    )
+    certificate = certificate_result.scalars().first()
+    if certificate is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The prior submission exists but its certificate transaction is incomplete.",
+        )
+
+    metadata = dict(session.evidence_metadata or {})
+    stored = metadata.get("analysis_response")
+    if isinstance(stored, dict):
+        replay = dict(stored)
+        replay["idempotent_replay"] = True
+        replay["submission_id"] = submission_id
+        return AnalysisResponse.model_validate(replay)
+
+    canonical_stats = dict(session.canonical_stats_json or {})
+    stats = _stats_from_dict(canonical_stats)
+    decision_source = str(session.decision_source or "LEGACY_UNKNOWN")
+    model_available = bool(session.model_available)
+    degraded_analysis = bool(session.degraded_analysis)
+    confidence = _clamp_score(session.ml_confidence_score)
+    risk_score = _clamp_score(100.0 - confidence)
+    return AnalysisResponse(
+        classification=str(session.classification_result or "UNKNOWN"),
+        confidence_score=confidence,
+        kill_switch_triggered=degraded_analysis,
+        kill_switch_reason=(
+            "The original record used degraded analysis."
+            if degraded_analysis
+            else None
+        ),
+        advanced_stats={
+            "decision_source": decision_source,
+            "model_available": model_available,
+            "degraded_analysis": degraded_analysis,
+        },
+        stats=stats,
+        session_id=int(session.id),
+        certificate_id=certificate.certificate_id,
+        document_hash=str(session.document_hash or certificate.document_hash),
+        risk_level=str(session.risk_level or "LOW"),
+        risk_score=risk_score,
+        evidence_hash=session.evidence_hash,
+        canonical_stats=canonical_stats,
+        submission_id=submission_id,
+        idempotent_replay=True,
+        decision_source=decision_source,
+        model_available=model_available,
+        degraded_analysis=degraded_analysis,
+    )
+
+
+async def _load_owned_draft(
     *,
     db: AsyncSession,
     user_id: str,
     draft_id: Optional[str],
-    session_id: int,
-) -> None:
+) -> Optional[DraftSession]:
     if not draft_id:
-        return
+        return None
 
     result = await db.execute(
         select(DraftSession).where(
@@ -228,15 +276,56 @@ async def _mark_draft_submitted(
     )
     draft = result.scalars().first()
     if draft is None:
-        return
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Draft not found or is not owned by this student.",
+        )
+    return draft
 
-    draft.lifecycle_status = "SUBMITTED"
-    draft.sync_status = "SYNCED"
-    draft.conflict_payload = {
-        "submitted_session_id": session_id,
-        "submitted_from": "sessions.analyze",
-    }
-    db.add(draft)
+
+def _verify_draft_matches_submission(
+    *,
+    draft: DraftSession,
+    payload: KeystrokeSessionAnalyzeRequest,
+    user_id: str,
+    submission_evidence_hash: str,
+) -> None:
+    if draft.submitted_session_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This draft is already linked to a submitted session.",
+        )
+
+    draft_text = decrypt_text(draft.text_content) or ""
+    draft_events = decrypt_json(draft.keystroke_array) or []
+    if not isinstance(draft_events, list):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The saved draft evidence is malformed and cannot be submitted.",
+        )
+
+    draft_canonical = compute_canonical_evidence(
+        title=normalize_title(draft.title),
+        text_content=draft_text,
+        keystroke_array=draft_events,
+        user_id=user_id,
+        client_stats=payload.stats,
+        client_active_duration_ms=int(draft.active_duration_ms or 0),
+    )
+    if draft_canonical.evidence_hash != submission_evidence_hash:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "The submitted evidence no longer matches the server-synced draft. "
+                "Save the latest draft and retry."
+            ),
+        )
+
+
+def _store_analysis_response(session: TypingSession, response: AnalysisResponse) -> None:
+    metadata = dict(session.evidence_metadata or {})
+    metadata["analysis_response"] = response.model_dump(mode="json")
+    session.evidence_metadata = metadata
 
 
 @router.post(
@@ -247,41 +336,72 @@ async def _mark_draft_submitted(
 async def analyze_session(
     payload: KeystrokeSessionAnalyzeRequest,
     request: Request,
+    response: Response,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(require_student),
     db: AsyncSession = Depends(get_db),
-):
+) -> AnalysisResponse:
+    user_id = str(current_user.id)
+    events = payload.event_dicts()
     title = normalize_title(payload.title)
     canonical = compute_canonical_evidence(
         title=title,
         text_content=payload.text_content,
-        keystroke_array=payload.keystroke_array,
-        user_id=str(current_user.id),
+        keystroke_array=events,
+        user_id=user_id,
         client_stats=payload.stats,
         client_active_duration_ms=payload.active_duration_ms,
     )
+
+    existing = await _load_idempotent_response(
+        db=db,
+        user_id=user_id,
+        submission_id=payload.submission_id,
+        expected_evidence_hash=canonical.evidence_hash,
+    )
+    if existing is not None:
+        response.status_code = status.HTTP_200_OK
+        return existing
     _validate_event_stream(
         event_counts=canonical.event_counts,
         text_content=payload.text_content,
     )
     server_stats = _stats_from_dict(canonical.stats)
 
-    await _ensure_student_can_submit_to_course(
+    course = await _ensure_student_can_submit_to_course(
         db=db,
-        student_id=str(current_user.id),
+        student_id=user_id,
         course_id=payload.course_id,
     )
+    draft = await _load_owned_draft(
+        db=db,
+        user_id=user_id,
+        draft_id=payload.draft_id,
+    )
+    if draft is not None:
+        _verify_draft_matches_submission(
+            draft=draft,
+            payload=payload,
+            user_id=user_id,
+            submission_evidence_hash=canonical.evidence_hash,
+        )
 
     try:
         result = inference_engine.analyze(
-            events=payload.keystroke_array,
+            events=events,
             stats=server_stats,
             text_content=payload.text_content,
         )
-    except Exception as exc:
+    except InferenceInputError as exc:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Analysis engine failed to process this writing session.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except InferenceInternalError as exc:
+        # No session, certificate, audit or notification objects have been added.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Analysis is temporarily unavailable. No evidence record was created.",
         ) from exc
 
     classification = _normalize_result_label(result.classification)
@@ -298,18 +418,30 @@ async def analyze_session(
         risk_score=risk_score,
         risk_level=risk_level,
     )
-    classification = paste_policy["classification"]
+    classification = str(paste_policy["classification"])
     confidence_score = _clamp_score(paste_policy["confidence_score"])
     risk_score = _clamp_score(paste_policy["risk_score"])
     risk_level = _normalize_risk_level(paste_policy["risk_level"], risk_score)
 
     advanced_stats = dict(paste_policy["advanced_stats"] or {})
+    decision_source = str(
+        advanced_stats.get("decision_source")
+        or result.decision_source
+        or "UNKNOWN"
+    )
+    model_available = bool(advanced_stats.get("model_available", False))
+    degraded_analysis = bool(
+        advanced_stats.get("degraded_analysis", not model_available)
+    )
     advanced_stats.update(
         {
             "canonical_evidence": canonical.evidence_metadata,
             "evidence_hash": canonical.evidence_hash,
             "duration_source": canonical.evidence_metadata.get("duration_source"),
             "idle_break_count": canonical.evidence_metadata.get("idle_break_count", 0),
+            "decision_source": decision_source,
+            "model_available": model_available,
+            "degraded_analysis": degraded_analysis,
         }
     )
 
@@ -322,20 +454,16 @@ async def analyze_session(
         or "fallback-rules"
     )
     model_score = _clamp_score(advanced_stats.get("model_score", risk_score))
-
     total_words = len((payload.text_content or "").split())
-
     certificate_id = await _create_unique_certificate_id(db)
 
-    encrypted_text = encrypt_text(payload.text_content)
-    encrypted_events = encrypt_json(payload.keystroke_array)
-
     session = TypingSession(
-        user_id=str(current_user.id),
+        user_id=user_id,
+        submission_id=payload.submission_id,
         course_id=payload.course_id,
         title=title,
-        text_content=encrypted_text,
-        raw_keystroke_data=encrypted_events,
+        text_content=encrypt_text(payload.text_content),
+        raw_keystroke_data=encrypt_json(events),
         word_count=total_words,
         wpm=float(server_stats.wpm),
         total_keystrokes=int(server_stats.keystrokes),
@@ -350,10 +478,13 @@ async def analyze_session(
         evidence_hash=canonical.evidence_hash,
         model_version=str(model_version),
         model_score=model_score,
+        decision_source=decision_source,
+        model_available=model_available,
+        degraded_analysis=degraded_analysis,
         canonical_stats_json=canonical.canonical_stats_json,
         evidence_metadata={
             **canonical.evidence_metadata,
-            "client_metadata": payload.client_metadata,
+            "client_metadata": dict(payload.client_metadata),
             "analysis_versions": {
                 "scoring_engine_version": str(
                     advanced_stats.get("scoring_engine_version")
@@ -364,16 +495,18 @@ async def analyze_session(
                     or PASTE_POLICY_VERSION
                 ),
                 "model_version": str(model_version),
-                "model_feature_family": advanced_stats.get(
-                    "model_feature_family"
-                ),
-                "decision_source": advanced_stats.get("decision_source"),
+                "model_feature_family": advanced_stats.get("model_feature_family"),
+                "decision_source": decision_source,
+                "model_available": model_available,
+                "degraded_analysis": degraded_analysis,
             },
         },
         active_duration_ms=canonical.active_duration_ms,
         idle_breaks_json=canonical.idle_breaks,
         risk_level=risk_level,
-        review_status="PENDING" if payload.course_id is not None else "NOT_APPLICABLE",
+        review_status=(
+            "PENDING" if payload.course_id is not None else "NOT_APPLICABLE"
+        ),
     )
 
     db.add(session)
@@ -393,22 +526,50 @@ async def analyze_session(
     signature_bundle = sign_certificate_for_session(session, certificate)
     db.add(certificate)
 
-    await _mark_draft_submitted(
-        db=db,
-        user_id=str(current_user.id),
-        draft_id=payload.draft_id,
+    if draft is not None:
+        draft.lifecycle_status = "SUBMITTED"
+        draft.sync_status = "SYNCED"
+        draft.submitted_session_id = int(session.id)
+        draft.conflict_payload = {
+            "submitted_session_id": int(session.id),
+            "submitted_from": "sessions.analyze",
+            "submission_id": payload.submission_id,
+            "evidence_hash": canonical.evidence_hash,
+        }
+        db.add(draft)
+
+    analysis_response = AnalysisResponse(
+        classification=classification,
+        confidence_score=confidence_score,
+        kill_switch_triggered=bool(paste_policy["kill_switch_triggered"]),
+        kill_switch_reason=paste_policy["kill_switch_reason"],
+        advanced_stats=advanced_stats,
+        stats=server_stats,
         session_id=int(session.id),
+        certificate_id=certificate_id,
+        document_hash=canonical.document_hash,
+        risk_level=risk_level,
+        risk_score=risk_score,
+        evidence_hash=canonical.evidence_hash,
+        canonical_stats=canonical.canonical_stats_json,
+        submission_id=payload.submission_id,
+        idempotent_replay=False,
+        decision_source=decision_source,
+        model_available=model_available,
+        degraded_analysis=degraded_analysis,
     )
+    _store_analysis_response(session, analysis_response)
 
     db.add(
         create_audit_log(
             event_type="SESSION_ANALYZED",
             entity_type="typing_session",
             entity_id=str(session.id),
-            actor_user_id=str(current_user.id),
-            target_user_id=str(current_user.id),
+            actor_user_id=user_id,
+            target_user_id=user_id,
             request=request,
             metadata={
+                "submission_id": payload.submission_id,
                 "certificate_id": certificate_id,
                 "classification": classification,
                 "risk_level": risk_level,
@@ -416,6 +577,9 @@ async def analyze_session(
                 "draft_id": payload.draft_id,
                 "model_version": str(model_version),
                 "model_score": model_score,
+                "decision_source": decision_source,
+                "model_available": model_available,
+                "degraded_analysis": degraded_analysis,
                 "scoring_engine_version": str(
                     advanced_stats.get("scoring_engine_version")
                     or SCORING_ENGINE_VERSION
@@ -432,11 +596,12 @@ async def analyze_session(
             event_type="CERTIFICATE_CREATED",
             entity_type="certificate",
             entity_id=certificate_id,
-            actor_user_id=str(current_user.id),
-            target_user_id=str(current_user.id),
+            actor_user_id=user_id,
+            target_user_id=user_id,
             request=request,
             metadata={
                 "session_id": int(session.id),
+                "submission_id": payload.submission_id,
                 "document_hash": canonical.document_hash,
                 "evidence_hash": canonical.evidence_hash,
                 "verification_status": certificate.verification_status,
@@ -450,38 +615,39 @@ async def analyze_session(
     try:
         await db.commit()
         await db.refresh(session)
+    except IntegrityError as exc:
+        await db.rollback()
+        replay = await _load_idempotent_response(
+            db=db,
+            user_id=user_id,
+            submission_id=payload.submission_id,
+            expected_evidence_hash=canonical.evidence_hash,
+        )
+        if replay is not None:
+            response.status_code = status.HTTP_200_OK
+            return replay
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The evidence submission conflicts with an existing record.",
+        ) from exc
     except Exception:
         await db.rollback()
         raise
 
-    if payload.course_id:
-        course_query = await db.execute(select(Course).where(Course.id == payload.course_id))
-        course_obj = course_query.scalars().first()
-        if course_obj:
-            background_tasks.add_task(
-                dispatch_notification,
-                recipient_id=course_obj.teacher_id,
-                actor_id=str(current_user.id),
-                event_type="SESSION_SUBMITTED",
-                entity_type="typing_session",
-                entity_id=str(session.id),
-                title=f"{current_user.first_name} submitted \"{title}\"",
-                body=f"Classification: {classification} · Risk: {risk_level}",
-                action_url=f"/teacher/submissions?search={session.id}",
-            )
+    if course is not None:
+        background_tasks.add_task(
+            dispatch_notification,
+            recipient_id=course.teacher_id,
+            actor_id=user_id,
+            event_type="SESSION_SUBMITTED",
+            entity_type="typing_session",
+            entity_id=str(session.id),
+            title=f'{current_user.first_name} submitted "{title}"',
+            body=(
+                f"Classification: {classification} · Risk: {risk_level}"
+                + (" · Degraded analysis" if degraded_analysis else "")
+            ),
+            action_url=f"/teacher/submissions?search={session.id}",
+        )
 
-    return AnalysisResponse(
-        classification=classification,
-        confidence_score=confidence_score,
-        kill_switch_triggered=bool(paste_policy["kill_switch_triggered"]),
-        kill_switch_reason=paste_policy["kill_switch_reason"],
-        advanced_stats=advanced_stats,
-        stats=server_stats,
-        session_id=int(session.id),
-        certificate_id=certificate_id,
-        document_hash=canonical.document_hash,
-        risk_level=risk_level,
-        risk_score=risk_score,
-        evidence_hash=canonical.evidence_hash,
-        canonical_stats=canonical.canonical_stats_json,
-    )
+    return analysis_response

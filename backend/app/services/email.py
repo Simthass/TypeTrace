@@ -1,50 +1,93 @@
-# backend/app/services/email.py
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
+from __future__ import annotations
+
+import logging
+from html import escape
+from typing import Literal, Optional
+
+from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 from pydantic import EmailStr
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
+from app.core.config import settings
 
-# configuring smtp for testmail.app
-# professor will like that we use env variables for security
-conf = ConnectionConfig(
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME", "your_testmail_namespace"),
-    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", "your_testmail_token"),
-    MAIL_FROM=os.getenv("MAIL_FROM", "verify@typetrace.com"),
-    MAIL_PORT=int(os.getenv("MAIL_PORT", 465)),
-    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.testmail.app"),
-    MAIL_STARTTLS=False,
-    MAIL_SSL_TLS=True,
-    USE_CREDENTIALS=True,
-    VALIDATE_CERTS=True
-)
+logger = logging.getLogger("typetrace.email")
+EmailPurpose = Literal["verification", "password reset"]
 
-async def send_otp_email(email: EmailStr, otp: str):
-    """
-    Sends the 6-digit OTP asynchronously via SMTP.
-    """
-    html_content = f"""
-    <div style="font-family: Arial, sans-serif; max-w-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #EAEAEA; border-radius: 8px;">
-        <h2 style="color: #111827;">TypeTrace Verification</h2>
-        <p style="color: #4B5563; font-size: 16px;">Your academic integrity verification code is:</p>
-        <div style="background-color: #F9FAFB; padding: 16px; border-radius: 6px; text-align: center; margin: 24px 0;">
-            <span style="font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #2A7FE0;">{otp}</span>
-        </div>
-        <p style="color: #9CA3AF; font-size: 12px;">This code expires in 10 minutes. If you did not request this, please ignore this email.</p>
-    </div>
-    """
 
-    message = MessageSchema(
-        subject="Your TypeTrace Verification Code",
-        recipients=[email],
-        body=html_content,
-        subtype=MessageType.html
+class EmailDeliveryError(RuntimeError):
+    """Raised when an authentication email could not be delivered."""
+
+
+def _connection_config() -> ConnectionConfig:
+    return ConnectionConfig(
+        MAIL_USERNAME=settings.MAIL_USERNAME,
+        MAIL_PASSWORD=settings.MAIL_PASSWORD,
+        MAIL_FROM=settings.MAIL_FROM,
+        MAIL_PORT=settings.MAIL_PORT,
+        MAIL_SERVER=settings.MAIL_SERVER,
+        MAIL_STARTTLS=settings.MAIL_STARTTLS,
+        MAIL_SSL_TLS=settings.MAIL_SSL_TLS,
+        USE_CREDENTIALS=settings.MAIL_USE_CREDENTIALS,
+        VALIDATE_CERTS=settings.MAIL_VALIDATE_CERTS,
     )
 
-    fm = FastMail(conf)
+
+def _message(
+    email: EmailStr,
+    otp: str,
+    purpose: EmailPurpose,
+    action_url: Optional[str],
+) -> MessageSchema:
+    subject = (
+        "Your TypeTrace verification code"
+        if purpose == "verification"
+        else "Your TypeTrace password reset code"
+    )
+    action_markup = ""
+    if action_url:
+        safe_url = escape(action_url, quote=True)
+        action_markup = f"""
+        <p style="text-align:center;margin:20px 0">
+          <a href="{safe_url}" style="display:inline-block;background:#2A7FE0;color:#FFFFFF;text-decoration:none;padding:10px 16px;border-radius:6px;font-weight:700">Open secure verification page</a>
+        </p>
+        <p style="color:#6B7280;font-size:12px;word-break:break-all">If the button does not work, open: {safe_url}</p>
+        """
+
+    html_content = f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #EAEAEA;border-radius:8px">
+      <h2 style="color:#111827">TypeTrace</h2>
+      <p style="color:#4B5563;font-size:16px">Your {purpose} code is:</p>
+      <div style="background:#F9FAFB;padding:16px;border-radius:6px;text-align:center;margin:24px 0">
+        <span style="font-size:32px;font-weight:700;letter-spacing:4px;color:#2A7FE0">{otp}</span>
+      </div>
+      {action_markup}
+      <p style="color:#9CA3AF;font-size:12px">This code expires in 10 minutes. If you did not request it, ignore this email.</p>
+    </div>
+    """
+    return MessageSchema(
+        subject=subject,
+        recipients=[email],
+        body=html_content,
+        subtype=MessageType.html,
+    )
+
+
+async def send_otp_email(
+    email: EmailStr,
+    otp: str,
+    *,
+    purpose: EmailPurpose = "verification",
+    action_url: Optional[str] = None,
+) -> None:
+    """Send an OTP or raise; callers must never report success after failure."""
+
     try:
-        await fm.send_message(message)
-        print(f"[EMAIL SERVICE] Successfully sent OTP to {email}")
-    except Exception as e:
-        print(f"[EMAIL ERROR] Failed to send email: {str(e)}")
+        await FastMail(_connection_config()).send_message(
+            _message(email, otp, purpose, action_url)
+        )
+    except Exception as exc:
+        # Do not log the recipient address or the OTP. The exception trace is enough
+        # for operational diagnosis and avoids leaking authentication secrets.
+        logger.exception("Authentication email delivery failed")
+        raise EmailDeliveryError(
+            "The authentication email could not be delivered."
+        ) from exc

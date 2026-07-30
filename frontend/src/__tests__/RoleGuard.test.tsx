@@ -39,7 +39,6 @@ function setAuth(
     user,
     token: authenticated ? "token" : null,
     isAuthenticated: authenticated,
-    pendingEmail: null,
     hasHydrated: hydrated,
   });
 }

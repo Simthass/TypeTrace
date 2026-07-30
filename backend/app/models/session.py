@@ -2,6 +2,7 @@
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -30,6 +32,8 @@ class TypingSession(Base):
         nullable=False,
         index=True,
     )
+
+    submission_id = Column(String(120), nullable=True)
 
     course_id = Column(
         Integer,
@@ -65,6 +69,9 @@ class TypingSession(Base):
     evidence_hash = Column(String(64), nullable=True)
     model_version = Column(String(80), nullable=True, index=True)
     model_score = Column(Float, nullable=True)
+    decision_source = Column(String(80), nullable=True, index=True)
+    model_available = Column(Boolean, nullable=False, default=False, server_default="false")
+    degraded_analysis = Column(Boolean, nullable=False, default=False, server_default="false")
     canonical_stats_json = Column(JSONB, nullable=True)
     evidence_metadata = Column(JSONB, nullable=True)
     active_duration_ms = Column(BigInteger, nullable=True)
@@ -126,6 +133,11 @@ class TypingSession(Base):
         CheckConstraint(
             "risk_level IN ('LOW', 'MEDIUM', 'HIGH')",
             name="ck_typing_sessions_risk_level_valid",
+        ),
+        UniqueConstraint(
+            "user_id",
+            "submission_id",
+            name="uq_typing_sessions_user_submission_id",
         ),
         Index("ix_typing_sessions_user_created", "user_id", "created_at"),
         Index("ix_typing_sessions_course_created", "course_id", "created_at"),

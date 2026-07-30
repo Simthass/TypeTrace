@@ -20,6 +20,14 @@ import {
   normalizeEvidenceScore,
 } from "../lib/evidenceScore";
 
+type CertificateLedgerStatus =
+  | "VALID"
+  | "REVIEW_REQUIRED"
+  | "REVOKED"
+  | "INVALID_SIGNATURE"
+  | "LEGACY_UNSIGNED"
+  | "NOT_FOUND";
+
 interface CertificateItem {
   session_id: number;
   title: string;
@@ -29,9 +37,15 @@ interface CertificateItem {
   certificate_id: string;
   document_hash: string;
   risk_level: string;
+  review_status: string;
+  review_outcome: string;
   course_name?: string | null;
   course_code?: string | null;
   verify_url: string;
+  status: CertificateLedgerStatus;
+  certificate_active: boolean;
+  degraded_analysis: boolean;
+  decision_source?: string | null;
 }
 
 interface CertificatesResponse {
@@ -346,6 +360,37 @@ function StatusBadge({ value }: { value?: string }) {
   );
 }
 
+function ledgerStatusLabel(status: CertificateLedgerStatus): string {
+  if (status === "VALID") return "Active";
+  if (status === "REVIEW_REQUIRED") return "Active · review required";
+  if (status === "REVOKED") return "Revoked";
+  if (status === "INVALID_SIGNATURE") return "Invalid signature";
+  if (status === "LEGACY_UNSIGNED") return "Legacy unsigned";
+  return "Not found";
+}
+
+function ledgerStatusStyle(status: CertificateLedgerStatus) {
+  if (status === "VALID") {
+    return { background: colors.mintTint, color: brand.humanText, borderColor: colors.mintTint };
+  }
+  if (status === "REVIEW_REQUIRED" || status === "LEGACY_UNSIGNED") {
+    return { background: colors.amberTint, color: brand.suspiciousText, borderColor: colors.amberTint };
+  }
+  return { background: colors.roseTint, color: brand.aiText, borderColor: colors.roseTint };
+}
+
+function LedgerStatusBadge({ status }: { status: CertificateLedgerStatus }) {
+  const style = ledgerStatusStyle(status);
+  return (
+    <span
+      className="inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+      style={style}
+    >
+      {ledgerStatusLabel(status)}
+    </span>
+  );
+}
+
 function MetricCard({
   label,
   value,
@@ -529,7 +574,9 @@ export default function CertificatesPage() {
   const stats = useMemo(() => {
     const total = certificates.length;
     const human = certificates.filter(
-      (item) => classificationBucket(item.classification) === "HUMAN",
+      (item) =>
+        item.certificate_active &&
+        classificationBucket(item.classification) === "HUMAN",
     ).length;
     const hashes = certificates.filter((item) =>
       Boolean(item.document_hash),
@@ -707,9 +754,9 @@ export default function CertificatesPage() {
           icon="file"
         />
         <MetricCard
-          label="Human verified"
+          label="Active human records"
           value={stats.human}
-          helper="Certificates linked to human-classified sessions"
+          helper="Active ledger records linked to human-classified sessions"
           icon="shield"
         />
         <MetricCard
@@ -959,6 +1006,9 @@ export default function CertificatesPage() {
                               >
                                 {shortHash(certificate.document_hash)}
                               </p>
+                              <div className="mt-1.5">
+                                <LedgerStatusBadge status={certificate.status} />
+                              </div>
                             </button>
                             <span className="relative shrink-0">
                               <button
@@ -1028,6 +1078,11 @@ export default function CertificatesPage() {
 
                         <td className="px-4 py-3 align-middle">
                           <StatusBadge value={certificate.classification} />
+                          {certificate.degraded_analysis && (
+                            <p className="mt-1 text-[10px] font-semibold" style={{ color: colors.amber }}>
+                              Fallback rules
+                            </p>
+                          )}
                         </td>
 
                         <td className="px-4 py-3 align-middle">
@@ -1244,6 +1299,28 @@ export default function CertificatesPage() {
                 >
                   {selectedCertificate.certificate_id}
                 </div>
+              </div>
+
+              <div>
+                <p
+                  className="text-[10px] font-bold uppercase tracking-[0.14em]"
+                  style={{ color: colors.text.muted }}
+                >
+                  Ledger status
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <LedgerStatusBadge status={selectedCertificate.status} />
+                  {selectedCertificate.degraded_analysis && (
+                    <span className="text-[11px] font-semibold" style={{ color: colors.amber }}>
+                      {selectedCertificate.decision_source || "FALLBACK_RULES"} · trained model unavailable
+                    </span>
+                  )}
+                </div>
+                {!selectedCertificate.certificate_active && (
+                  <p className="mt-2 text-[12px] leading-5" style={{ color: colors.text.secondary }}>
+                    This record is not an active verified certificate. Open the public audit for the exact ledger reason.
+                  </p>
+                )}
               </div>
 
               <div>

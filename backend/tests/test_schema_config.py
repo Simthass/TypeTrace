@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from app.core.config import Settings
 from app.core.rate_limit import per_minute
+from app.models.user import User
 from app.schemas.user import (
     OTPVerify,
     PasswordResetConfirm,
@@ -54,6 +55,7 @@ class ConfigurationContractTests(unittest.TestCase):
             RATE_LIMIT_STORAGE_URI="redis://localhost:6379/1",
             ALLOWED_ORIGINS="https://typetrace.example",
             CERTIFICATE_ALLOW_HMAC_FALLBACK=True,
+            MAIL_USE_CREDENTIALS=False,
         )
 
         self.assertFalse(config.api_docs_enabled)
@@ -119,22 +121,28 @@ class UserSchemaContractTests(unittest.TestCase):
     def test_otp_requires_exactly_six_digits(self) -> None:
         self.assertEqual(
             OTPVerify(
-                email="student@example.com",
+                registration_id="reg_" + "A" * 64,
                 otp="123456",
             ).otp,
             "123456",
         )
         with self.assertRaises(ValidationError):
             OTPVerify(
-                email="student@example.com",
+                registration_id="reg_" + "A" * 64,
                 otp="12345",
             )
+
+    def test_user_verification_defaults_fail_closed(self) -> None:
+        column = User.__table__.c.is_verified
+        self.assertIsNotNone(column.default)
+        self.assertFalse(bool(column.default.arg))
+        self.assertIsNotNone(column.server_default)
+        self.assertIn("false", str(column.server_default.arg).lower())
 
     def test_reset_password_uses_same_strength_contract(self) -> None:
         with self.assertRaises(ValidationError):
             PasswordResetConfirm(
-                email="student@example.com",
-                reset_token="token",
+                reset_token="x" * 80,
                 new_password="weakpass",
             )
 

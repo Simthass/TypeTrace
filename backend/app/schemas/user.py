@@ -1,47 +1,71 @@
-# backend/app/schemas/user.py
+from __future__ import annotations
 
 import re
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional, Union
 
-from pydantic import BaseModel, EmailStr, field_validator
-
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 UserRole = Literal["STUDENT", "TEACHER"]
+RegistrationState = Literal["PENDING", "CLAIMED", "LOCKED", "COMPLETED"]
+PasswordResetState = Literal[
+    "OTP_PENDING",
+    "TOKEN_ISSUED",
+    "CLAIMED",
+    "LOCKED",
+    "COMPLETED",
+]
 
+_REGISTRATION_ID_PATTERN = re.compile(r"^reg_[A-Za-z0-9_-]{32,160}$")
+_RESET_ID_PATTERN = re.compile(r"^rst_[A-Za-z0-9_-]{32,160}$")
 
-# =============================================================================
-# SHARED VALIDATORS
-# =============================================================================
 
 def _clean_text(value: str) -> str:
-    clean = re.sub(r"<[^>]*>", "", value or "")
-    clean = clean.strip()
+    clean = re.sub(r"<[^>]*>", "", value or "").strip()
     if not clean:
         raise ValueError("This field cannot be empty.")
     return clean
 
 
 def _validate_password_strength(value: str) -> str:
-    if len(value) < 8:
-        raise ValueError("Password must be at least 8 characters.")
+    if len(value) < 8 or len(value) > 128:
+        raise ValueError("Password must be between 8 and 128 characters.")
+    if not any(char.isalpha() for char in value):
+        raise ValueError("Password must contain at least one letter.")
     if not any(char.isdigit() for char in value):
         raise ValueError("Password must contain at least one number.")
-    if not any(not char.isalnum() for char in value):
-        raise ValueError("Password must contain at least one special character.")
     return value
 
 
-# =============================================================================
-# REGISTRATION SCHEMAS
-# =============================================================================
+def _validate_registration_id(value: str) -> str:
+    clean = value.strip()
+    if not _REGISTRATION_ID_PATTERN.fullmatch(clean):
+        raise ValueError("Invalid registration session identifier.")
+    return clean
+
+
+def _validate_reset_id(value: str) -> str:
+    clean = value.strip()
+    if not _RESET_ID_PATTERN.fullmatch(clean):
+        raise ValueError("Invalid password-reset session identifier.")
+    return clean
+
+
+def _validate_otp(value: str) -> str:
+    clean = value.strip()
+    if not clean.isdigit() or len(clean) != 6:
+        raise ValueError("OTP must be exactly 6 digits.")
+    return clean
+
 
 class StudentRegister(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
     role: Literal["STUDENT"] = "STUDENT"
-    first_name: str
-    last_name: str
-    student_id: str
+    first_name: str = Field(min_length=1, max_length=50)
+    last_name: str = Field(min_length=1, max_length=50)
+    student_id: str = Field(min_length=5, max_length=30)
     email: EmailStr
-    university_name: Optional[str] = None
+    university_name: Optional[str] = Field(default=None, max_length=200)
     password: str
     consent: bool
 
@@ -50,6 +74,14 @@ class StudentRegister(BaseModel):
     def sanitize_name(cls, value: str) -> str:
         return _clean_text(value)
 
+    @field_validator("university_name")
+    @classmethod
+    def sanitize_optional_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        clean = value.strip()
+        return _clean_text(clean) if clean else None
+
     @field_validator("student_id")
     @classmethod
     def validate_student_id(cls, value: str) -> str:
@@ -57,14 +89,6 @@ class StudentRegister(BaseModel):
         if not clean.isdigit() or len(clean) < 5:
             raise ValueError("Student ID must be numeric and at least 5 digits.")
         return clean
-
-    @field_validator("university_name")
-    @classmethod
-    def sanitize_optional_university(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        clean = re.sub(r"<[^>]*>", "", value).strip()
-        return clean or None
 
     @field_validator("password")
     @classmethod
@@ -80,12 +104,14 @@ class StudentRegister(BaseModel):
 
 
 class TeacherRegister(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
     role: Literal["TEACHER"] = "TEACHER"
-    first_name: str
-    last_name: str
+    first_name: str = Field(min_length=1, max_length=50)
+    last_name: str = Field(min_length=1, max_length=50)
     email: EmailStr
-    university_name: str
-    department: str
+    university_name: str = Field(min_length=1, max_length=200)
+    department: str = Field(min_length=1, max_length=200)
     password: str
     consent: bool
 
@@ -107,52 +133,57 @@ class TeacherRegister(BaseModel):
         return value
 
 
-# =============================================================================
-# AUTH REQUEST SCHEMAS
-# =============================================================================
+RegistrationRequest = Annotated[
+    Union[StudentRegister, TeacherRegister],
+    Field(discriminator="role"),
+]
+
 
 class OTPVerify(BaseModel):
-    email: EmailStr
+    model_config = ConfigDict(extra="forbid")
+
+    registration_id: str
     otp: str
 
-    @field_validator("otp")
-    @classmethod
-    def validate_otp(cls, value: str) -> str:
-        clean = value.strip()
-        if not clean.isdigit() or len(clean) != 6:
-            raise ValueError("OTP must be exactly 6 digits.")
-        return clean
+    _registration_id = field_validator("registration_id")(_validate_registration_id)
+    _otp = field_validator("otp")(_validate_otp)
 
 
 class ResendOTPRequest(BaseModel):
-    email: EmailStr
+    model_config = ConfigDict(extra="forbid")
+
+    registration_id: str
+
+    _registration_id = field_validator("registration_id")(_validate_registration_id)
 
 
 class UserLogin(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=128)
 
 
 class PasswordResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: EmailStr
 
 
 class PasswordResetVerify(BaseModel):
-    email: EmailStr
+    model_config = ConfigDict(extra="forbid")
+
+    reset_id: str
     otp: str
 
-    @field_validator("otp")
-    @classmethod
-    def validate_otp(cls, value: str) -> str:
-        clean = value.strip()
-        if not clean.isdigit() or len(clean) != 6:
-            raise ValueError("OTP must be exactly 6 digits.")
-        return clean
+    _reset_id = field_validator("reset_id")(_validate_reset_id)
+    _otp = field_validator("otp")(_validate_otp)
 
 
 class PasswordResetConfirm(BaseModel):
-    email: EmailStr
-    reset_token: str
+    model_config = ConfigDict(extra="forbid")
+
+    reset_token: str = Field(min_length=40, max_length=4096)
     new_password: str
 
     @field_validator("new_password")
@@ -161,11 +192,9 @@ class PasswordResetConfirm(BaseModel):
         return _validate_password_strength(value)
 
 
-# =============================================================================
-# RESPONSE SCHEMAS
-# =============================================================================
-
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     first_name: str
     last_name: Optional[str] = None
@@ -176,30 +205,55 @@ class UserResponse(BaseModel):
     department: Optional[str] = None
     is_verified: bool
 
-    class Config:
-        from_attributes = True
-
 
 class AuthTokenResponse(BaseModel):
     message: str
     access_token: str
     token_type: Literal["bearer"] = "bearer"
     user: UserResponse
+    already_completed: bool = False
 
 
 class RegisterResponse(BaseModel):
     message: str
+    registration_id: str
     email: EmailStr
     role: UserRole
+    expires_in_seconds: int = Field(gt=0)
+
+
+class RegistrationStatusResponse(BaseModel):
+    registration_id: str
+    email: EmailStr
+    role: UserRole
+    state: RegistrationState
+    expires_in_seconds: int = Field(ge=0)
+    attempts_remaining: int = Field(ge=0)
+    resends_remaining: int = Field(ge=0)
+    resend_available_in_seconds: int = Field(ge=0)
 
 
 class MessageResponse(BaseModel):
     message: str
 
 
+class PasswordResetRequestResponse(BaseModel):
+    message: str
+    reset_id: str
+    expires_in_seconds: int = Field(gt=0)
+
+
 class PasswordResetVerifyResponse(BaseModel):
     message: str
     reset_token: str
+
+
+class PasswordResetStatusResponse(BaseModel):
+    reset_id: str
+    email: EmailStr
+    state: PasswordResetState
+    expires_in_seconds: int = Field(ge=0)
+    attempts_remaining: int = Field(ge=0)
 
 
 class TokenVerifyResponse(BaseModel):
