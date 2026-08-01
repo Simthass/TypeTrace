@@ -171,11 +171,12 @@ export function getApiErrorMessage(error: unknown): string {
   const data = error.response?.data;
 
   if (data?.error && typeof data.error === "object") {
-    const validationMessage = formatValidationDetail(data.error.details);
+    const errorRecord = data.error as Record<string, unknown>;
+    const validationMessage = formatValidationDetail(errorRecord.details);
     if (validationMessage) return validationMessage;
 
-    if ("message" in data.error && typeof data.error.message === "string") {
-      return data.error.message;
+    if (typeof errorRecord.message === "string") {
+      return errorRecord.message;
     }
   }
 

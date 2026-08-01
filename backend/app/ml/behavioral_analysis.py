@@ -2,6 +2,8 @@ import math
 from statistics import mean, median, pstdev
 from typing import Any, Dict, List, Optional
 
+from app.services.canonical_evidence import is_writing_keydown_event
+
 
 MAX_HUMAN_REASONABLE_WPM = 180
 HIGH_PASTE_COUNT = 3
@@ -117,7 +119,7 @@ def _extract_timing_values(events: List[Dict[str, Any]]) -> Dict[str, Any]:
             pasted_length += _event_pasted_length(event)
             continue
 
-        if event_type != "keydown":
+        if event_type != "keydown" or not is_writing_keydown_event(event):
             continue
 
         keydown_events.append(event)
@@ -176,9 +178,10 @@ def _event_deleted_characters(event: Dict[str, Any]) -> int:
     if _is_keyup_event(event):
         return 0
 
-    explicit = event.get("chars_deleted", event.get("deletedCharacters"))
-    value = _safe_float(explicit, 0.0)
-    if value > 0:
+    has_explicit = "chars_deleted" in event or "deletedCharacters" in event
+    if has_explicit:
+        explicit = event.get("chars_deleted", event.get("deletedCharacters"))
+        value = _safe_float(explicit, 0.0)
         return max(0, int(round(value)))
     if _is_delete_keydown_event(event):
         return 1
@@ -194,11 +197,17 @@ def _compute_revision_metrics(events: List[Dict[str, Any]], stats: Any) -> Dict[
 
         deleted = _event_deleted_characters(event)
         method = str(event.get("deletion_method") or "unknown").lower()
+        has_explicit_deletion_count = (
+            "chars_deleted" in event or "deletedCharacters" in event
+        )
         has_revision_signal = (
             not _is_keyup_event(event)
             and (
                 deleted > 0
-                or _is_delete_keydown_event(event)
+                or (
+                    _is_delete_keydown_event(event)
+                    and not has_explicit_deletion_count
+                )
                 or event.get("key") in {"__CUT_EVENT__", "__TEXT_REVISION__"}
                 or method != "unknown"
             )

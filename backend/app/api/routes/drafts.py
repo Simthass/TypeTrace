@@ -21,7 +21,10 @@ from app.schemas.evidence import (
     MAX_ACTIVE_DURATION_MS,
     MAX_ANALYSIS_EVENT_COUNT,
     MAX_ANALYSIS_TEXT_CHARACTERS,
+    MAX_EVENT_TIMESTAMP_MS,
+    KeystrokeEvent,
 )
+from app.services.text_units import utf16_length
 from app.schemas.responses import DraftListResponse, DraftResponse, MessageResponse
 
 
@@ -36,18 +39,28 @@ class DraftUpsertRequest(BaseModel):
     title: str = Field(default="Untitled Document", max_length=255)
     text_content: str = Field(default="", max_length=MAX_ANALYSIS_TEXT_CHARACTERS)
     course_id: Optional[int] = None
-    keystroke_array: List[Dict[str, Any]] = Field(
+    keystroke_array: List[KeystrokeEvent] = Field(
         default_factory=list,
         max_length=MAX_ANALYSIS_EVENT_COUNT,
     )
     active_duration_ms: int = Field(default=0, ge=0, le=MAX_ACTIVE_DURATION_MS)
-    started_at: Optional[int] = Field(default=None, ge=0)
-    last_activity_at: Optional[int] = Field(default=None, ge=0)
-    paused_at: Optional[int] = Field(default=None, ge=0)
+    started_at: Optional[int] = Field(default=None, ge=0, le=MAX_EVENT_TIMESTAMP_MS)
+    last_activity_at: Optional[int] = Field(default=None, ge=0, le=MAX_EVENT_TIMESTAMP_MS)
+    paused_at: Optional[int] = Field(default=None, ge=0, le=MAX_EVENT_TIMESTAMP_MS)
     expected_version: Optional[int] = Field(default=None, ge=1)
-    save_reason: str = Field(default="autosave", max_length=30)
+    save_reason: Literal["autosave", "manual", "recovery", "resume"] = "autosave"
     lifecycle_status: Literal["ACTIVE", "PAUSED"] = "PAUSED"
     sync_status: Literal["LOCAL_ONLY", "SYNCED", "PENDING_SYNC", "CONFLICT"] = "SYNCED"
+
+    def event_dicts(self) -> List[Dict[str, Any]]:
+        return [event.model_dump(exclude_none=True) for event in self.keystroke_array]
+
+    def validated_text_content(self) -> str:
+        if utf16_length(self.text_content) > MAX_ANALYSIS_TEXT_CHARACTERS:
+            raise ValueError(
+                f"Draft text may not exceed {MAX_ANALYSIS_TEXT_CHARACTERS} UTF-16 code units."
+            )
+        return self.text_content
 
 
 class DraftSubmitLinkRequest(BaseModel):
@@ -227,6 +240,15 @@ async def upsert_draft(
             detail="Draft evidence stream is too large to sync in one request.",
         )
 
+    try:
+        text_content = payload.validated_text_content()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    events = payload.event_dicts()
+
     await _ensure_student_can_link_course(
         db=db,
         student_id=str(current_user.id),
@@ -274,8 +296,8 @@ async def upsert_draft(
     draft.course_id = payload.course_id
     draft.title = _normalize_title(payload.title)
     
-    draft.text_content = encrypt_text(payload.text_content) or ""
-    draft.keystroke_array = encrypt_json(payload.keystroke_array) or []
+    draft.text_content = encrypt_text(text_content) or ""
+    draft.keystroke_array = encrypt_json(events) or []
     
     draft.active_duration_ms = int(payload.active_duration_ms or 0)
     draft.started_at = _ms_to_datetime(payload.started_at)
@@ -304,7 +326,7 @@ async def upsert_draft(
                 "local_draft_id": draft.local_draft_id,
                 "save_reason": draft.save_reason,
                 "lifecycle_status": draft.lifecycle_status,
-                "event_count": len(payload.keystroke_array or []),
+                "event_count": len(events),
                 "active_duration_ms": int(draft.active_duration_ms or 0),
             },
         )
@@ -314,8 +336,8 @@ async def upsert_draft(
     await db.refresh(draft)
 
     payload_response = _draft_payload(draft)
-    payload_response["text_content"] = payload.text_content
-    payload_response["keystroke_array"] = payload.keystroke_array
+    payload_response["text_content"] = text_content
+    payload_response["keystroke_array"] = events
 
     return {
         "status": "success",

@@ -16,7 +16,7 @@ CertificatePublicStatus = Literal[
 
 
 class StrictResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", protected_namespaces=())
 
 
 class CertificateAuditEvent(StrictResponseModel):
@@ -312,7 +312,7 @@ class HealthResponse(StrictResponseModel):
 
 
 class ModelStatusResponse(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", protected_namespaces=())
     status: str | None = None
     model_available: bool = False
     model_name: str | None = None

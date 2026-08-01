@@ -19,6 +19,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 import numpy as np
 import pandas as pd
 
+from app.services.canonical_evidence import is_writing_keydown_event
+
 from app.ml.feature_schema import (
     ALL_FEATURE_COLUMNS,
     MAX_VALID_TIMING_MS,
@@ -335,7 +337,7 @@ def extract_typetrace_event_features(
 
     clean_events = [event for event in events if isinstance(event, dict)]
     keydown_events = [
-        event for event in clean_events if _event_type(event) == "keydown"
+        event for event in clean_events if is_writing_keydown_event(event)
     ]
 
     timing_frame = pd.DataFrame(

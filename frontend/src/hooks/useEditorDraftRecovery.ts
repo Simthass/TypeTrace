@@ -4,6 +4,7 @@ import {
   createEditorDraftId,
   deleteEditorDraft,
   deleteEditorDraftByKey,
+  deleteEditorDraftLocal,
   listEditorDrafts,
   readEditorDraft,
   saveEditorDraft,
@@ -36,6 +37,16 @@ export function useEditorDraftRecovery({
   const [hasCheckedDraft, setHasCheckedDraft] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const latestSaveRef = useRef<Promise<EditorDraftSnapshot> | null>(null);
+  const saveQueueRef = useRef<Promise<void> | null>(null);
+  const pendingSaveCountRef = useRef(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!requestedDraftId) return;
@@ -82,26 +93,45 @@ export function useEditorDraftRecovery({
       snapshot: EditorDraftInput,
       options?: { saveReason?: DraftSaveReason },
     ) => {
+      pendingSaveCountRef.current += 1;
       setIsSavingDraft(true);
 
-      const savePromise = saveEditorDraft({
-        userId: safeUser,
-        draftId: activeDraftId,
-        snapshot,
-        saveReason: options?.saveReason ?? "autosave",
-        existingCreatedAt: activeCreatedAt,
-      }).finally(() => {
-        if (latestSaveRef.current === savePromise) {
-          setIsSavingDraft(false);
-          latestSaveRef.current = null;
-        }
-      });
+      const previousSave = saveQueueRef.current ?? Promise.resolve();
+      const savePromise = previousSave
+        .catch(() => undefined)
+        .then(() =>
+          saveEditorDraft({
+            userId: safeUser,
+            draftId: activeDraftId,
+            snapshot,
+            saveReason: options?.saveReason ?? "autosave",
+            existingCreatedAt: activeCreatedAt,
+          }),
+        )
+        .finally(() => {
+          pendingSaveCountRef.current = Math.max(
+            0,
+            pendingSaveCountRef.current - 1,
+          );
+          if (latestSaveRef.current === savePromise) {
+            latestSaveRef.current = null;
+          }
+          if (pendingSaveCountRef.current === 0 && mountedRef.current) {
+            setIsSavingDraft(false);
+          }
+        });
 
+      saveQueueRef.current = savePromise.then(
+        () => undefined,
+        () => undefined,
+      );
       latestSaveRef.current = savePromise;
       const saved = await savePromise;
-      setRecoveredDraft(saved);
-      setActiveDraftId(saved.draftId);
-      setActiveCreatedAt(saved.createdAt);
+      if (mountedRef.current) {
+        setRecoveredDraft(saved);
+        setActiveDraftId(saved.draftId);
+        setActiveCreatedAt(saved.createdAt);
+      }
       return saved;
     },
     [activeCreatedAt, activeDraftId, safeUser],
@@ -111,6 +141,23 @@ export function useEditorDraftRecovery({
     async (draftIdToClear?: string | null) => {
       const targetDraftId = draftIdToClear || activeDraftId;
       await deleteEditorDraft(safeUser, targetDraftId);
+      setRecoveredDraft((current) =>
+        current?.draftId === targetDraftId ? null : current,
+      );
+      if (targetDraftId === activeDraftId) {
+        const nextDraftId = createEditorDraftId();
+        setActiveDraftId(nextDraftId);
+        setActiveCreatedAt(null);
+      }
+    },
+    [activeDraftId, safeUser],
+  );
+
+
+  const clearLocalDraft = useCallback(
+    async (draftIdToClear?: string | null) => {
+      const targetDraftId = draftIdToClear || activeDraftId;
+      await deleteEditorDraftLocal(safeUser, targetDraftId);
       setRecoveredDraft((current) =>
         current?.draftId === targetDraftId ? null : current,
       );
@@ -157,6 +204,7 @@ export function useEditorDraftRecovery({
     status,
     saveDraft,
     clearDraft,
+    clearLocalDraft,
     deleteDraftByKey,
     dismissRecoveredDraft,
     refreshDrafts,

@@ -92,6 +92,12 @@ export interface ReplayEvent {
    * before this field existed.
    */
   inserted_text?: string | null;
+  ctrlKey?: boolean;
+  altKey?: boolean;
+  metaKey?: boolean;
+  shiftKey?: boolean;
+  repeat?: boolean;
+  isComposing?: boolean;
   is_paste: boolean;
   is_deletion: boolean;
   is_enter: boolean;

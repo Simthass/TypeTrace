@@ -36,6 +36,7 @@ from app.schemas.evidence import (
 from app.services.audit_log import create_audit_log
 from app.services.canonical_evidence import compute_canonical_evidence, normalize_title
 from app.services.certificate_signing import sign_certificate_for_session
+from app.services.evidence_replay import EvidenceReplayMismatch, validate_evidence_text
 from app.services.notifications import dispatch_notification
 
 
@@ -344,6 +345,7 @@ async def analyze_session(
     user_id = str(current_user.id)
     events = payload.event_dicts()
     title = normalize_title(payload.title)
+
     canonical = compute_canonical_evidence(
         title=title,
         text_content=payload.text_content,
@@ -360,8 +362,24 @@ async def analyze_session(
         expected_evidence_hash=canonical.evidence_hash,
     )
     if existing is not None:
+        # Preserve the original idempotency contract across deployments. A
+        # historical session may predate strict replay validation, but an exact
+        # retry must still return the committed result rather than create a new
+        # failure mode after an upgrade.
         response.status_code = status.HTTP_200_OK
         return existing
+
+    try:
+        validate_evidence_text(
+            events=events,
+            expected_text=payload.text_content,
+        )
+    except EvidenceReplayMismatch as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
     _validate_event_stream(
         event_counts=canonical.event_counts,
         text_content=payload.text_content,

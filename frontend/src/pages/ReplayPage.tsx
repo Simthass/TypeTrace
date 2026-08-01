@@ -5,12 +5,17 @@ import { api, getApiErrorMessage } from "../lib/api";
 import { ROUTES } from "../constants/routes";
 import { colors, brand } from "../styles/colors";
 import type {
-  ReplayEvent,
   ReplayResponse,
   ReplaySegment,
   ReplayTimelineMarker,
 } from "../types/replay";
 import { API_ROUTES } from "../constants/apiRoutes";
+import {
+  cellsToSegments,
+  countReconstructedCharacters,
+  lineAndColumnAt,
+  reconstructState,
+} from "../lib/replayDocument";
 
 function PlayIcon() {
   return (
@@ -197,213 +202,6 @@ function markerLabelForType(type: ReplayTimelineMarker["type"]) {
 function metricValue(value: number | string | null | undefined) {
   if (value === null || value === undefined || value === "") return "-";
   return value;
-}
-
-/**
- * Applies a single replay event, mutating `cells` in place, and returns the
- * cursor position immediately after the event (or `null` for events that
- * don't move the cursor, e.g. keyup).
- *
- * This replaces the original "append to end of buffer / remove exactly one
- * character" model, which had no concept of where in the document an edit
- * actually happened. Every event is applied at its recorded
- * `cursorPosition`, using the real deleted/inserted character counts and
- * literal replacement text where available, so edits that go back to an
- * earlier part of the document (fixing a typo, replacing a selection) land
- * in the right place instead of corrupting whatever the buffer's end
- * happened to be at that moment.
- */
-function insertCharacters(
-  cells: ReplaySegment[],
-  at: number,
-  text: string,
-  cellType: "typed" | "paste" = "typed",
-): number {
-  if (!text) return at;
-  const chars = Array.from(text).map((char) => ({
-    text: char,
-    type: cellType,
-  }));
-  cells.splice(at, 0, ...chars);
-  return at + chars.length;
-}
-
-function fallbackInsertText(event: ReplayEvent): string {
-  if (event.type !== "keydown") return "";
-  if (event.key === "Enter") return "\n";
-  if (event.key === "Tab") return "    ";
-  if (event.key && event.key.length === 1) return event.key;
-  return "";
-}
-
-function applyReplayEvent(
-  cells: ReplaySegment[],
-  event: ReplayEvent,
-): number | null {
-  // keyup is only the release half of a key action and never mutates the
-  // document or moves the cursor by itself; the matching keydown already
-  // carries the effect.
-  if (event.type === "keyup") return null;
-
-  const pos = Math.max(
-    0,
-    Math.min(cells.length, event.cursorPosition ?? cells.length),
-  );
-
-  // A pure cursor-movement event (click elsewhere, arrow-key navigation
-  // with no text change) — doesn't touch the document, only where the
-  // caret is, which is exactly what makes "moved back to paragraph one to
-  // fix something" visible in replay.
-  if (event.type === "cursor") {
-    return pos;
-  }
-
-  if (event.is_paste) {
-    // Show the real pasted text when it was captured, instead of only a
-    // placeholder — a reviewer needs to see what was actually pasted.
-    const text = event.inserted_text;
-    if (text && text.length > 0) {
-      return insertCharacters(cells, pos, text, "paste");
-    }
-
-    // Legacy sessions recorded before paste text was captured only have a
-    // length to fall back on.
-    const label =
-      event.pastedLength > 0
-        ? `[pasted ${event.pastedLength} characters — original text not captured]`
-        : "[pasted content]";
-    cells.splice(pos, 0, { text: label, type: "paste" });
-    return pos + 1;
-  }
-
-  const deletedCount = Math.max(
-    0,
-    event.deletedCharacters ||
-      event.chars_deleted ||
-      (event.is_deletion ? 1 : 0),
-  );
-
-  if (deletedCount > 0) {
-    // Direction depends on how the deletion happened, not just the key:
-    // - An explicit selection (selection_length_before > 0) is always
-    //   removed starting AT the cursor (forward), regardless of which key
-    //   triggered it.
-    // - Standalone revision events (spellcheck/autocorrect/IME/anything
-    //   that isn't a real keydown) record cursorPosition as the edit's
-    //   left edge already, so they are always "forward" from there too.
-    // - A plain Backspace/word-back/line-back with no selection removes
-    //   backward, ending at the cursor. Delete/word-forward/line-forward
-    //   always removes forward.
-    const isForwardStyle =
-      event.type !== "keydown" ||
-      event.key === "Delete" ||
-      (event.selection_length_before || 0) > 0;
-
-    const deleteStart = isForwardStyle ? pos : Math.max(0, pos - deletedCount);
-    const actualDeleteCount = Math.min(
-      deletedCount,
-      Math.max(0, cells.length - deleteStart),
-    );
-
-    if (actualDeleteCount > 0) {
-      cells.splice(deleteStart, actualDeleteCount);
-    }
-
-    // The same user action can also insert new content in one step, e.g.
-    // typing a replacement character over a selection, or a spellcheck
-    // correction that both removes and replaces text at once.
-    const insertText = event.inserted_text || fallbackInsertText(event);
-    return insertCharacters(cells, deleteStart, insertText);
-  }
-
-  // Pure insertion — either a normal keydown character, or a standalone
-  // revision event with no matching keydown at all (spellcheck/autocorrect/
-  // IME/mobile predictive text that added characters without deleting
-  // anything, e.g. "cmputer" -> "computer" is a single inserted "o" with
-  // zero deletions).
-  const insertText = event.inserted_text || fallbackInsertText(event);
-  if (insertText) return insertCharacters(cells, pos, insertText);
-
-  return pos;
-}
-
-interface ReconstructionState {
-  cells: ReplaySegment[];
-  cursor: number;
-}
-
-function reconstructState(
-  events: ReplayEvent[],
-  currentTimeMs: number,
-): ReconstructionState {
-  const activeEvents = events.filter(
-    (event) => event.relative_time_ms <= currentTimeMs,
-  );
-
-  const cells: ReplaySegment[] = [];
-  let cursor = 0;
-
-  activeEvents.forEach((event) => {
-    const next = applyReplayEvent(cells, event);
-    if (next !== null) cursor = next;
-  });
-
-  return { cells, cursor };
-}
-
-function cellsToSegments(cells: ReplaySegment[]): ReplaySegment[] {
-  const segments: ReplaySegment[] = [];
-
-  cells.forEach((cell) => {
-    const last = segments[segments.length - 1];
-
-    if (last && last.type === cell.type) {
-      segments[segments.length - 1] = {
-        ...last,
-        text: last.text + cell.text,
-      };
-    } else {
-      segments.push({ ...cell });
-    }
-  });
-
-  return segments;
-}
-
-/**
- * Total reconstructed character count. Excludes legacy placeholder labels
- * (a single cell holding a bracketed string like "[pasted 12 characters]"),
- * which aren't real characters; real pasted content (captured as one cell
- * per character) counts normally, same as typed text.
- */
-function countReconstructedCharacters(cells: ReplaySegment[]): number {
-  return cells.reduce((total, cell) => {
-    if (cell.type === "paste" && cell.text.length > 1) return total;
-    return total + cell.text.length;
-  }, 0);
-}
-
-function lineAndColumnAt(cells: ReplaySegment[], cursor: number) {
-  let line = 1;
-  let column = 1;
-  let index = 0;
-
-  for (const cell of cells) {
-    if (index >= cursor) break;
-
-    for (const char of cell.text) {
-      if (index >= cursor) break;
-      if (char === "\n") {
-        line += 1;
-        column = 1;
-      } else {
-        column += 1;
-      }
-      index += 1;
-    }
-  }
-
-  return { line, column };
 }
 
 function MetricCard({

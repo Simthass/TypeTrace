@@ -31,8 +31,10 @@ describe("edge-case utilities", () => {
   });
 
   it("applies password, title, and percentage boundaries", () => {
-    expect(isStrongEnoughPassword("12345678")).toBe(true);
-    expect(isStrongEnoughPassword("1234567")).toBe(false);
+    expect(isStrongEnoughPassword("abc12345")).toBe(true);
+    expect(isStrongEnoughPassword("12345678")).toBe(false);
+    expect(isStrongEnoughPassword("abcdefgh")).toBe(false);
+    expect(isStrongEnoughPassword("abc1234")).toBe(false);
     expect(truncateTitle("   ")).toBe("Untitled Document");
     expect(clampPercentage(-5)).toBe(0);
     expect(clampPercentage(105)).toBe(100);

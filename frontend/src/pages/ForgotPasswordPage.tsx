@@ -70,9 +70,7 @@ export default function ForgotPasswordPage() {
   );
   const recoveryAttemptedFor = useRef<string | null>(null);
 
-  const [step, setStep] = useState<Step>(
-    session && session.expiresAt > Date.now() ? "verify" : "request",
-  );
+  const [step, setStep] = useState<Step>(session ? "verify" : "request");
   const [email, setEmail] = useState(session?.email ?? "");
   const [otp, setOtp] = useState("");
   const [resetToken, setResetToken] = useState("");

@@ -10,6 +10,11 @@ import type {
   KeystrokeEvent,
   SessionStats,
 } from "../types/editor";
+import {
+  cloneKeystrokeEvents,
+  countWritingKeydowns,
+  isWritingKeydownEvent,
+} from "../lib/captureEvents";
 
 interface UseKeystrokeCaptureOptions {
   text: string;
@@ -495,11 +500,13 @@ function getDeletedCharacters(event: KeystrokeEvent): number {
   // counted once on keydown and once again on keyup.
   if (isKeyUpEvent(event)) return 0;
 
-  const explicit = safeNumber(event.chars_deleted ?? event.deletedCharacters);
-  if (explicit !== null && explicit > 0) return Math.round(explicit);
+  const rawExplicit = event.chars_deleted ?? event.deletedCharacters;
+  if (rawExplicit !== undefined && rawExplicit !== null) {
+    const explicit = safeNumber(rawExplicit);
+    return explicit === null ? 0 : Math.max(0, Math.round(explicit));
+  }
 
-  // Legacy fallback: old raw events did not have chars_deleted, so count one
-  // removed character only for the keydown event itself.
+  // Legacy fallback applies only when old events omitted deletion counts.
   if (isDeleteKeyDownEvent(event)) return 1;
 
   return 0;
@@ -508,9 +515,13 @@ function getDeletedCharacters(event: KeystrokeEvent): number {
 function isDeletionEvidence(event: KeystrokeEvent): boolean {
   if (isKeyUpEvent(event)) return false;
 
+  const hasExplicitDeletionCount =
+    event.chars_deleted !== undefined ||
+    event.deletedCharacters !== undefined;
+
   return (
     getDeletedCharacters(event) > 0 ||
-    isDeleteKeyDownEvent(event) ||
+    (isDeleteKeyDownEvent(event) && !hasExplicitDeletionCount) ||
     event.key === "__CUT_EVENT__" ||
     event.key === "__TEXT_REVISION__" ||
     Boolean(event.deletion_method && event.deletion_method !== "unknown")
@@ -796,6 +807,9 @@ export function useKeystrokeCapture({
         snapshot.end,
       );
       const isDeletionKey = event.key === "Backspace" || event.key === "Delete";
+      const hasPredictedDeletion =
+        deletionIntent.predictedDeletedCharacters > 0 ||
+        snapshot.selectionLength > 0;
 
       // FIX (replace-over-selection correlation bug): typing a printable
       // character while text is selected replaces that selection in one
@@ -816,7 +830,7 @@ export function useKeystrokeCapture({
         event.key.length === 1 || event.key === "Enter" || event.key === "Tab";
       const hasActiveSelection =
         snapshot.selectionLength > 0 && isMutatingKeyPress;
-      const willActuallyDelete = isDeletionKey || hasActiveSelection;
+      const willActuallyDelete = hasPredictedDeletion || hasActiveSelection;
 
       // FIX (severe capture gaps on mobile/virtual-keyboard/IME typing):
       // many software keyboards, predictive-text engines, and IME
@@ -844,7 +858,10 @@ export function useKeystrokeCapture({
         !event.altKey &&
         event.key.length === 1 &&
         !isDeletionKey;
-      const capturesRevision = !isKnownNonMutatingKey && !isShortcutCombo;
+      const capturesRevision =
+        !isKnownNonMutatingKey &&
+        !isShortcutCombo &&
+        (!isDeletionKey || hasPredictedDeletion);
       const revisionId = capturesRevision
         ? createRevisionId(wallNow)
         : undefined;
@@ -859,8 +876,31 @@ export function useKeystrokeCapture({
         up_time: null,
         dwell_time: null,
         flight_time: flightTime,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        repeat: event.repeat,
+        isComposing: event.nativeEvent.isComposing,
         documentLength: snapshot.documentLength,
         cursorPosition: snapshot.start,
+        ...(isDeletionKey && !hasPredictedDeletion
+          ? {
+              documentLengthBefore: snapshot.documentLength,
+              documentLengthAfter: snapshot.documentLength,
+              selectionStartBefore: snapshot.start,
+              selectionEndBefore: snapshot.end,
+              selection_length_before: snapshot.selectionLength,
+              deltaLength: 0,
+              insertedCharacters: 0,
+              insertedText: "",
+              chars_deleted: 0,
+              deletedCharacters: 0,
+              deletion_method: "unknown" as const,
+              isBulkDeletion: false,
+              bulk_deletion: false,
+            }
+          : {}),
         ...(revisionId
           ? {
               revision_id: revisionId,
@@ -1043,6 +1083,12 @@ export function useKeystrokeCapture({
         up_time: Math.round(perfNow),
         dwell_time: dwellTime,
         flight_time: null,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        repeat: event.repeat,
+        isComposing: event.nativeEvent.isComposing,
         documentLength: textRef.current.length,
         cursorPosition: getCursorPosition(event.currentTarget),
       });
@@ -1352,6 +1398,35 @@ export function useKeystrokeCapture({
     ],
   );
 
+  const rejectPendingInput = useCallback(() => {
+    const intent = pendingIntentRef.current;
+    if (!intent) return;
+
+    if (typeof intent.eventIndex === "number" && intent.eventIndex >= 0) {
+      patchEventWithRevision(intent.eventIndex, {
+        key: "__BLOCKED_INPUT__",
+        code: "BlockedInput",
+        inputType: "historyBlockedInput",
+        documentLengthBefore: intent.documentLengthBefore,
+        documentLengthAfter: intent.documentLengthBefore,
+        cursorPosition: intent.selectionStartBefore,
+        selectionStartBefore: intent.selectionStartBefore,
+        selectionEndBefore: intent.selectionEndBefore,
+        selection_length_before: intent.selectionLengthBefore,
+        deltaLength: 0,
+        insertedCharacters: 0,
+        insertedText: "",
+        deletedCharacters: 0,
+        chars_deleted: 0,
+        deletion_method: "unknown",
+        isBulkDeletion: false,
+        bulk_deletion: false,
+      });
+    }
+
+    pendingIntentRef.current = null;
+  }, [patchEventWithRevision]);
+
   const resetCapture = useCallback(() => {
     logRef.current = [];
     activeKeysRef.current = {};
@@ -1422,7 +1497,7 @@ export function useKeystrokeCapture({
       }
 
       return {
-        events: logRef.current,
+        events: cloneKeystrokeEvents(logRef.current),
         startedAt,
         lastActivityAt: effectiveLastActivityAt,
         lastKeyDownTimestamp: options?.pause
@@ -1437,7 +1512,7 @@ export function useKeystrokeCapture({
 
   const getStats = useCallback((): SessionStats => {
     const keydownEvents = logRef.current.filter(
-      (event) => event.type === "keydown",
+      (event) => isWritingKeydownEvent(event),
     );
     const flightTimes = keydownEvents
       .map((event) => sanitizeFlightTime(event.flight_time))
@@ -1447,6 +1522,7 @@ export function useKeystrokeCapture({
     );
 
     const revisionMetrics = computeRevisionMetrics(logRef.current);
+    const writingKeydowns = countWritingKeydowns(logRef.current);
 
     const pauses = flightTimes.filter((value) => value > 1000).length;
 
@@ -1474,7 +1550,7 @@ export function useKeystrokeCapture({
 
     return {
       wpm,
-      keystrokes: keydownEvents.length,
+      keystrokes: writingKeydowns,
       deletions: revisionMetrics.deleteActions,
       deletedCharacters: revisionMetrics.deletedCharacters,
       bulkDeletionEvents: revisionMetrics.bulkDeletionEvents,
@@ -1530,6 +1606,7 @@ export function useKeystrokeCapture({
 
       lastCursorPositionRef.current = start;
       lastCursorEventAtRef.current = wallNow;
+      registerActivity(wallNow);
 
       logRef.current.push({
         key: "__CURSOR_MOVE__",
@@ -1548,7 +1625,7 @@ export function useKeystrokeCapture({
         selection_length_before: Math.max(0, end - start),
       });
     },
-    [],
+    [registerActivity],
   );
 
   return {
@@ -1563,6 +1640,7 @@ export function useKeystrokeCapture({
     handleBeforeInput,
     handleSelectionChange,
     recordTextChange,
+    rejectPendingInput,
     getStats,
     resetCapture,
     hydrateCapture,

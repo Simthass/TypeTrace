@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.services.text_units import utf16_length
+
 
 MAX_ANALYSIS_TEXT_CHARACTERS = 30_000
 MAX_ANALYSIS_EVENT_COUNT = 120_000
@@ -95,6 +97,12 @@ class KeystrokeEvent(BaseModel):
     deletion_method: Optional[DeletionMethod] = None
     isBulkDeletion: Optional[bool] = None
     bulk_deletion: Optional[bool] = None
+    ctrlKey: Optional[bool] = None
+    altKey: Optional[bool] = None
+    metaKey: Optional[bool] = None
+    shiftKey: Optional[bool] = None
+    repeat: Optional[bool] = None
+    isComposing: Optional[bool] = None
     idleBreakMs: Optional[int] = Field(default=None, ge=0, le=MAX_TIMESTAMP_SPAN_MS)
     idle_break_ms: Optional[int] = Field(default=None, ge=0, le=MAX_TIMESTAMP_SPAN_MS)
 
@@ -110,8 +118,27 @@ class KeystrokeEvent(BaseModel):
             allowed = self.type in {"paste", "input", "keydown"}
             if not allowed:
                 raise ValueError("insertedText is not valid for this event type.")
-            if self.insertedCharacters is not None and len(self.insertedText) != self.insertedCharacters:
-                raise ValueError("insertedCharacters must match insertedText length.")
+            inserted_units = utf16_length(self.insertedText)
+            if (
+                self.insertedCharacters is not None
+                and inserted_units != self.insertedCharacters
+            ):
+                raise ValueError(
+                    "insertedCharacters must match insertedText UTF-16 length."
+                )
+
+        if self.type == "paste":
+            if self.insertedText is None:
+                raise ValueError("Paste events must include the captured pasted text.")
+            inserted_units = utf16_length(self.insertedText)
+            if self.pastedLength != inserted_units:
+                raise ValueError(
+                    "pastedLength must match the pasted text UTF-16 length."
+                )
+            if self.insertedCharacters != inserted_units:
+                raise ValueError(
+                    "insertedCharacters must match the pasted text UTF-16 length."
+                )
 
         return self
 
@@ -139,6 +166,15 @@ class KeystrokeSessionAnalyzeRequest(BaseModel):
             return None
         stripped = value.strip()
         return stripped or None
+
+    @field_validator("text_content")
+    @classmethod
+    def validate_text_utf16_length(cls, value: str) -> str:
+        if utf16_length(value) > MAX_ANALYSIS_TEXT_CHARACTERS:
+            raise ValueError(
+                f"text_content may not exceed {MAX_ANALYSIS_TEXT_CHARACTERS} UTF-16 code units."
+            )
+        return value
 
     @field_validator("client_metadata")
     @classmethod
@@ -168,10 +204,18 @@ class KeystrokeSessionAnalyzeRequest(BaseModel):
         if timestamps and max(timestamps) - min(timestamps) > MAX_TIMESTAMP_SPAN_MS:
             raise ValueError("Keystroke timestamp range exceeds the permitted session span.")
 
+        previous_timestamp: float | None = None
+        for timestamp in timestamps:
+            if previous_timestamp is not None and timestamp < previous_timestamp - 1_000:
+                raise ValueError(
+                    "Keystroke timestamps must preserve capture order."
+                )
+            previous_timestamp = timestamp
+
         total_pasted = sum(
             max(
                 event.pastedLength or 0,
-                len(event.insertedText or "") if event.type == "paste" else 0,
+                utf16_length(event.insertedText or "") if event.type == "paste" else 0,
             )
             for event in events
             if event.type == "paste"
@@ -193,6 +237,8 @@ class KeystrokeSessionAnalyzeRequest(BaseModel):
 
 
 class AnalysisResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", protected_namespaces=())
+
     classification: str
     confidence_score: float
     kill_switch_triggered: bool

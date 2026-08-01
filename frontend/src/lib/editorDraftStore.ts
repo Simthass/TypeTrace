@@ -697,16 +697,22 @@ async function syncDraftToServer(
 }
 
 async function deleteServerDraftById(draftId: string | null): Promise<void> {
-  if (!draftId || !canAttemptServerSync()) return;
+  if (!draftId) return;
+
+  if (!canAttemptServerSync()) {
+    throw new Error(
+      "This draft is synchronized with the server and cannot be deleted while offline.",
+    );
+  }
 
   try {
     await api.delete(API_ROUTES.drafts.detail(draftId), {
       skipGlobalToast: true,
       skipAuthRedirect: true,
     });
-  } catch {
-    // Local deletion still wins for the current browser. Backend cleanup retries
-    // when the draft is next synced/listed.
+  } catch (error) {
+    if (getApiStatusCode(error) === 404) return;
+    throw error;
   }
 }
 
@@ -874,15 +880,45 @@ export async function saveEditorDraft(params: {
   return snapshot;
 }
 
-export async function deleteEditorDraftByKey(draftKey: string): Promise<void> {
-  const draftId = readDraftIdFromKey(draftKey);
+async function deleteLocalDraftArtifacts(draftKey: string): Promise<void> {
   deleteLocalMirror(draftKey);
   try {
     await deleteIndexedDbDraft(draftKey);
   } catch {
-    // Local mirror is already removed; ignore IndexedDB cleanup failures.
+    // localStorage was already cleared. IndexedDB cleanup can be retried by the
+    // browser's normal expiry sweep without changing server state.
   }
-  await deleteServerDraftById(draftId);
+}
+
+export async function deleteEditorDraftLocalByKey(
+  draftKey: string,
+): Promise<void> {
+  await deleteLocalDraftArtifacts(draftKey);
+}
+
+export async function deleteEditorDraftByKey(draftKey: string): Promise<void> {
+  const local = readLocalDraft(draftKey);
+  const serverDraftId = local?.backendDraftId ?? readDraftIdFromKey(draftKey);
+
+  // Delete the authoritative server record first. A failed API request must not
+  // silently erase only the local mirror and make the draft reappear later.
+  await deleteServerDraftById(serverDraftId);
+  await deleteLocalDraftArtifacts(draftKey);
+}
+
+export async function deleteEditorDraftLocal(
+  userId?: string | null,
+  draftId?: string | null,
+): Promise<void> {
+  const safeUser = safeDraftUserId(userId);
+
+  if (draftId) {
+    await deleteEditorDraftLocalByKey(createEditorDraftKey(safeUser, draftId));
+    return;
+  }
+
+  const latest = await readEditorDraft(safeUser);
+  if (latest) await deleteEditorDraftLocalByKey(latest.draftKey);
 }
 
 export async function deleteEditorDraft(

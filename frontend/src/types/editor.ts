@@ -58,6 +58,14 @@ export interface KeystrokeEvent {
   isBulkDeletion?: boolean;
   bulk_deletion?: boolean;
 
+  /** Modifier/composition context used to distinguish text input from shortcuts. */
+  ctrlKey?: boolean;
+  altKey?: boolean;
+  metaKey?: boolean;
+  shiftKey?: boolean;
+  repeat?: boolean;
+  isComposing?: boolean;
+
   /** Long inactive gap excluded from active writing duration. */
   idleBreakMs?: number;
   idle_break_ms?: number;

@@ -98,6 +98,16 @@ function countPasteEvents(
   ).length;
 }
 
+function keyboardInsertionText(
+  event: React.KeyboardEvent<HTMLTextAreaElement>,
+): string {
+  const shortcut = (event.ctrlKey || event.metaKey) && !event.altKey;
+  if (shortcut) return "";
+  if (event.key === "Enter") return "\n";
+  if (event.key === "Tab") return "    ";
+  return event.key.length === 1 ? event.key : "";
+}
+
 function getResultStyle(classification: string) {
   const n = classification.toUpperCase();
   if (n === "HUMAN")
@@ -235,7 +245,7 @@ function SaveIndicator({
   state,
   offlineSafe,
 }: {
-  state: "saved" | "saving" | "unsaved";
+  state: "saved" | "saving" | "local" | "unsaved";
   offlineSafe?: boolean;
 }) {
   const cfg = {
@@ -249,14 +259,22 @@ function SaveIndicator({
       label: "Saving",
       text: colors.text.muted,
     },
-    unsaved: {
+    local: {
       dot: colors.amber,
+      label: "Saved locally",
+      text: colors.text.muted,
+    },
+    unsaved: {
+      dot: colors.red,
       label: "Unsaved",
       text: colors.text.muted,
     },
   }[state];
 
-  const label = offlineSafe && state === "saved" ? "Saved locally" : cfg.label;
+  const label =
+    (offlineSafe && state === "saved") || state === "local"
+      ? "Saved locally"
+      : cfg.label;
 
   return (
     <div className="flex items-center gap-[6px]">
@@ -912,8 +930,9 @@ function AnalysisResultModal({
                   }}
                 >
                   <strong>Degraded analysis:</strong> the trained model was not
-                  available. TypeTrace used documented fallback rules. Treat this
-                  result as supplementary evidence requiring teacher review.
+                  available. TypeTrace used documented fallback rules. Treat
+                  this result as supplementary evidence requiring teacher
+                  review.
                 </div>
               )}
 
@@ -1181,9 +1200,9 @@ export default function EditorPage() {
       : window.localStorage.getItem(EDITOR_CONSENT_STORAGE_KEY) !== "accepted",
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved">(
-    "saved",
-  );
+  const [saveState, setSaveState] = useState<
+    "saved" | "saving" | "local" | "unsaved"
+  >("saved");
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
@@ -1196,7 +1215,7 @@ export default function EditorPage() {
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const suspendingDraftRef = useRef(false);
-  const submissionIdRef = useRef<string>(crypto.randomUUID());
+  const draftSaveErrorNotifiedRef = useRef(false);
 
   const {
     liveStats,
@@ -1204,8 +1223,9 @@ export default function EditorPage() {
     handleKeyUp: baseHandleKeyUp,
     handlePaste: baseHandlePaste,
     handleCut: baseHandleCut,
-    handleBeforeInput,
+    handleBeforeInput: baseHandleBeforeInput,
     recordTextChange,
+    rejectPendingInput,
     handleSelectionChange,
     getStats,
     resetCapture,
@@ -1215,12 +1235,12 @@ export default function EditorPage() {
 
   const userDraftId = String(user?.id ?? user?.email ?? "anonymous");
   const {
-    activeDraftId,
     recoveredDraft,
     hasCheckedDraft,
     isSavingDraft,
     saveDraft,
     clearDraft,
+    clearLocalDraft,
     dismissRecoveredDraft,
   } = useEditorDraftRecovery({ userId: userDraftId, draftId: routeDraftId });
 
@@ -1262,39 +1282,24 @@ export default function EditorPage() {
   const initials =
     `${user?.first_name?.[0] ?? "S"}${user?.last_name?.[0] ?? ""}`.toUpperCase();
 
-  // Wrap keydown to also set isTyping and handle tab
+  // Wrap keydown to enforce document bounds before the capture engine logs
+  // a mutation. A blocked browser edit must never remain as orphan evidence.
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Tab") {
-      baseHandleKeyDown(e);
-      setIsTyping(true);
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 1200);
+    const target = e.currentTarget;
+    const insertedText = keyboardInsertionText(e);
+    const selectionLength = Math.max(
+      0,
+      target.selectionEnd - target.selectionStart,
+    );
+    const projectedLength = text.length - selectionLength + insertedText.length;
+
+    if (insertedText && projectedLength > MAX_EDITOR_TEXT_LENGTH) {
       e.preventDefault();
-
-      const target = e.currentTarget;
-      const start = target.selectionStart;
-      const end = target.selectionEnd;
-
-      const nextText = `${text.slice(0, start)}    ${text.slice(end)}`;
-
-      if (nextText.length > MAX_EDITOR_TEXT_LENGTH) {
-        showToast({
-          type: "warning",
-          title: "Document limit reached",
-          message: "Cannot insert more characters into this session.",
-        });
-        return;
-      }
-
-      recordTextChange(nextText, { inputType: "insertText" });
-      setText(nextText);
-      syncCaptureTelemetry();
-
-      window.requestAnimationFrame(() => {
-        target.selectionStart = start + 4;
-        target.selectionEnd = start + 4;
+      showToast({
+        type: "warning",
+        title: "Document limit reached",
+        message: "Cannot insert more characters into this session.",
       });
-
       return;
     }
 
@@ -1303,6 +1308,50 @@ export default function EditorPage() {
     setIsTyping(true);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 1200);
+
+    if (e.key !== "Tab") return;
+
+    e.preventDefault();
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+    const nextText = `${text.slice(0, start)}    ${text.slice(end)}`;
+
+    recordTextChange(nextText, { inputType: "insertText" });
+    setText(nextText);
+    syncCaptureTelemetry();
+
+    window.requestAnimationFrame(() => {
+      target.selectionStart = start + 4;
+      target.selectionEnd = start + 4;
+    });
+  };
+
+  const handleBeforeInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
+    const native = e.nativeEvent as InputEvent;
+    const insertedText = typeof native.data === "string" ? native.data : "";
+    const inputType = native.inputType || "";
+    const target = e.currentTarget;
+    const selectionLength = Math.max(
+      0,
+      target.selectionEnd - target.selectionStart,
+    );
+
+    if (
+      inputType.startsWith("insert") &&
+      insertedText &&
+      text.length - selectionLength + insertedText.length >
+        MAX_EDITOR_TEXT_LENGTH
+    ) {
+      e.preventDefault();
+      showToast({
+        type: "warning",
+        title: "Document limit reached",
+        message: "This input would exceed the maximum document length.",
+      });
+      return;
+    }
+
+    baseHandleBeforeInput(e);
   };
 
   const handleKeyUp = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1315,9 +1364,17 @@ export default function EditorPage() {
     syncCaptureTelemetry();
   };
 
-  // Wrap paste handler with size check
+  // Reject invalid paste operations before the capture engine records them.
+  // This keeps the evidence event and the browser's actual text mutation aligned.
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const pastedText = e.clipboardData.getData("text");
+    const target = e.currentTarget;
+    const selectionLength = Math.max(
+      0,
+      target.selectionEnd - target.selectionStart,
+    );
+    const nextDocumentLength =
+      text.length - selectionLength + pastedText.length;
 
     if (pastedText.length > MAX_PASTE_LENGTH) {
       e.preventDefault();
@@ -1329,6 +1386,17 @@ export default function EditorPage() {
           "Very large paste events reduce evidence quality. Type or paste smaller sections.",
       });
 
+      return;
+    }
+
+    if (nextDocumentLength > MAX_EDITOR_TEXT_LENGTH) {
+      e.preventDefault();
+      showToast({
+        type: "warning",
+        title: "Document limit reached",
+        message:
+          "This paste would exceed the maximum document length and was not recorded.",
+      });
       return;
     }
 
@@ -1346,10 +1414,15 @@ export default function EditorPage() {
         if (!mounted) return;
 
         setEnrolledCourses(response.data?.courses ?? []);
-      } catch {
+      } catch (error) {
         if (!mounted) return;
 
         setEnrolledCourses([]);
+        showToast({
+          type: "warning",
+          title: "Courses unavailable",
+          message: getApiErrorMessage(error),
+        });
       }
     }
 
@@ -1358,7 +1431,7 @@ export default function EditorPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -1406,15 +1479,25 @@ export default function EditorPage() {
     const timer = window.setTimeout(() => {
       if (suspendingDraftRef.current) return;
       setSaveState("saving");
-      void saveDraft(buildDraftSnapshot(), { saveReason: "autosave" }).then(
-        () => {
-          setSaveState("saved");
-        },
-      );
+      void saveDraft(buildDraftSnapshot(), { saveReason: "autosave" })
+        .then((saved) => {
+          draftSaveErrorNotifiedRef.current = false;
+          setSaveState(saved.syncStatus === "SYNCED" ? "saved" : "local");
+        })
+        .catch((error) => {
+          setSaveState("unsaved");
+          if (draftSaveErrorNotifiedRef.current) return;
+          draftSaveErrorNotifiedRef.current = true;
+          showToast({
+            type: "error",
+            title: "Autosave failed",
+            message: getApiErrorMessage(error),
+          });
+        });
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [buildDraftSnapshot, hasRecoverableDraft, saveDraft]);
+  }, [buildDraftSnapshot, hasRecoverableDraft, saveDraft, showToast]);
 
   // Emergency save on tab hide/reload. The hook writes a localStorage mirror first,
   // then IndexedDB, so this protects against refresh/crash as much as the browser allows.
@@ -1425,6 +1508,10 @@ export default function EditorPage() {
       if (suspendingDraftRef.current) return;
       void saveDraft(buildDraftSnapshot({ pause: true }), {
         saveReason: "recovery",
+      }).catch((error) => {
+        // localStorage is written synchronously before the asynchronous save.
+        // Log the failure so page-hide work never becomes an unhandled promise.
+        console.error("TypeTrace emergency draft save failed:", error);
       });
     };
 
@@ -1552,16 +1639,25 @@ export default function EditorPage() {
     });
   };
 
-  const discardRecoveredDraft = () => {
-    void clearDraft(recoveredDraft?.draftId);
-    dismissRecoveredDraft();
-    setShowDraftRecoveryModal(false);
+  const discardRecoveredDraft = async () => {
+    try {
+      await clearDraft(recoveredDraft?.draftId);
+      dismissRecoveredDraft();
+      setShowDraftRecoveryModal(false);
 
-    showToast({
-      type: "info",
-      title: "Draft discarded",
-      message: "The local unfinished session was removed from this browser.",
-    });
+      showToast({
+        type: "info",
+        title: "Draft discarded",
+        message:
+          "The unfinished session was removed from this browser and server.",
+      });
+    } catch (error) {
+      showToast({
+        type: "error",
+        title: "Draft deletion failed",
+        message: getApiErrorMessage(error),
+      });
+    }
   };
 
   const saveCurrentSessionAsDraft = async () => {
@@ -1578,15 +1674,18 @@ export default function EditorPage() {
     suspendingDraftRef.current = true;
 
     try {
-      await saveDraft(buildDraftSnapshot({ pause: true }), {
+      const saved = await saveDraft(buildDraftSnapshot({ pause: true }), {
         saveReason: "manual",
       });
-      setSaveState("saved");
+      const synchronized = saved.syncStatus === "SYNCED";
+      setSaveState(synchronized ? "saved" : "local");
 
       showToast({
-        type: "success",
-        title: "Draft saved",
-        message: "Your writing session was paused and saved to Drafts.",
+        type: synchronized ? "success" : "warning",
+        title: synchronized ? "Draft saved" : "Draft saved locally",
+        message: synchronized
+          ? "Your writing session was paused and synchronized to Drafts."
+          : "The browser saved this draft locally, but server synchronization is still pending.",
       });
 
       navigate(ROUTES.DASHBOARD, { replace: true });
@@ -1640,7 +1739,7 @@ export default function EditorPage() {
   const confirmSubmit = async () => {
     if (isSubmitting) return;
 
-    const finalText = text.trim();
+    const finalText = text;
     const finalTitle = truncateTitle(title);
     const submitSnapshot = getCaptureSnapshot();
     const finalStats = getStats();
@@ -1696,11 +1795,41 @@ export default function EditorPage() {
     }
 
     setIsSubmitting(true);
+    suspendingDraftRef.current = true;
+    let analysisCompleted = false;
 
     try {
-      const submissionId = activeDraftId
-        ? `draft:${activeDraftId}`
-        : submissionIdRef.current;
+      const savedDraft = await saveDraft(
+        {
+          title,
+          text: finalText,
+          selectedCourseId,
+          keystrokeLog: evidence,
+          startedAt: submitSnapshot.startedAt,
+          lastActivityAt: submitSnapshot.lastActivityAt,
+          lastKeyDownTimestamp: submitSnapshot.lastKeyDownTimestamp,
+          activeDurationMs: submitSnapshot.activeDurationMs,
+          pausedAt: submitSnapshot.pausedAt,
+        },
+        { saveReason: "manual" },
+      );
+
+      if (savedDraft.syncStatus !== "SYNCED") {
+        setSaveState("local");
+        showToast({
+          type: "error",
+          title: "Draft synchronization required",
+          message:
+            savedDraft.syncStatus === "CONFLICT"
+              ? "The server has a newer draft version. Reload the draft and resolve the conflict before analysis."
+              : "The latest evidence could not be synchronized to the server. Restore connectivity and retry analysis.",
+        });
+        return;
+      }
+
+      setSaveState("saved");
+      const submittedDraftId = savedDraft.draftId;
+      const submissionId = `draft:${submittedDraftId}`;
       const response = await api.post(API_ROUTES.sessions.analyze, {
         submission_id: submissionId,
         title: finalTitle,
@@ -1709,10 +1838,10 @@ export default function EditorPage() {
         stats: finalStats,
         course_id: selectedCourseId,
         active_duration_ms: submitSnapshot.activeDurationMs,
-        draft_id: activeDraftId,
+        draft_id: submittedDraftId,
         client_metadata: {
           source: routeDraftId ? "draft_resume" : "editor",
-          localDraftId: activeDraftId,
+          localDraftId: submittedDraftId,
         },
       });
 
@@ -1728,6 +1857,7 @@ export default function EditorPage() {
         return;
       }
 
+      analysisCompleted = true;
       setAnalysisResult({
         classification: data.classification,
         confidence: data.confidence_score,
@@ -1758,7 +1888,13 @@ export default function EditorPage() {
       setShowCourseModal(false);
       setShowResultModal(true);
       setSaveState("saved");
-      void clearDraft(activeDraftId);
+      void clearLocalDraft(submittedDraftId).catch((error) => {
+        showToast({
+          type: "warning",
+          title: "Local cleanup incomplete",
+          message: getApiErrorMessage(error),
+        });
+      });
       setSearchParams({}, { replace: true });
 
       showToast({
@@ -1778,6 +1914,9 @@ export default function EditorPage() {
       });
     } finally {
       setIsSubmitting(false);
+      if (!analysisCompleted) {
+        suspendingDraftRef.current = false;
+      }
     }
   };
 
@@ -1791,12 +1930,10 @@ export default function EditorPage() {
     setSaveState("saved");
     resetCapture();
     setCaptureTelemetry({ eventCount: 0, pasteEventCount: 0 });
-    void clearDraft(activeDraftId);
     navigate(ROUTES.DASHBOARD, { replace: true });
   };
 
   const newSession = () => {
-    submissionIdRef.current = crypto.randomUUID();
     setTitle("");
     setText("");
     setSelectedCourseId(null);
@@ -1806,7 +1943,6 @@ export default function EditorPage() {
     setSaveState("saved");
     resetCapture();
     setCaptureTelemetry({ eventCount: 0, pasteEventCount: 0 });
-    void clearDraft(activeDraftId);
     setSearchParams({}, { replace: true });
 
     showToast({
@@ -2033,7 +2169,10 @@ export default function EditorPage() {
                     message: `TypeTrace supports up to ${MAX_EDITOR_TEXT_LENGTH.toLocaleString()} characters per session.`,
                   });
 
-                  recordTextChange(limitedValue);
+                  rejectPendingInput();
+                  recordTextChange(limitedValue, {
+                    inputType: "historyBlockedInput",
+                  });
                   setText(limitedValue);
                   syncCaptureTelemetry();
                   return;

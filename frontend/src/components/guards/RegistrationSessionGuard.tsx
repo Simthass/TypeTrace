@@ -3,11 +3,7 @@ import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { API_ROUTES } from "../../constants/apiRoutes";
 import { ROUTES } from "../../constants/routes";
-import {
-  api,
-  getApiErrorMessage,
-  getApiStatusCode,
-} from "../../lib/api";
+import { api, getApiErrorMessage, getApiStatusCode } from "../../lib/api";
 import type { UserRole } from "../../store/authStore";
 import { useRegistrationStore } from "../../store/registrationStore";
 import { useToast } from "../ui/ToastContext";
@@ -41,28 +37,54 @@ export default function RegistrationSessionGuard() {
   const { showToast } = useToast();
   const directAccessNotified = useRef(false);
   const recoveryAttemptedFor = useRef<string | null>(null);
-  const [isRecovering, setIsRecovering] = useState(false);
+  const [clockNow, setClockNow] = useState<number | null>(null);
 
   const recoveryRegistrationId = useMemo(
     () => readRecoveryRegistrationId(location.hash),
     [location.hash],
   );
 
-  const isValid = Boolean(
+  useEffect(() => {
+    let expiryTimer: number | null = null;
+    const initialTimer = window.setTimeout(() => {
+      const now = Date.now();
+      setClockNow(now);
+
+      if (session?.expiresAt && Number.isFinite(session.expiresAt)) {
+        const remaining = Math.max(0, session.expiresAt - now + 25);
+        expiryTimer = window.setTimeout(() => {
+          setClockNow(Date.now());
+        }, Math.min(remaining, 2_147_483_647));
+      }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(initialTimer);
+      if (expiryTimer !== null) window.clearTimeout(expiryTimer);
+    };
+  }, [session?.expiresAt]);
+
+  const hasValidShape = Boolean(
     session &&
       REGISTRATION_ID_PATTERN.test(session.registrationId) &&
       session.email.trim().length > 0 &&
       (session.role === "STUDENT" || session.role === "TEACHER") &&
-      Number.isFinite(session.expiresAt) &&
-      session.expiresAt > Date.now(),
+      Number.isFinite(session.expiresAt),
   );
+  const isExpired = Boolean(
+    hasValidShape &&
+      clockNow !== null &&
+      session &&
+      session.expiresAt <= clockNow,
+  );
+  const isValid = Boolean(hasValidShape && clockNow !== null && !isExpired);
 
   useEffect(() => {
-    if (isValid || !recoveryRegistrationId) return;
+    if (clockNow === null || isValid || !recoveryRegistrationId) return;
     if (recoveryAttemptedFor.current === recoveryRegistrationId) return;
 
     recoveryAttemptedFor.current = recoveryRegistrationId;
-    setIsRecovering(true);
+    const controller = new AbortController();
 
     const recover = async () => {
       try {
@@ -71,10 +93,12 @@ export default function RegistrationSessionGuard() {
           {
             skipGlobalToast: true,
             skipAuthRedirect: true,
+            signal: controller.signal,
           },
         );
-        const value = response.data;
+        if (controller.signal.aborted) return;
 
+        const value = response.data;
         if (
           value.registration_id !== recoveryRegistrationId ||
           value.expires_in_seconds <= 0
@@ -112,6 +136,7 @@ export default function RegistrationSessionGuard() {
         });
         navigate(ROUTES.VERIFY_OTP, { replace: true });
       } catch (error) {
+        if (controller.signal.aborted) return;
         clearSession();
         const statusCode = getApiStatusCode(error);
         showToast({
@@ -123,14 +148,14 @@ export default function RegistrationSessionGuard() {
               : getApiErrorMessage(error),
         });
         navigate(ROUTES.REGISTER, { replace: true });
-      } finally {
-        setIsRecovering(false);
       }
     };
 
     void recover();
+    return () => controller.abort();
   }, [
     clearSession,
+    clockNow,
     isValid,
     navigate,
     recoveryRegistrationId,
@@ -139,7 +164,12 @@ export default function RegistrationSessionGuard() {
   ]);
 
   useEffect(() => {
-    if (isValid || recoveryRegistrationId || directAccessNotified.current) {
+    if (
+      clockNow === null ||
+      isValid ||
+      recoveryRegistrationId ||
+      directAccessNotified.current
+    ) {
       return;
     }
 
@@ -147,14 +177,35 @@ export default function RegistrationSessionGuard() {
     clearSession();
     showToast({
       type: "warning",
-      title: "Registration session required",
-      message: "Start registration before entering a verification code.",
+      title: isExpired
+        ? "Registration session expired"
+        : "Registration session required",
+      message: isExpired
+        ? "Start registration again to receive a new verification code."
+        : "Start registration before entering a verification code.",
     });
-  }, [clearSession, isValid, recoveryRegistrationId, showToast]);
+  }, [
+    clearSession,
+    clockNow,
+    isExpired,
+    isValid,
+    recoveryRegistrationId,
+    showToast,
+  ]);
+
+  if (clockNow === null) {
+    return (
+      <div className="flex min-h-[240px] items-center justify-center px-6 text-sm">
+        <p role="status" aria-live="polite">
+          Checking the secure registration session…
+        </p>
+      </div>
+    );
+  }
 
   if (isValid) return <Outlet />;
 
-  if (recoveryRegistrationId || isRecovering) {
+  if (recoveryRegistrationId) {
     return (
       <div className="flex min-h-[240px] items-center justify-center px-6 text-sm">
         <p role="status" aria-live="polite">

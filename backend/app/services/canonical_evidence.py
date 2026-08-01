@@ -5,6 +5,8 @@ import math
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional
 
+from app.services.text_units import utf16_length
+
 
 IDLE_BREAK_THRESHOLD_MS = 30_000
 MAX_REASONABLE_ACTIVE_DURATION_MS = 1000 * 60 * 60 * 24
@@ -88,6 +90,68 @@ def is_keydown_event(event: Dict[str, Any]) -> bool:
     return event_type(event) == "keydown"
 
 
+_NON_WRITING_KEYS = {
+    "Shift",
+    "Control",
+    "Alt",
+    "Meta",
+    "CapsLock",
+    "Escape",
+    "ArrowUp",
+    "ArrowDown",
+    "ArrowLeft",
+    "ArrowRight",
+    "Home",
+    "End",
+    "PageUp",
+    "PageDown",
+    "Insert",
+    "ScrollLock",
+    "NumLock",
+    "Pause",
+    "ContextMenu",
+    "PrintScreen",
+    *(f"F{number}" for number in range(1, 25)),
+}
+
+
+def is_writing_keydown_event(event: Dict[str, Any]) -> bool:
+    if not is_keydown_event(event) or bool(event.get("repeat")):
+        return False
+
+    inserted = safe_int(event.get("insertedCharacters"))
+    deleted = safe_int(
+        event.get("deletedCharacters", event.get("chars_deleted"))
+    )
+    has_confirmed_mutation = any(
+        field in event
+        for field in (
+            "insertedCharacters",
+            "insertedText",
+            "inserted_text",
+            "deletedCharacters",
+            "chars_deleted",
+        )
+    )
+    if inserted > 0 or deleted > 0:
+        return True
+    if has_confirmed_mutation:
+        return False
+
+    key = event_key(event)
+    if key in {"Enter", "Tab"}:
+        return True
+    if key in {"Backspace", "Delete"}:
+        return False
+    if key in _NON_WRITING_KEYS:
+        return False
+
+    shortcut = bool(event.get("ctrlKey") or event.get("metaKey")) and not bool(
+        event.get("altKey")
+    )
+    return utf16_length(key) == 1 and not shortcut
+
+
 def is_paste_event(event: Dict[str, Any]) -> bool:
     return event_type(event) == "paste" or event_key(event) == "__PASTE_EVENT__"
 
@@ -126,9 +190,12 @@ def event_deleted_characters(event: Dict[str, Any]) -> int:
     if is_keyup_event(event):
         return 0
 
-    explicit = safe_number(event.get("chars_deleted", event.get("deletedCharacters")))
-    if explicit is not None and explicit > 0:
-        return max(0, int(round(explicit)))
+    has_explicit = "chars_deleted" in event or "deletedCharacters" in event
+    if has_explicit:
+        explicit = safe_number(
+            event.get("chars_deleted", event.get("deletedCharacters"))
+        )
+        return 0 if explicit is None else max(0, int(round(explicit)))
 
     if is_delete_keydown_event(event):
         return 1
@@ -141,9 +208,12 @@ def is_deletion_evidence(event: Dict[str, Any]) -> bool:
         return False
 
     method = str(event.get("deletion_method") or "unknown").lower()
+    has_explicit_deletion_count = (
+        "chars_deleted" in event or "deletedCharacters" in event
+    )
     return (
         event_deleted_characters(event) > 0
-        or is_delete_keydown_event(event)
+        or (is_delete_keydown_event(event) and not has_explicit_deletion_count)
         or event_key(event) in {"__CUT_EVENT__", "__TEXT_REVISION__"}
         or method != "unknown"
     )
@@ -232,6 +302,7 @@ def clean_events(raw_events: Iterable[Any]) -> List[Dict[str, Any]]:
 
 
 def event_counts(events: List[Dict[str, Any]]) -> Dict[str, int]:
+    raw_keydown_count = 0
     keydown_count = 0
     paste_count = 0
     cut_count = 0
@@ -240,6 +311,8 @@ def event_counts(events: List[Dict[str, Any]]) -> Dict[str, int]:
 
     for event in events:
         if is_keydown_event(event):
+            raw_keydown_count += 1
+        if is_writing_keydown_event(event):
             keydown_count += 1
         if is_paste_event(event):
             paste_count += 1
@@ -251,6 +324,7 @@ def event_counts(events: List[Dict[str, Any]]) -> Dict[str, int]:
 
     return {
         "keydown_count": keydown_count,
+        "raw_keydown_count": raw_keydown_count,
         "paste_count": paste_count,
         "cut_count": cut_count,
         "pasted_length": pasted_length,
@@ -353,7 +427,7 @@ def select_active_duration_ms(
         # Accept the frontend active clock only if it is close to what the raw
         # event stream proves. Otherwise use the raw-event reconstruction.
         tolerance = max(3000.0, reconstructed * 0.2)
-        if explicit <= reconstructed + tolerance:
+        if abs(explicit - reconstructed) <= tolerance:
             return {
                 "active_duration_ms": int(max(1000, explicit)),
                 "duration_source": "client_active_duration_verified",
@@ -394,7 +468,7 @@ def timing_values(events: List[Dict[str, Any]]) -> Dict[str, List[float]]:
     flight_values: List[float] = []
 
     for event in events:
-        if not is_keydown_event(event):
+        if not is_writing_keydown_event(event):
             continue
 
         dwell = sanitize_dwell_time(event.get("dwell_time"))
@@ -442,7 +516,7 @@ def compute_canonical_evidence(
     session_seconds = max(1.0, round(active_duration_ms / 1000, 2)) if events else 0.0
 
     word_count = count_words(text_content)
-    char_count = len(text_content or "")
+    char_count = utf16_length(text_content or "")
     wpm = round((word_count / session_seconds) * 60, 2) if session_seconds > 0 else 0.0
 
     flight_values = timings["flight_values"]
@@ -472,6 +546,8 @@ def compute_canonical_evidence(
         "word_count": word_count,
         "character_count": char_count,
         "event_count": counts["event_count"],
+        "writing_keydown_count": counts["keydown_count"],
+        "raw_keydown_count": counts["raw_keydown_count"],
         "paste_count": counts["paste_count"],
         "cut_count": counts["cut_count"],
         "pasted_length": counts["pasted_length"],
