@@ -227,3 +227,22 @@ export function isNetworkError(error: unknown): boolean {
 export function isTimeoutError(error: unknown): boolean {
   return axios.isAxiosError(error) && error.code === "ECONNABORTED";
 }
+
+export function getApiErrorCode(error: unknown): string | null {
+  if (!axios.isAxiosError<ApiErrorBody>(error)) return null;
+  const bodyError = error.response?.data?.error;
+  if (!bodyError || typeof bodyError !== "object") return null;
+  const code = (bodyError as Record<string, unknown>).code;
+  return typeof code === "string" && code.trim() ? code.trim() : null;
+}
+
+export function getApiErrorDetails(error: unknown): unknown {
+  if (!axios.isAxiosError<ApiErrorBody>(error)) return null;
+  const data = error.response?.data;
+  if (data?.error && typeof data.error === "object") {
+    const details = (data.error as Record<string, unknown>).details;
+    if (details !== undefined) return details;
+  }
+  if (data?.detail && typeof data.detail === "object") return data.detail;
+  return null;
+}

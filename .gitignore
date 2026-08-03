@@ -180,3 +180,21 @@ frontend/.env.e2e
 frontend/playwright/.auth/
 frontend/playwright-report/
 frontend/test-results/
+
+# Generated database audit and migration reports
+**/word-count-audit-*.json
+**/evidence-encryption-audit-*.json
+**/evidence-encryption-migration-*.json
+
+# Backend coverage artifacts
+backend/.coverage
+backend/coverage-html/
+
+# Frontend test and build artifacts
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+frontend/playwright/.auth/
+
+# Local E2E secrets
+frontend/.env.e2e

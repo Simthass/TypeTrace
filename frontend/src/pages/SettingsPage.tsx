@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { api, getApiErrorMessage } from "../lib/api";
+import { clearLocalAccountData } from "../lib/accountLocalCleanup";
 import { isStrongEnoughPassword } from "../lib/edgeCases";
 import { useToast } from "../components/ui/ToastContext";
 import { ROUTES } from "../constants/routes";
@@ -407,6 +408,7 @@ export default function SettingsPage() {
 
     setIsDeleting(true);
     try {
+      const deletedUserId = user?.id ?? null;
       await api.delete(API_ROUTES.user.account, {
         data: {
           password: deleteForm.password,
@@ -414,11 +416,18 @@ export default function SettingsPage() {
         },
       });
       setDeleteForm({ password: "", confirmation: "" });
-      logout();
-      toast.success(
-        "Account anonymized",
-        "Your login identity was removed and all previous sessions are invalid.",
-      );
+      const cleanup = await clearLocalAccountData(deletedUserId);
+      if (cleanup.failures.length > 0) {
+        toast.warning(
+          "Account anonymized",
+          "The server account was anonymized, but some browser storage could not be cleared automatically. Clear this site's browser data before leaving the device.",
+        );
+      } else {
+        toast.success(
+          "Account anonymized",
+          `Your login identity and ${cleanup.deletedDraftCount} local draft${cleanup.deletedDraftCount === 1 ? "" : "s"} were removed.`,
+        );
+      }
       navigate(ROUTES.LOGIN, { replace: true });
     } catch (error) {
       toast.error("Anonymization failed", getApiErrorMessage(error));

@@ -71,6 +71,7 @@ class Settings(BaseSettings):
 
     MAX_LOGIN_ATTEMPTS_PER_MINUTE: int = 8
     MAX_OTP_ATTEMPTS_PER_MINUTE: int = 6
+    MAX_REAUTH_ATTEMPTS_PER_MINUTE: int = 5
     MAX_PUBLIC_VERIFY_PER_MINUTE: int = 30
     MAX_REQUEST_BODY_BYTES: int = 32 * 1024 * 1024
     RATE_LIMIT_STORAGE_URI: str = Field(default="memory://")
@@ -137,6 +138,7 @@ class Settings(BaseSettings):
     @field_validator(
         "MAX_LOGIN_ATTEMPTS_PER_MINUTE",
         "MAX_OTP_ATTEMPTS_PER_MINUTE",
+        "MAX_REAUTH_ATTEMPTS_PER_MINUTE",
         "MAX_PUBLIC_VERIFY_PER_MINUTE",
         "MAX_REQUEST_BODY_BYTES",
     )

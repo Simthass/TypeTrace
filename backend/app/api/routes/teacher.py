@@ -1,6 +1,6 @@
 # backend/app/api/routes/teacher.py
 
-from app.core.privacy import summarize_keystroke_events
+import hashlib
 import logging
 import secrets
 import string
@@ -8,14 +8,23 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Literal, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    status,
+)
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import require_teacher
-from app.core.crypto import decrypt_text, decrypt_json
+from app.core.crypto import decrypt_json, decrypt_text
+from app.core.privacy import summarize_keystroke_events
 from app.models.user import User
 from app.repositories.teacher import (
     TeacherSubmissionFilters,
@@ -32,6 +41,7 @@ from app.schemas.responses import (
     TeacherSubmissionDetailResponse,
     TeacherSubmissionsResponse,
 )
+from app.services.audit_log import create_audit_log
 from app.services.notifications import bump_unread_cache
 
 
@@ -788,31 +798,35 @@ async def get_teacher_submission_detail(
 async def review_teacher_submission(
     session_id: int,
     payload: TeacherReviewUpdate,
+    request: Request,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
 ):
     teacher_id = str(current_user.id)
     review_status = payload.status
-
     notes = (payload.notes or "").strip()
 
-    existing = (await db.execute(
-        text(
-            """
-            SELECT ts.id, ts.user_id, ts.title
-            FROM typing_sessions ts
-            JOIN courses c ON c.id = ts.course_id
-            WHERE ts.id = :session_id
-              AND c.teacher_id = :teacher_id
-            LIMIT 1
-            """
-        ),
-        {
-            "session_id": session_id,
-            "teacher_id": teacher_id,
-        },
-    )).mappings().fetchone()
+    existing = (
+        await db.execute(
+            text(
+                """
+                SELECT ts.id, ts.user_id, ts.title, ts.review_status,
+                       ts.review_notes, ts.reviewed_by, ts.updated_at
+                FROM typing_sessions ts
+                JOIN courses c ON c.id = ts.course_id
+                WHERE ts.id = :session_id
+                  AND c.teacher_id = :teacher_id
+                LIMIT 1
+                FOR UPDATE OF ts
+                """
+            ),
+            {
+                "session_id": session_id,
+                "teacher_id": teacher_id,
+            },
+        )
+    ).mappings().fetchone()
 
     if existing is None:
         raise HTTPException(
@@ -820,29 +834,50 @@ async def review_teacher_submission(
             detail="Submission not found.",
         )
 
-    updated = (await db.execute(
-        text(
-            """
-            UPDATE typing_sessions
-            SET
-                review_status = :review_status,
-                review_notes = :review_notes,
-                reviewed_by = :teacher_id,
-                updated_at = NOW()
-            WHERE id = :session_id
-            RETURNING updated_at
-            """
-        ),
-        {
-            "review_status": review_status,
-            "review_notes": notes,
-            "teacher_id": teacher_id,
-            "session_id": session_id,
-        },
-    )).mappings().fetchone()
+    previous_status = str(existing.get("review_status") or "PENDING").upper()
+    previous_notes = str(existing.get("review_notes") or "").strip()
+    review_changed = (
+        previous_status != review_status
+        or previous_notes != notes
+        or str(existing.get("reviewed_by") or "") != teacher_id
+    )
 
-    notif_id = str(uuid.uuid4())
-    (await db.execute(
+    if not review_changed:
+        return {
+            "status": "success",
+            "message": "Submission review was already up to date.",
+            "review_status": previous_status,
+            "review_notes": previous_notes,
+            "review_saved_at": _format_datetime(existing.get("updated_at")),
+            "review_changed": False,
+            "notification_created": False,
+        }
+
+    updated = (
+        await db.execute(
+            text(
+                """
+                UPDATE typing_sessions
+                SET
+                    review_status = :review_status,
+                    review_notes = :review_notes,
+                    reviewed_by = :teacher_id,
+                    updated_at = NOW()
+                WHERE id = :session_id
+                RETURNING updated_at
+                """
+            ),
+            {
+                "review_status": review_status,
+                "review_notes": notes,
+                "teacher_id": teacher_id,
+                "session_id": session_id,
+            },
+        )
+    ).mappings().fetchone()
+
+    notification_id = str(uuid.uuid4())
+    await db.execute(
         text(
             """
             INSERT INTO notifications (
@@ -855,17 +890,43 @@ async def review_teacher_submission(
             """
         ),
         {
-            "id": notif_id,
+            "id": notification_id,
             "recipient_id": existing["user_id"],
             "actor_id": teacher_id,
             "event_type": "REVIEW_COMPLETED",
             "entity_type": "typing_session",
             "entity_id": str(session_id),
             "title": f"Review Updated: {review_status.replace('_', ' ').title()}",
-            "body": f"Your instructor updated the review status for '{existing['title']}'.",
-            "action_url": f"/sessions",
-        }
-    ))
+            "body": (
+                f"Your instructor updated the review status for "
+                f"'{existing['title']}'."
+            ),
+            "action_url": f"/sessions/{session_id}",
+        },
+    )
+
+    previous_notes_hash = hashlib.sha256(
+        previous_notes.encode("utf-8")
+    ).hexdigest()
+    new_notes_hash = hashlib.sha256(notes.encode("utf-8")).hexdigest()
+    db.add(
+        create_audit_log(
+            event_type="TEACHER_REVIEW_UPDATED",
+            entity_type="typing_session",
+            entity_id=str(session_id),
+            actor_user_id=teacher_id,
+            target_user_id=str(existing["user_id"]),
+            request=request,
+            metadata={
+                "previous_status": previous_status,
+                "new_status": review_status,
+                "notes_changed": previous_notes != notes,
+                "previous_notes_hash": previous_notes_hash,
+                "new_notes_hash": new_notes_hash,
+                "notification_id": notification_id,
+            },
+        )
+    )
 
     try:
         await db.commit()
@@ -873,12 +934,19 @@ async def review_teacher_submission(
         await db.rollback()
         raise
 
-    background_tasks.add_task(_safe_bump_unread_cache, str(existing["user_id"]))
+    background_tasks.add_task(
+        _safe_bump_unread_cache,
+        str(existing["user_id"]),
+    )
 
     return {
         "status": "success",
         "message": "Submission review updated successfully.",
         "review_status": review_status,
         "review_notes": notes,
-        "review_saved_at": _format_datetime(updated["updated_at"] if updated else None),
+        "review_saved_at": _format_datetime(
+            updated["updated_at"] if updated else None
+        ),
+        "review_changed": True,
+        "notification_created": True,
     }

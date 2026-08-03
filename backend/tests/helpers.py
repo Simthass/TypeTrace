@@ -42,6 +42,13 @@ class FakeExecuteResult:
     def scalar_one(self) -> Any:
         return self._value
 
+    def all(self) -> list[Any]:
+        if self._value is None:
+            return []
+        if isinstance(self._value, list):
+            return list(self._value)
+        return [self._value]
+
     def fetchone(self) -> Any:
         return self._value
 
@@ -65,6 +72,7 @@ class FakeAsyncSession:
         self._execute_results = list(execute_results or [])
         self._commit_exception = commit_exception
         self.added: list[Any] = []
+        self.executed: list[tuple[Any, Any]] = []
         self.commits = 0
         self.rollbacks = 0
         self.refreshes = 0
@@ -75,7 +83,10 @@ class FakeAsyncSession:
         _statement: Any,
         _parameters: Any = None,
     ) -> FakeExecuteResult:
+        self.executed.append((_statement, _parameters))
         value = self._execute_results.pop(0) if self._execute_results else None
+        if isinstance(value, FakeExecuteResult):
+            return value
         return FakeExecuteResult(value)
 
     def add(self, value: Any) -> None:

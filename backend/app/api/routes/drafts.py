@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_student
 from app.core.crypto import decrypt_json, decrypt_text, encrypt_json, encrypt_text
+from app.core.errors import ApiError
 from app.db.database import get_db
 from app.models.course import Course, CourseStudent
 from app.models.draft import DraftSession
@@ -25,7 +26,13 @@ from app.schemas.evidence import (
     KeystrokeEvent,
 )
 from app.services.text_units import utf16_length
-from app.schemas.responses import DraftListResponse, DraftResponse, MessageResponse
+from app.schemas.responses import (
+    DraftConflictDetails,
+    DraftListResponse,
+    DraftResponse,
+    DraftSnapshotResponse,
+    MessageResponse,
+)
 
 
 router = APIRouter(prefix="/drafts")
@@ -129,6 +136,22 @@ def _draft_payload(draft: DraftSession) -> Dict[str, Any]:
     }
 
 
+def _decrypted_draft_payload(draft: DraftSession) -> Dict[str, Any]:
+    """Return the authorised client contract without exposing stored ciphertext."""
+
+    payload = _draft_payload(draft)
+    events = decrypt_json(draft.keystroke_array) or []
+    if not isinstance(events, list):
+        raise ApiError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="DRAFT_EVIDENCE_INVALID",
+            message="The server draft evidence is malformed and cannot be recovered.",
+        )
+    payload["text_content"] = decrypt_text(draft.text_content) or ""
+    payload["keystroke_array"] = events
+    return DraftSnapshotResponse.model_validate(payload).model_dump(mode="json")
+
+
 async def _ensure_student_can_link_course(
     *,
     db: AsyncSession,
@@ -189,10 +212,7 @@ async def list_drafts(
 
     decrypted_drafts = []
     for draft in drafts:
-        payload = _draft_payload(draft)
-        payload["text_content"] = decrypt_text(draft.text_content) or ""
-        payload["keystroke_array"] = decrypt_json(draft.keystroke_array) or []
-        decrypted_drafts.append(payload)
+        decrypted_drafts.append(_decrypted_draft_payload(draft))
 
     return {
         "status": "success",
@@ -217,13 +237,9 @@ async def get_draft(
             detail="Draft not found.",
         )
 
-    payload = _draft_payload(draft)
-    payload["text_content"] = decrypt_text(draft.text_content) or ""
-    payload["keystroke_array"] = decrypt_json(draft.keystroke_array) or []
-
     return {
         "status": "success",
-        "draft": payload,
+        "draft": _decrypted_draft_payload(draft),
     }
 
 
@@ -277,12 +293,16 @@ async def upsert_draft(
         and payload.expected_version is not None
         and int(draft.version or 1) != int(payload.expected_version)
     ):
-        raise HTTPException(
+        conflict = DraftConflictDetails(
+            server_draft=DraftSnapshotResponse.model_validate(
+                _decrypted_draft_payload(draft)
+            )
+        )
+        raise ApiError(
             status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "message": "Draft version conflict.",
-                "server_draft": _draft_payload(draft),
-            },
+            code="DRAFT_VERSION_CONFLICT",
+            message="Draft version conflict.",
+            details=conflict,
         )
 
     created = draft is None
@@ -341,7 +361,9 @@ async def upsert_draft(
 
     return {
         "status": "success",
-        "draft": payload_response,
+        "draft": DraftSnapshotResponse.model_validate(payload_response).model_dump(
+            mode="json"
+        ),
     }
 
 

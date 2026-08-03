@@ -214,14 +214,39 @@ class ReplayResponse(StrictResponseModel):
     audit: dict[str, Any]
 
 
+class DraftSnapshotResponse(StrictResponseModel):
+    id: str
+    backend_draft_id: str
+    draft_id: str
+    local_draft_id: str
+    title: str
+    text_content: str
+    course_id: int | None = None
+    keystroke_array: list[dict[str, Any]]
+    active_duration_ms: int
+    started_at: int | None = None
+    last_activity_at: int | None = None
+    paused_at: int | None = None
+    version: int
+    lifecycle_status: str
+    sync_status: str
+    save_reason: str
+    created_at: int | None = None
+    updated_at: int | None = None
+
+
+class DraftConflictDetails(StrictResponseModel):
+    server_draft: DraftSnapshotResponse
+
+
 class DraftListResponse(StrictResponseModel):
     status: Literal["success"]
-    drafts: list[dict[str, Any]]
+    drafts: list[DraftSnapshotResponse]
 
 
 class DraftResponse(StrictResponseModel):
     status: Literal["success"]
-    draft: dict[str, Any]
+    draft: DraftSnapshotResponse
 
 
 class NotificationListResponse(StrictResponseModel):
@@ -296,6 +321,8 @@ class TeacherReviewResponse(StrictResponseModel):
     review_status: str
     review_notes: str
     review_saved_at: str
+    review_changed: bool
+    notification_created: bool
 
 
 class UserProfileResponse(StrictResponseModel):

@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.routes.notifications import router as notifications_router
 
 from app.core.config import settings
+from app.core.errors import ApiError
 from app.core.rate_limit import limiter
 
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -126,6 +127,20 @@ def create_application() -> FastAPI:
     )
 
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    @app.exception_handler(ApiError)
+    async def api_error_handler(request: Request, exc: ApiError):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=_error_payload(
+                code=exc.code,
+                message=exc.message,
+                path=str(request.url.path),
+                status_code=exc.status_code,
+                details=exc.details,
+            ),
+            headers=exc.headers,
+        )
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):

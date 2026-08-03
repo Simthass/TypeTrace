@@ -1,7 +1,12 @@
 import type { KeystrokeEvent } from "../types/editor";
 
 import { API_ROUTES } from "../constants/apiRoutes";
-import { api, getApiStatusCode } from "./api";
+import {
+  api,
+  getApiErrorCode,
+  getApiErrorDetails,
+  getApiStatusCode,
+} from "./api";
 
 const DB_NAME = "typetrace-editor-drafts";
 const DB_VERSION = 3;
@@ -663,26 +668,22 @@ async function syncDraftToServer(
     return serverDraft ?? { ...snapshot, syncStatus: "SYNCED" };
   } catch (error: unknown) {
     const status = getApiStatusCode(error);
-    const response =
-      error && typeof error === "object" && "response" in error
-        ? (
-            error as {
-              response?: {
-                data?: {
-                  detail?: {
-                    server_draft?: unknown;
-                  };
-                };
-              };
-            }
-          ).response
-        : undefined;
+    const code = getApiErrorCode(error);
+    const details = getApiErrorDetails(error);
+    const serverDraftValue =
+      details && typeof details === "object"
+        ? (details as Record<string, unknown>).server_draft
+        : null;
     const serverDraft = serverDraftToSnapshot(
-      response?.data?.detail?.server_draft,
+      serverDraftValue,
       snapshot.userId,
     );
 
-    if (status === 409 && serverDraft) {
+    if (
+      status === 409 &&
+      code === "DRAFT_VERSION_CONFLICT" &&
+      serverDraft
+    ) {
       return {
         ...serverDraft,
         syncStatus: "CONFLICT",
@@ -934,4 +935,77 @@ export async function deleteEditorDraft(
 
   const latest = await readEditorDraft(safeUser);
   if (latest) await deleteEditorDraftByKey(latest.draftKey);
+}
+
+function draftKeyBelongsToUser(draftKey: string, userId: string): boolean {
+  return (
+    draftKey === legacyDraftKey(userId) ||
+    draftKey.startsWith(`editor:${userId}:`)
+  );
+}
+
+/**
+ * Remove every browser-resident editor draft owned by one account.
+ *
+ * This intentionally does not call the server. It is used after account
+ * anonymization, when the authenticated server identity no longer exists.
+ */
+export async function clearEditorDraftsForUser(
+  userId?: string | null,
+): Promise<number> {
+  const safeUser = safeDraftUserId(userId);
+  const draftKeys = new Set<string>();
+
+  let localStorageFailed = false;
+  let indexedDbFailed = false;
+
+  if (canUseBrowserStorage()) {
+    try {
+      const exactLegacyMirror = `${LOCAL_MIRROR_PREFIX}${legacyDraftKey(safeUser)}`;
+      const mirrorPrefix = `${LOCAL_MIRROR_PREFIX}editor:${safeUser}:`;
+      const keysToRemove: string[] = [];
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const key = window.localStorage.key(index);
+        if (key !== exactLegacyMirror && !key?.startsWith(mirrorPrefix)) {
+          continue;
+        }
+        keysToRemove.push(key);
+        draftKeys.add(key.slice(LOCAL_MIRROR_PREFIX.length));
+      }
+      keysToRemove.forEach((key) => window.localStorage.removeItem(key));
+    } catch {
+      localStorageFailed = true;
+    }
+  }
+
+  if (canUseBrowserStorage() && "indexedDB" in window) {
+    try {
+      const values = await readAllIndexedDbValues();
+      for (const value of values) {
+        if (!value || typeof value !== "object") continue;
+        const rawKey = (value as Record<string, unknown>).draftKey;
+        if (
+          typeof rawKey === "string" &&
+          draftKeyBelongsToUser(rawKey, safeUser)
+        ) {
+          draftKeys.add(rawKey);
+        }
+      }
+
+      const results = await Promise.allSettled(
+        Array.from(draftKeys, (draftKey) => deleteIndexedDbDraft(draftKey)),
+      );
+      indexedDbFailed = results.some((result) => result.status === "rejected");
+    } catch {
+      indexedDbFailed = true;
+    }
+  }
+
+  if (localStorageFailed || indexedDbFailed) {
+    throw new Error(
+      "Some browser-resident editor drafts could not be cleared.",
+    );
+  }
+
+  return draftKeys.size;
 }

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -12,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.core.crypto import decrypt_json, decrypt_text
 from app.core.privacy import privacy_safe_export_session
+from app.core.rate_limit import limiter, per_minute, reauth_rate_limit_key
+from app.core.config import settings
 from app.core.security import get_password_hash, verify_password
 from app.db.database import get_db
 from app.models.user import User
@@ -186,12 +186,18 @@ async def update_user_profile(
 
 
 @router.post("/user/change-password", response_model=UserProfileResponse)
+@limiter.limit(
+    per_minute(settings.MAX_REAUTH_ATTEMPTS_PER_MINUTE),
+    key_func=reauth_rate_limit_key,
+)
 async def change_password(
     payload: PasswordChangeRequest,
     request: Request,
+    response: Response,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    del response
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Current password is incorrect.")
     if verify_password(payload.new_password, current_user.hashed_password):
@@ -456,6 +462,10 @@ async def export_user_data(
 
 
 @router.post("/user/data-export/sensitive", response_model=UserDataExportResponse)
+@limiter.limit(
+    per_minute(settings.MAX_REAUTH_ATTEMPTS_PER_MINUTE),
+    key_func=reauth_rate_limit_key,
+)
 async def export_sensitive_user_data(
     payload: SensitiveExportRequest,
     request: Request,
@@ -496,12 +506,18 @@ async def export_sensitive_user_data(
 
 
 @router.delete("/user/account", response_model=UserProfileResponse)
+@limiter.limit(
+    per_minute(settings.MAX_REAUTH_ATTEMPTS_PER_MINUTE),
+    key_func=reauth_rate_limit_key,
+)
 async def delete_user_account(
     payload: DeleteAccountRequest,
     request: Request,
+    response: Response,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    del response
     if payload.confirmation.strip().upper() != "DELETE":
         raise HTTPException(status_code=400, detail="Type DELETE to confirm account removal.")
     if not verify_password(payload.password, current_user.hashed_password):
