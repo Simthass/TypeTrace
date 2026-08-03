@@ -144,7 +144,7 @@ export default function StudentSessionDetailPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Document Viewer (Decrypted Content) */}
         <div className="lg:col-span-2">
-          <AppSurface className="h-full min-h-[600px] p-8">
+          <AppSurface className="h-full min-h-[420px] p-4 sm:min-h-[600px] sm:p-8">
             <div
               className="mb-6 border-b pb-4"
               style={{ borderColor: colors.surface[200] }}
@@ -255,7 +255,7 @@ export default function StudentSessionDetailPage() {
               Behavioral Metrics
             </h3>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <p
                   className="text-[20px] font-bold tracking-tight"

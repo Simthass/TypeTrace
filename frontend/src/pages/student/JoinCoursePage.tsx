@@ -50,7 +50,7 @@ export default function JoinCoursePage() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-140px)] items-center justify-center py-10">
+    <div className="flex min-h-[calc(100dvh-140px)] items-center justify-center py-5 sm:py-10">
       <motion.div
         initial={{ opacity: 0, y: 10, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -58,7 +58,7 @@ export default function JoinCoursePage() {
         className="w-full max-w-md"
       >
         <div
-          className="relative overflow-hidden rounded-xl border bg-white px-8 py-10 text-center"
+          className="relative overflow-hidden rounded-xl border bg-white px-4 py-7 text-center sm:px-8 sm:py-10"
           style={{
             borderColor: colors.surface[200],
             boxShadow: `0 24px 60px -12px ${colors.shadowStrong}`,
@@ -124,7 +124,7 @@ export default function JoinCoursePage() {
                     setCode(e.target.value.toUpperCase().replace(/\s/g, ""));
                   }}
                   placeholder="TT-XXXXXXXX"
-                  className="w-full rounded-lg border-2 bg-transparent px-4 py-4 text-center font-mono text-xl font-bold tracking-[0.15em] outline-none transition-colors focus:ring-0"
+                  className="w-full rounded-lg border-2 bg-transparent px-3 py-4 text-center font-mono text-[17px] font-bold tracking-[0.1em] sm:px-4 sm:text-xl sm:tracking-[0.15em] outline-none transition-colors focus:ring-0"
                   style={{
                     borderColor: error ? brand.aiAccent : colors.surface[200],
                     color: colors.text.primary,

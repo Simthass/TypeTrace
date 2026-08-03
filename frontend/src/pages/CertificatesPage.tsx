@@ -9,6 +9,7 @@ import { Link } from "react-router-dom";
 
 import { Button } from "../components/ui/Button";
 import { ErrorState } from "../components/ui/AsyncState";
+import { ResponsiveDialog } from "../components/ui/ResponsiveDialog";
 import { ROUTES } from "../constants/routes";
 import { useCertificateDownload } from "../hooks/useCertificateDownload";
 import { api, getApiErrorMessage } from "../lib/api";
@@ -391,6 +392,129 @@ function LedgerStatusBadge({ status }: { status: CertificateLedgerStatus }) {
   );
 }
 
+
+function CertificateMobileCard({
+  certificate,
+  downloading,
+  onSelect,
+  onDownload,
+}: {
+  certificate: CertificateItem;
+  downloading: boolean;
+  onSelect: (certificate: CertificateItem) => void;
+  onDownload: (certificate: CertificateItem) => void;
+}) {
+  const confidence = normalizeEvidenceScore(certificate.confidence);
+  const barColor = progressBarColor(certificate.classification);
+
+  return (
+    <article className="mobile-record-card">
+      <div className="flex items-start justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => onSelect(certificate)}
+          className="min-w-0 text-left"
+        >
+          <p
+            className="text-anywhere font-mono text-[12px] font-bold"
+            style={{ color: colors.brand }}
+          >
+            {certificate.certificate_id}
+          </p>
+          <h3
+            className="mt-1 text-anywhere text-[14px] font-semibold leading-5"
+            style={{ color: colors.text.primary }}
+          >
+            {certificate.title || "Untitled Document"}
+          </h3>
+          <p className="mt-1 text-[11px]" style={{ color: colors.text.muted }}>
+            {certificate.course_code || "Personal"} · {formatShortDate(certificate.created_at)}
+          </p>
+        </button>
+        <LedgerStatusBadge status={certificate.status} />
+      </div>
+
+      <div className="mt-4">
+        <div className="flex items-center justify-between gap-3">
+          <StatusBadge value={certificate.classification} />
+          <p
+            className="font-mono text-[13px] font-bold tabular-nums"
+            style={{ color: colors.text.primary }}
+          >
+            {formatEvidenceScore(confidence)}%
+          </p>
+        </div>
+        <div className="mt-2 h-1.5 rounded-md" style={{ background: colors.surface[200] }}>
+          <div
+            className="h-1.5 rounded-md"
+            style={{ background: barColor, width: `${confidence}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="mobile-record-grid mt-4">
+        <div>
+          <p className="mobile-record-label">Risk level</p>
+          <div className="mt-1"><StatusBadge value={certificate.risk_level || "LOW"} /></div>
+        </div>
+        <div>
+          <p className="mobile-record-label">Review</p>
+          <p className="mobile-record-value text-anywhere">
+            {certificate.review_outcome || certificate.review_status || "Pending"}
+          </p>
+        </div>
+      </div>
+
+      {certificate.degraded_analysis && (
+        <p className="mt-3 text-[11px] leading-5" style={{ color: colors.amber }}>
+          {certificate.decision_source || "FALLBACK_RULES"} · trained model unavailable
+        </p>
+      )}
+
+      <div className="responsive-actions mt-4">
+        <Link
+          to={`/verify/${certificate.certificate_id}`}
+          className="touch-target inline-flex items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-semibold"
+          style={{
+            borderColor: colors.surface[200],
+            color: colors.text.secondary,
+            background: colors.surface[50],
+          }}
+        >
+          <Icon type="external" size={14} />
+          Verify
+        </Link>
+        <Link
+          to={ROUTES.REPLAY.replace(":sessionId", String(certificate.session_id))}
+          className="touch-target inline-flex items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-semibold"
+          style={{
+            borderColor: colors.surface[200],
+            color: colors.text.secondary,
+            background: colors.surface[50],
+          }}
+        >
+          <Icon type="replay" size={14} />
+          Replay
+        </Link>
+        <button
+          type="button"
+          disabled={downloading}
+          onClick={() => onDownload(certificate)}
+          className="touch-target inline-flex items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
+          style={{
+            borderColor: colors.surface[200],
+            color: colors.text.secondary,
+            background: colors.surface[50],
+          }}
+        >
+          <Icon type="download" size={14} />
+          PDF
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function MetricCard({
   label,
   value,
@@ -719,7 +843,7 @@ export default function CertificatesPage() {
   );
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-4 px-0 pb-8">
+    <div className="responsive-page space-y-4">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p
@@ -940,7 +1064,19 @@ export default function CertificatesPage() {
           />
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="mobile-card-list xl:hidden">
+              {paginatedCertificates.map((certificate) => (
+                <CertificateMobileCard
+                  key={certificate.certificate_id}
+                  certificate={certificate}
+                  downloading={downloadingId === certificate.certificate_id}
+                  onSelect={setSelectedCertificate}
+                  onDownload={(item) => void downloadCertificate(item.certificate_id)}
+                />
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto xl:block">
               <table className="w-full min-w-[1120px] border-collapse text-left">
                 <thead>
                   <tr
@@ -1235,22 +1371,14 @@ export default function CertificatesPage() {
       </section>
 
       {selectedCertificate && (
-        <div
-          className="fixed inset-0 z-50"
-          onClick={() => setSelectedCertificate(null)}
+        <ResponsiveDialog
+          open
+          onClose={() => setSelectedCertificate(null)}
+          title="Certificate detail"
+          position="right"
+          panelClassName="border-l border-surface-200"
         >
-          <div
-            className="absolute inset-0"
-            style={{ background: colors.shadowStrong }}
-          />
-          <aside
-            className="absolute right-0 top-0 h-full w-full max-w-[420px] overflow-y-auto border-l p-5"
-            style={{
-              background: colors.surface[50],
-              borderColor: colors.surface[200],
-            }}
-            onClick={(event) => event.stopPropagation()}
-          >
+          <aside className="scroll-region h-full overflow-y-auto p-4 sm:p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p
@@ -1342,7 +1470,7 @@ export default function CertificatesPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div
                   className="rounded-md border p-3"
                   style={{
@@ -1501,8 +1629,10 @@ export default function CertificatesPage() {
               </div>
             </div>
           </aside>
-        </div>
+        </ResponsiveDialog>
       )}
     </div>
   );
 }
+
+

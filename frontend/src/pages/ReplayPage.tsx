@@ -691,7 +691,7 @@ export default function ReplayPage() {
       `}</style>
 
       <header
-        className="sticky top-0 z-20 border-b bg-white px-6 py-4"
+        className="sticky top-0 z-20 border-b bg-white px-3 py-3 sm:px-6 sm:py-4"
         style={{ borderColor: colors.surface[200] }}
       >
         <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -710,9 +710,9 @@ export default function ReplayPage() {
             </button>
 
             <div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="responsive-actions flex-wrap items-center gap-2">
                 <h1
-                  className="text-[17px] font-semibold"
+                  className="text-anywhere text-[16px] font-semibold leading-6 sm:text-[17px]"
                   style={{ color: colors.text.primary }}
                 >
                   Replay Audit: {replay.session.title}
@@ -760,7 +760,7 @@ export default function ReplayPage() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-5 px-6 py-6 lg:grid-cols-[1fr_340px]">
+      <main className="mx-auto grid max-w-7xl gap-4 px-3 py-4 sm:gap-5 sm:px-6 sm:py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="space-y-5">
           {replay?.audit.is_truncated && (
             <div
@@ -837,11 +837,11 @@ export default function ReplayPage() {
 
           {/* Player card: viewport + attached transport bar, video-player style */}
           <div
-            className="overflow-hidden rounded-lg border bg-white shadow-sm"
+            className="min-w-0 overflow-hidden rounded-lg border bg-white shadow-sm"
             style={{ borderColor: colors.surface[200] }}
           >
             <div
-              className="flex flex-col justify-between gap-3 border-b px-5 py-4 md:flex-row md:items-center"
+              className="flex flex-col justify-between gap-3 border-b px-4 py-4 sm:px-5 md:flex-row md:items-center"
               style={{ borderColor: colors.surface[200] }}
             >
               <div>
@@ -1141,7 +1141,7 @@ export default function ReplayPage() {
                   Cognitive pause
                 </span>
                 <span
-                  className="ml-auto text-[11px]"
+                  className="w-full text-[11px] sm:ml-auto sm:w-auto"
                   style={{ color: colors.text.secondary }}
                 >
                   Shortcuts: Space play/pause · ←/→ seek 5s · Home/End jump
@@ -1251,7 +1251,7 @@ export default function ReplayPage() {
               Timeline markers
             </h2>
 
-            <div className="mt-4 max-h-[300px] space-y-2 overflow-auto">
+            <div className="scroll-region mt-4 max-h-[300px] space-y-2 overflow-auto">
               {replay.timeline_markers.length ? (
                 replay.timeline_markers.map((marker) => (
                   <button

@@ -233,7 +233,7 @@ export function PageHeading({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <div className="mb-6 flex min-w-0 flex-col gap-4 sm:mb-7 lg:flex-row lg:items-end lg:justify-between">
       <div>
         {eyebrow && (
           <p
@@ -245,7 +245,7 @@ export function PageHeading({
         )}
 
         <h1
-          className="mt-2 text-3xl font-semibold tracking-[-0.05em] sm:text-4xl"
+          className="mt-2 text-[1.85rem] font-semibold leading-tight tracking-[-0.045em] sm:text-4xl"
           style={{ color: colors.text.primary }}
         >
           {title}
@@ -261,7 +261,7 @@ export function PageHeading({
         )}
       </div>
 
-      {action && <div className="shrink-0">{action}</div>}
+      {action && <div className="w-full shrink-0 sm:w-auto">{action}</div>}
     </div>
   );
 }

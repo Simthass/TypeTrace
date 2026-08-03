@@ -87,7 +87,12 @@ export default defineConfig({
     },
     {
       name: "chromium-e2e",
-      testIgnore: [/auth\.setup\.ts/, /public-cross-browser\.spec\.ts/],
+      testIgnore: [
+        /auth\.setup\.ts/,
+        /public-cross-browser\.spec\.ts/,
+        /responsive-public\.spec\.ts/,
+        /responsive-student\.spec\.ts/,
+      ],
       dependencies: ["auth-setup"],
       use: {
         ...devices["Desktop Chrome"],
@@ -112,6 +117,28 @@ export default defineConfig({
       testMatch: /public-cross-browser\.spec\.ts/,
       use: {
         ...devices["Desktop Safari"],
+      },
+    },
+    {
+      name: "chromium-mobile-responsive",
+      testMatch: [
+        /responsive-public\.spec\.ts/,
+        /responsive-student\.spec\.ts/,
+      ],
+      dependencies: ["auth-setup"],
+      use: {
+        ...devices["Pixel 5"],
+      },
+    },
+    {
+      name: "chromium-tablet-responsive",
+      testMatch: [
+        /responsive-public\.spec\.ts/,
+        /responsive-student\.spec\.ts/,
+      ],
+      dependencies: ["auth-setup"],
+      use: {
+        ...devices["iPad Mini"],
       },
     },
   ],

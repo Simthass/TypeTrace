@@ -649,7 +649,7 @@ export default function VerifyCertificatePage() {
               : result.status.replaceAll("_", " ")}
           </SectionEyebrow>
           <h1
-            className="mt-3 text-[2.8rem] font-bold leading-[1.05] tracking-[-0.05em] md:text-[3.8rem]"
+            className="mt-3 text-[2.1rem] font-bold leading-[1.08] tracking-[-0.045em] sm:text-[2.8rem] sm:leading-[1.05] md:text-[3.8rem]"
             style={{ color: colors.text.primary }}
           >
             {result.title || "Writing Evidence Certificate"}
@@ -686,12 +686,12 @@ export default function VerifyCertificatePage() {
         )}
 
         {/* Two-column layout */}
-        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+        <div className="grid min-w-0 gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
           {/* Left column — evidence details */}
           <div className="space-y-6">
             {/* Session info card */}
             <div
-              className="rounded-2xl border p-6"
+              className="rounded-2xl border p-4 sm:p-6"
               style={{
                 borderColor: colors.surface[200],
                 background: colors.surface[50],
@@ -760,7 +760,7 @@ export default function VerifyCertificatePage() {
 
             {/* Certificate ID + Hash card */}
             <div
-              className="rounded-2xl border p-6"
+              className="rounded-2xl border p-4 sm:p-6"
               style={{
                 borderColor: colors.surface[200],
                 background: colors.surface[50],
@@ -875,7 +875,7 @@ export default function VerifyCertificatePage() {
                           "Legacy unsigned certificate"}
                       </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 text-[11px]">
+                    <div className="grid grid-cols-1 gap-3 text-[11px] sm:grid-cols-2">
                       <div>
                         <p
                           className="font-bold uppercase tracking-wider"
@@ -919,7 +919,7 @@ export default function VerifyCertificatePage() {
 
             {result.audit_timeline && result.audit_timeline.length > 0 && (
               <div
-                className="rounded-2xl border p-6"
+                className="rounded-2xl border p-4 sm:p-6"
                 style={{
                   borderColor: colors.surface[200],
                   background: colors.surface[50],
@@ -992,7 +992,7 @@ export default function VerifyCertificatePage() {
             )}
 
             {/* Session metrics */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               {[
                 {
                   label: "Duration",
@@ -1065,7 +1065,7 @@ export default function VerifyCertificatePage() {
                 background: colors.surface[50],
               }}
             >
-              <div className="p-6 pb-4">
+              <div className="p-4 pb-4 sm:p-6 sm:pb-4">
                 <h2
                   className="text-[11px] font-bold uppercase tracking-[0.16em] mb-4"
                   style={{ color: colors.text.muted }}
@@ -1109,7 +1109,7 @@ export default function VerifyCertificatePage() {
               </div>
 
               {/* Confidence bar */}
-              <div className="px-6 pb-2">
+              <div className="px-4 pb-2 sm:px-6">
                 <div className="flex items-center justify-between text-[11px] mb-1.5">
                   <span style={{ color: colors.text.muted }}>
                     Human Writing Evidence Score
@@ -1151,7 +1151,7 @@ export default function VerifyCertificatePage() {
 
               {/* Evidence breakdown */}
               <div
-                className="border-t p-6"
+                className="border-t p-4 sm:p-6"
                 style={{
                   borderColor: colors.surface[200],
                   background: colors.surface[100],

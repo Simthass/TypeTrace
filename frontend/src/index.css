@@ -15,12 +15,46 @@
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
     text-rendering: geometricPrecision;
+    min-width: 320px;
   }
 
   body {
     @apply font-sans bg-surface-50 text-text-primary;
     min-height: 100dvh;
-    overflow-x: hidden;
+    min-width: 320px;
+  }
+
+  #root {
+    min-height: 100dvh;
+    min-width: 0;
+  }
+
+  main,
+  section,
+  article,
+  aside,
+  header,
+  footer,
+  nav,
+  form,
+  fieldset,
+  div {
+    min-width: 0;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
+  }
+
+  p,
+  li,
+  dd,
+  td,
+  th {
+    overflow-wrap: anywhere;
   }
 
   ::selection {
@@ -80,8 +114,68 @@
   }
 
   .page-shell {
-    @apply min-h-screen px-6 py-8;
+    @apply min-h-screen px-4 py-5 sm:px-6 sm:py-8;
     background: #ffffff;
+  }
+
+  .responsive-page {
+    @apply mx-auto w-full max-w-[1440px] px-3 pb-8 sm:px-4 md:px-6;
+  }
+
+  .responsive-toolbar {
+    @apply flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center;
+  }
+
+  .responsive-toolbar > * {
+    min-width: 0;
+  }
+
+  .responsive-actions {
+    @apply flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center;
+  }
+
+  .responsive-actions > a,
+  .responsive-actions > button {
+    @apply w-full sm:w-auto;
+  }
+
+  .mobile-card-list {
+    @apply grid gap-3 p-3;
+  }
+
+  .mobile-record-card {
+    @apply rounded-lg border border-surface-200 bg-white p-4 shadow-sm;
+  }
+
+  .mobile-record-grid {
+    @apply grid grid-cols-2 gap-3;
+  }
+
+  .mobile-record-label {
+    @apply text-[10px] font-bold uppercase tracking-[0.12em] text-text-secondary;
+  }
+
+  .mobile-record-value {
+    @apply mt-1 text-[12px] font-semibold text-text-primary;
+  }
+
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .text-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .scroll-region {
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
   }
 
   .card {
@@ -181,5 +275,32 @@
 @keyframes shimmer {
   100% {
     transform: translateX(100%);
+  }
+}
+
+@media (max-width: 639px) {
+  .mobile-record-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

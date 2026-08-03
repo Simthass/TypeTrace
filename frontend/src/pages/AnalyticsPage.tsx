@@ -275,7 +275,7 @@ function ChartTooltip({
         {payload.map((item) => (
           <div
             key={`${item.name}-${item.color}`}
-            className="flex min-w-[150px] items-center justify-between gap-6"
+            className="flex min-w-0 items-center justify-between gap-3 sm:min-w-[150px] sm:gap-6"
           >
             <span
               className="inline-flex items-center gap-2"

@@ -33,11 +33,11 @@ export function AuthPanel({
       className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[1fr_0.92fr]"
       style={{ background: colors.surface[50] }}
     >
-      <section className="flex items-center justify-center px-6 py-12 md:px-10">
+      <section className="flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12 md:px-10">
         <div className="w-full max-w-[460px]">
           <Link
             to={ROUTES.HOME}
-            className="mb-10 inline-flex w-fit items-center"
+            className="mb-8 inline-flex w-fit items-center sm:mb-10"
           >
             <img
               src="/Logo.png"
@@ -54,7 +54,7 @@ export function AuthPanel({
           </p>
 
           <h1
-            className="mt-3 text-[2.4rem] font-bold leading-[1.02] tracking-[-0.05em]"
+            className="mt-3 text-[2rem] font-bold leading-[1.05] tracking-[-0.045em] sm:text-[2.4rem] sm:leading-[1.02]"
             style={{ color: colors.text.primary }}
           >
             {title}

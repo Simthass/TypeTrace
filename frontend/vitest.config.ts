@@ -19,6 +19,8 @@ export default defineConfig({
         "src/lib/**/*.{ts,tsx}",
         "src/store/**/*.{ts,tsx}",
         "src/components/guards/**/*.{ts,tsx}",
+        "src/components/ui/Responsive*.tsx",
+        "src/hooks/useBodyScrollLock.ts",
       ],
       exclude: ["src/**/*.d.ts", "src/test/**", "src/**/*.test.{ts,tsx}"],
     },

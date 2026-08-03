@@ -366,6 +366,120 @@ function StatusBadge({ value }: { value?: string }) {
   );
 }
 
+
+function SessionMobileCard({ session }: { session: SessionItem }) {
+  const bucket = getBucket(session);
+  const confidence = normalizeEvidenceScore(session.confidence);
+  const hasCertificate = Boolean(session.certificate_id);
+  const barColor = progressBarColor(session);
+
+  return (
+    <article className="mobile-record-card">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link
+            to={ROUTES.SESSION_DETAIL.replace(
+              ":sessionId",
+              String(session.id),
+            )}
+            className="text-anywhere text-[14px] font-semibold leading-5 hover:underline"
+            style={{ color: colors.text.primary }}
+          >
+            {session.title || "Untitled Document"}
+          </Link>
+          <p className="mt-1 text-[11px]" style={{ color: colors.text.muted }}>
+            {session.course_code || "Personal"} · {formatShortDate(session.created_at)}
+          </p>
+        </div>
+        <StatusBadge value={bucket} />
+      </div>
+
+      <div className="mt-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="mobile-record-label">Human evidence score</p>
+          <p
+            className="font-mono text-[13px] font-bold tabular-nums"
+            style={{ color: colors.text.primary }}
+          >
+            {formatEvidenceScore(confidence)}%
+          </p>
+        </div>
+        <div className="mt-2 h-1.5 rounded-md" style={{ background: colors.surface[200] }}>
+          <div
+            className="h-1.5 rounded-md"
+            style={{ background: barColor, width: `${confidence}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="mobile-record-grid mt-4">
+        <div>
+          <p className="mobile-record-label">Words</p>
+          <p className="mobile-record-value font-mono tabular-nums">
+            {Number(session.word_count || 0).toLocaleString()}
+          </p>
+        </div>
+        <div>
+          <p className="mobile-record-label">WPM</p>
+          <p className="mobile-record-value font-mono tabular-nums">
+            {Math.round(Number(session.wpm) || 0)}
+          </p>
+        </div>
+        <div>
+          <p className="mobile-record-label">Duration</p>
+          <p className="mobile-record-value font-mono tabular-nums">
+            {formatCompactDuration(session.duration_seconds)}
+          </p>
+        </div>
+        <div>
+          <p className="mobile-record-label">Certificate</p>
+          <p className="mobile-record-value">
+            {hasCertificate ? "Issued" : "Not issued"}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <StatusBadge value={session.review_status || "PENDING"} />
+        {session.review_outcome && (
+          <p className="text-[11px] leading-4" style={{ color: colors.text.muted }}>
+            {session.review_outcome}
+          </p>
+        )}
+      </div>
+
+      <div className="responsive-actions mt-4">
+        <Link
+          to={ROUTES.REPLAY.replace(":sessionId", String(session.id))}
+          className="touch-target inline-flex items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-semibold"
+          style={{
+            borderColor: colors.surface[200],
+            color: colors.text.secondary,
+            background: colors.surface[50],
+          }}
+        >
+          <Icon type="replay" size={14} />
+          Open replay
+        </Link>
+        {session.certificate_id && (
+          <Link
+            to={`/verify/${session.certificate_id}`}
+            className="touch-target inline-flex items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-semibold"
+            style={{
+              borderColor: colors.surface[200],
+              color: colors.text.secondary,
+              background: colors.surface[50],
+            }}
+          >
+            <Icon type="external" size={14} />
+            Verify certificate
+          </Link>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function MetricCard({
   label,
   value,
@@ -700,7 +814,7 @@ export default function SessionsPage() {
   );
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-4 px-0 pb-8">
+    <div className="responsive-page space-y-4">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p
@@ -797,8 +911,8 @@ export default function SessionsPage() {
               })}
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="relative">
+            <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:flex xl:w-auto xl:flex-row xl:items-center">
+              <div className="relative min-w-0 sm:col-span-2 xl:col-span-1">
                 <div
                   className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
                   style={{ color: colors.text.muted }}
@@ -812,7 +926,7 @@ export default function SessionsPage() {
                     setPage(0);
                   }}
                   placeholder="Search title, course, certificate"
-                  className="h-9 w-full rounded-md border py-0 pl-9 pr-9 text-[13px] outline-none sm:w-72"
+                  className="h-9 w-full rounded-md border py-0 pl-9 pr-9 text-[13px] outline-none xl:w-72"
                   style={{
                     borderColor: colors.surface[200],
                     color: colors.text.primary,
@@ -835,14 +949,14 @@ export default function SessionsPage() {
                 )}
               </div>
 
-              <div className="relative">
+              <div className="relative min-w-0">
                 <select
                   value={reviewFilter}
                   onChange={(event) => {
                     setReviewFilter(event.target.value as ReviewFilter);
                     setPage(0);
                   }}
-                  className="h-9 appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none"
+                  className="h-9 w-full appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none xl:w-auto"
                   style={{
                     background: colors.surface[50],
                     borderColor: colors.surface[200],
@@ -863,14 +977,14 @@ export default function SessionsPage() {
                 </span>
               </div>
 
-              <div className="relative">
+              <div className="relative min-w-0">
                 <select
                   value={sortBy}
                   onChange={(event) => {
                     setSortBy(event.target.value as SortValue);
                     setPage(0);
                   }}
-                  className="h-9 appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none"
+                  className="h-9 w-full appearance-none rounded-md border py-0 pl-3 pr-8 text-[12px] font-semibold outline-none xl:w-auto"
                   style={{
                     background: colors.surface[50],
                     borderColor: colors.surface[200],
@@ -935,7 +1049,13 @@ export default function SessionsPage() {
           />
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="mobile-card-list xl:hidden">
+              {paginatedSessions.map((session) => (
+                <SessionMobileCard key={session.id} session={session} />
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto xl:block">
               <table className="w-full min-w-[1120px] border-collapse text-left">
                 <thead>
                   <tr
@@ -1222,3 +1342,5 @@ export default function SessionsPage() {
     </div>
   );
 }
+
+

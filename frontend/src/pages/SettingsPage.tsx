@@ -120,7 +120,7 @@ function SectionCard({
 }) {
   return (
     <div
-      className="rounded-xl border bg-white p-6 transition-all hover:shadow-md"
+      className="rounded-xl border bg-white p-4 transition-all hover:shadow-md sm:p-6"
       style={{
         borderColor: colors.surface[200],
         boxShadow:
@@ -449,8 +449,7 @@ export default function SettingsPage() {
       className="min-h-screen bg-gray-50/80"
       style={{ backgroundColor: colors.surface[100] }}
     >
-      {/* EXACT 75px Padding */}
-      <div className="px-[75px] py-10">
+      <div className="w-full min-w-0 px-4 py-6 sm:px-6 sm:py-8 md:px-10 lg:px-[75px] lg:py-10">
         {/* Header with Back Navigation */}
         <div className="mb-8 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
           <div>
@@ -476,9 +475,11 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* TOP TAB SWITCHER - 2026 Minimalist Style */}
+        {/* Responsive tab switcher */}
         <div
-          className="mb-8 inline-flex items-center rounded-lg bg-white p-1 border"
+          className="mb-8 grid w-full min-w-0 grid-cols-2 gap-1 rounded-lg border bg-white p-1 sm:inline-grid sm:w-auto sm:grid-cols-4"
+          role="tablist"
+          aria-label="Account settings"
           style={{
             borderColor: colors.surface[200],
             boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.03)",
@@ -489,8 +490,11 @@ export default function SettingsPage() {
             return (
               <button
                 key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 rounded-md px-3.5 py-1.5 text-[13px] font-medium transition-all ${
+                className={`flex min-w-0 items-center justify-center gap-1.5 rounded-md px-2.5 py-2 text-center text-[12px] font-medium transition-all sm:gap-2 sm:px-3.5 sm:text-[13px] ${
                   isActive ? "shadow-sm" : "hover:bg-gray-50/50"
                 }`}
                 style={{
@@ -512,9 +516,9 @@ export default function SettingsPage() {
         </div>
 
         {/* Main Bento Grid Layout - 2 Columns */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
+        <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           {/* LEFT COLUMN: Dynamic Content based on Active Tab */}
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
             {/* TAB 1: PROFILE */}
             {activeTab === "profile" && (
               <SectionCard
@@ -758,7 +762,7 @@ export default function SettingsPage() {
             {/* TAB 4: DANGER ZONE */}
             {activeTab === "danger" && (
               <div
-                className="rounded-xl border p-6"
+                className="rounded-xl border p-4 sm:p-6"
                 style={{
                   borderColor: brand.aiAccent,
                   backgroundColor: brand.aiBg,
@@ -837,7 +841,7 @@ export default function SettingsPage() {
           <div className="space-y-6">
             {/* User Snapshot Card - Embedded "Bento" Style */}
             <div
-              className="rounded-xl border bg-white p-6"
+              className="rounded-xl border bg-white p-4 sm:p-6"
               style={{ borderColor: colors.surface[200] }}
             >
               <p
@@ -890,7 +894,7 @@ export default function SettingsPage() {
 
             {/* Quick Help Card - Minimal */}
             <div
-              className="rounded-xl border bg-white p-6"
+              className="rounded-xl border bg-white p-4 sm:p-6"
               style={{ borderColor: colors.surface[200] }}
             >
               <h4

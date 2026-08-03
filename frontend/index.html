@@ -42,20 +42,22 @@
 
     <style>
       #skip-link {
-        position: absolute;
-        left: -9999px;
+        position: fixed;
+        left: 12px;
         top: 0;
         z-index: 9999;
+        transform: translateY(-150%);
         background: #2a7fe0;
         color: white;
         padding: 8px 16px;
         font-size: 14px;
         font-family: "Geist", sans-serif;
         text-decoration: none;
-        border-radius: 0 0 6px 0;
+        border-radius: 0 0 6px 6px;
+        transition: transform 120ms ease;
       }
       #skip-link:focus {
-        left: 0;
+        transform: translateY(0);
       }
     </style>
 
@@ -67,3 +69,4 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+

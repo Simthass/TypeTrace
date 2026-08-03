@@ -386,7 +386,7 @@ export default function VerifyLookupPage() {
           </div>
 
           <h1
-            className="mt-6 max-w-[760px] text-[2.65rem] font-bold leading-[1.02] tracking-[-0.055em] sm:text-[3.7rem] lg:text-[4.55rem]"
+            className="mt-6 max-w-[760px] text-[2.15rem] font-bold leading-[1.08] tracking-[-0.045em] min-[380px]:text-[2.4rem] sm:text-[3.7rem] sm:leading-[1.02] lg:text-[4.55rem]"
             style={{ color: colors.text.primary }}
           >
             Verify a TypeTrace
@@ -507,7 +507,7 @@ export default function VerifyLookupPage() {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl px-6 text-[13px] font-bold transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
+                    className="flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-xl px-6 text-[13px] font-bold sm:w-auto transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
                     style={{
                       background: brand.action,
                       color: brand.textOnDark,

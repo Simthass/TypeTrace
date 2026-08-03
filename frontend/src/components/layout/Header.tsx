@@ -7,6 +7,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ROUTES } from "../../constants/routes";
 import { brand, colors } from "../../styles/colors";
 import { useAuthStore, type AuthUser } from "../../store/authStore";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 
 export const HEADER_HEIGHT = 60;
 
@@ -1127,6 +1128,10 @@ function AnnouncementBanner({ onDismiss }: { onDismiss: () => void }) {
     >
       <span
         style={{
+          flex: "1 1 auto",
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
           fontSize: 12,
           fontWeight: 600,
           color: colors.text.light,
@@ -1465,6 +1470,7 @@ function MobileMenu({
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  useBodyScrollLock(mobileOpen);
   const [profileOpen, setProfileOpen] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
 
@@ -1498,6 +1504,17 @@ export default function Header() {
   }, [location.pathname]);
 
   useEffect(() => {
+    if (!mobileOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false);
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [mobileOpen]);
+
+  useEffect(() => {
     const close = (e: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(e.target as Node))
         setProfileOpen(false);
@@ -1505,13 +1522,6 @@ export default function Header() {
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, []);
-
-  useEffect(() => {
-    document.body.style.overflow = mobileOpen ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [mobileOpen]);
 
   const handleLogout = useCallback(() => {
     logout();
@@ -1543,8 +1553,12 @@ export default function Header() {
               top: 0,
               left: 0,
               right: 0,
+              width: "100%",
+              maxWidth: "100vw",
+              minWidth: 0,
               zIndex: 60,
               overflow: "hidden",
+              boxSizing: "border-box",
             }}
           >
             <AnnouncementBanner onDismiss={() => setShowBanner(false)} />
@@ -1560,6 +1574,11 @@ export default function Header() {
           position: "fixed",
           left: 0,
           right: 0,
+          width: "100%",
+          maxWidth: "100vw",
+          minWidth: 0,
+          overflowX: "clip",
+          boxSizing: "border-box",
           zIndex: 50,
           height: HEADER_HEIGHT,
           backgroundColor: scrolled
@@ -1574,14 +1593,18 @@ export default function Header() {
         <ScrollProgress />
 
         <div
+          className="tt-header-inner"
           style={{
-            height: "100%",
+            width: "100%",
+            minWidth: 0,
             maxWidth: 1440,
+            height: "100%",
             margin: "0 auto",
             padding: "0 24px",
             display: "flex",
             alignItems: "center",
             gap: 0,
+            boxSizing: "border-box",
           }}
         >
           {/* ── Logo ── */}
@@ -1589,7 +1612,9 @@ export default function Header() {
             to={ROUTES.HOME}
             aria-label="TypeTrace Home"
             style={{
-              flexShrink: 0,
+              minWidth: 0,
+              maxWidth: "min(148px, 45vw)",
+              flexShrink: 1,
               display: "flex",
               alignItems: "center",
               textDecoration: "none",
@@ -1600,9 +1625,11 @@ export default function Header() {
             <img
               src="/Logo.png"
               alt="TypeTrace"
+              className="tt-header-logo"
               style={{
-                height: 28,
                 width: "auto",
+                maxWidth: "100%",
+                height: 28,
                 objectFit: "contain",
                 display: "block",
               }}
@@ -1799,11 +1826,17 @@ export default function Header() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Site navigation"
             style={{
               position: "fixed",
               inset: 0,
               top: HEADER_HEIGHT + (!user && showBanner ? BANNER_HEIGHT : 0),
               zIndex: 40,
+              overflowY: "auto",
+              overscrollBehavior: "contain",
+              paddingBottom: "max(16px, env(safe-area-inset-bottom))",
               backgroundColor: colors.surface[50],
             }}
           >
@@ -1830,6 +1863,16 @@ export default function Header() {
           .tt-nav { display: none !important; }
           .tt-auth { display: none !important; }
           .tt-hamburger { display: flex !important; }
+          .tt-header-inner {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow: hidden;
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+          }
+          .tt-header-logo {
+            max-width: min(132px, 42vw) !important;
+          }
         }
         @media (max-width: 1100px) {
           .tt-username { display: none !important; }

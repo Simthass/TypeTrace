@@ -129,6 +129,9 @@ export default function Footer() {
     <footer
       role="contentinfo"
       style={{
+        width: "100%",
+        minWidth: 0,
+        maxWidth: "100%",
         backgroundColor: colors.surface[50],
         borderTop: `1px solid ${colors.surface[200]}`,
         fontFamily: "inherit",
@@ -142,7 +145,10 @@ export default function Footer() {
         }}
       >
         <div
+          className="tt-footer-cta"
           style={{
+            width: "100%",
+            minWidth: 0,
             maxWidth: 1200,
             margin: "0 auto",
             padding: "40px 32px",
@@ -153,7 +159,7 @@ export default function Footer() {
             flexWrap: "wrap",
           }}
         >
-          <div style={{ maxWidth: 520 }}>
+          <div className="tt-footer-cta-copy" style={{ minWidth: 0, maxWidth: 520 }}>
             <p
               style={{
                 margin: "0 0 6px",
@@ -192,11 +198,15 @@ export default function Footer() {
           </div>
 
           <div
+            className="tt-footer-cta-actions"
             style={{
               display: "flex",
+              minWidth: 0,
+              maxWidth: "100%",
               alignItems: "center",
               gap: 10,
-              flexShrink: 0,
+              flexShrink: 1,
+              flexWrap: "wrap",
             }}
           >
             <Link
@@ -275,18 +285,26 @@ export default function Footer() {
 
       {/* ── Main footer body ── */}
       <div
-        style={{ maxWidth: 1200, margin: "0 auto", padding: "52px 32px 48px" }}
+        className="tt-footer-body"
+        style={{
+          width: "100%",
+          minWidth: 0,
+          maxWidth: 1200,
+          margin: "0 auto",
+          padding: "52px 32px 48px",
+        }}
       >
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
+            minWidth: 0,
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
             gap: "32px 48px",
           }}
           className="tt-footer-grid"
         >
           {/* ── Brand column ── */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{ display: "flex", minWidth: 0, flexDirection: "column", gap: 20 }}>
             {/* Logo */}
             <Link
               to={ROUTES.HOME}
@@ -354,7 +372,7 @@ export default function Footer() {
           {FOOTER_COLUMNS.map((col) => (
             <div
               key={col.heading}
-              style={{ display: "flex", flexDirection: "column", gap: 16 }}
+              style={{ display: "flex", minWidth: 0, flexDirection: "column", gap: 16 }}
             >
               <h3
                 style={{
@@ -397,7 +415,10 @@ export default function Footer() {
         }}
       >
         <div
+          className="tt-footer-bottom"
           style={{
+            width: "100%",
+            minWidth: 0,
             maxWidth: 1200,
             margin: "0 auto",
             padding: "16px 32px",
@@ -410,8 +431,11 @@ export default function Footer() {
         >
           {/* Left: copyright + author */}
           <div
+            className="tt-footer-meta"
             style={{
               display: "flex",
+              minWidth: 0,
+              maxWidth: "100%",
               alignItems: "center",
               gap: 20,
               flexWrap: "wrap",
@@ -427,6 +451,7 @@ export default function Footer() {
               © {currentYear} TypeTrace. All rights reserved.
             </p>
             <span
+              className="tt-footer-meta-divider"
               style={{
                 width: 1,
                 height: 14,
@@ -462,12 +487,23 @@ export default function Footer() {
           </div>
 
           {/* Right: trust badges */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div
+            className="tt-footer-trust"
+            style={{
+              display: "flex",
+              minWidth: 0,
+              maxWidth: "100%",
+              alignItems: "center",
+              gap: 6,
+              flexWrap: "wrap",
+            }}
+          >
             {TRUST_BADGES.map(({ label, color, bg, border }) => (
               <span
                 key={label}
                 style={{
                   display: "inline-flex",
+                  maxWidth: "100%",
                   alignItems: "center",
                   gap: 5,
                   fontSize: 11.5,
@@ -493,15 +529,81 @@ export default function Footer() {
       <style>{`
         @media (max-width: 900px) {
           .tt-footer-grid {
-            grid-template-columns: 1fr 1fr !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+
+          .tt-footer-bottom {
+            align-items: flex-start !important;
+          }
+
+          .tt-footer-trust {
+            width: 100%;
           }
         }
-        @media (max-width: 560px) {
+
+        @media (max-width: 640px) {
+          .tt-footer-cta {
+            padding: 32px 16px !important;
+            flex-direction: column;
+            align-items: stretch !important;
+            gap: 24px !important;
+          }
+
+          .tt-footer-cta-copy {
+            max-width: none !important;
+          }
+
+          .tt-footer-cta-actions {
+            width: 100%;
+            flex-direction: column;
+            align-items: stretch !important;
+          }
+
+          .tt-footer-cta-actions > a {
+            width: 100%;
+            justify-content: center;
+            white-space: normal !important;
+            text-align: center;
+          }
+
+          .tt-footer-body {
+            padding: 40px 16px 36px !important;
+          }
+
           .tt-footer-grid {
-            grid-template-columns: 1fr !important;
+            grid-template-columns: minmax(0, 1fr) !important;
+            gap: 32px !important;
+          }
+
+          .tt-footer-bottom {
+            padding: 16px !important;
+            flex-direction: column;
+            align-items: stretch !important;
+            gap: 16px !important;
+          }
+
+          .tt-footer-meta {
+            gap: 10px !important;
+          }
+
+          .tt-footer-meta-divider {
+            display: none;
+          }
+
+          .tt-footer-trust {
+            width: 100%;
+            align-items: stretch !important;
+          }
+
+          .tt-footer-trust > span {
+            flex: 1 1 100%;
+            justify-content: flex-start;
+            white-space: normal !important;
           }
         }
       `}</style>
     </footer>
   );
 }
+
+

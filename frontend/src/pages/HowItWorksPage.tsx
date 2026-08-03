@@ -136,7 +136,7 @@ export default function HowItWorksPage() {
 
       <PublicSection className="pt-8">
         <div
-          className="rounded-md border p-6"
+          className="rounded-md border p-4 sm:p-6"
           style={{
             borderColor: colors.surface[200],
             background: colors.surface[100],

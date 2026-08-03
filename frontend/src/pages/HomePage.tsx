@@ -721,7 +721,7 @@ function HeroSection() {
   const delay = (n: number) => (reduced ? 0 : n);
 
   return (
-    <section className="relative flex min-h-screen flex-col items-center overflow-hidden px-6 pb-24 pt-[100px] text-center">
+    <section className="relative flex min-h-[calc(100dvh-60px)] flex-col items-center overflow-hidden px-4 pb-16 pt-[92px] text-center sm:px-6 sm:pb-24 sm:pt-[100px]">
       <HeroBackground />
 
       <HeroWidget
@@ -754,7 +754,7 @@ function HeroSection() {
             delay: delay(0.14),
             ease: [0.22, 1, 0.36, 1],
           }}
-          className="mb-6 max-w-[820px] text-[2.9rem] font-bold leading-[1.05] tracking-[-0.045em] sm:text-[4rem] lg:text-[4rem]"
+          className="mb-5 max-w-[820px] text-[2.25rem] font-bold leading-[1.08] tracking-[-0.04em] min-[380px]:text-[2.55rem] sm:mb-6 sm:text-[4rem] sm:leading-[1.05]"
         >
           <span style={{ color: colors.text.primary }}>Capture the </span>
           <span style={{ color: colors.brand }}>Writing</span>
@@ -1339,10 +1339,10 @@ function ComparisonRow({
       transition={{ duration: 0.35, delay: index * 0.05 }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="group flex items-center border-b py-3 transition-colors duration-150 ml-5"
+      className="group flex flex-col items-stretch gap-3 border-b px-4 py-4 transition-colors duration-150 sm:ml-5 sm:flex-row sm:items-center sm:gap-0 sm:px-0 sm:py-3"
       style={{ borderColor: colors.surface[200] }}
     >
-      <div className="flex-1 pr-4">
+      <div className="min-w-0 flex-1 sm:pr-4">
         <p
           className="text-[13px] font-semibold"
           style={{ color: colors.text.primary }}
@@ -1352,9 +1352,9 @@ function ComparisonRow({
         <motion.p
           initial={false}
           animate={{
-            height: isHovered ? "auto" : 0,
-            opacity: isHovered ? 1 : 0,
-            marginTop: isHovered ? 4 : 0,
+            height: "auto",
+            opacity: 1,
+            marginTop: 4,
           }}
           className="overflow-hidden text-[11px] leading-relaxed"
           style={{ color: colors.text.secondary }}
@@ -1362,7 +1362,32 @@ function ComparisonRow({
           {detail}
         </motion.p>
       </div>
-      <div className="flex w-[300px] shrink-0 items-center justify-around">
+      <div className="grid grid-cols-3 gap-2 sm:hidden">
+        {[
+          ["TypeTrace", typeTrace, true],
+          ["Text detector", aiDetectors, false],
+          ["Proctoring", proctoring, false],
+        ].map(([label, value, isTypeTraceValue]) => (
+          <div
+            key={String(label)}
+            className="rounded-md border px-2 py-2 text-center"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <p
+              className="mb-2 text-[9px] font-bold uppercase tracking-[0.08em]"
+              style={{ color: colors.text.muted }}
+            >
+              {String(label)}
+            </p>
+            {renderCell(
+              value as boolean | string,
+              Boolean(isTypeTraceValue),
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden w-[300px] shrink-0 items-center justify-around sm:flex">
         <div className="w-16 text-center">
           <motion.div
             animate={{
@@ -1552,7 +1577,7 @@ function StatCard({
 function DifferentiatorSection() {
   return (
     <section
-      className="relative overflow-hidden px-6 py-20 md:px-12 md:py-28"
+      className="relative overflow-hidden px-4 py-16 sm:px-6 sm:py-20 md:px-12 md:py-28"
       style={{ background: colors.surface[100] }}
     >
       <div
@@ -1572,7 +1597,7 @@ function DifferentiatorSection() {
           />
         </Reveal>
 
-        <Reveal className="mb-12 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Reveal className="mb-12 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
           <StatCard value="43" label="Timing-model features" icon="model" />
           <StatCard value="2" label="Evidence layers" icon="activity" />
           <StatCard
@@ -1606,7 +1631,7 @@ function DifferentiatorSection() {
               </p>
               <PublicCard className="overflow-hidden">
                 <div
-                  className="border-b flex items-center py-2.5 ml-5"
+                  className="hidden border-b py-2.5 sm:ml-5 sm:flex sm:items-center"
                   style={{ borderColor: colors.surface[200] }}
                 >
                   <div className="flex-1">
@@ -1858,7 +1883,7 @@ function TrustSection() {
 
   return (
     <section
-      className="relative overflow-hidden px-6 py-20 md:px-12 md:py-28"
+      className="relative overflow-hidden px-4 py-16 sm:px-6 sm:py-20 md:px-12 md:py-28"
       style={{ background: colors.text.primary }}
     >
       <div
@@ -1911,9 +1936,11 @@ function TrustSection() {
         </Reveal>
 
         <Reveal delay={0.05}>
-          <div className="mb-8 flex justify-center">
+          <div className="mb-8 flex min-w-0 justify-center">
             <div
-              className="inline-flex rounded-xl border p-1"
+              className="grid w-full min-w-0 max-w-[680px] grid-cols-1 gap-1 rounded-xl border p-1 sm:grid-cols-3"
+              role="tablist"
+              aria-label="Trust architecture"
               style={{
                 borderColor: withAlpha(colors.text.light, "15"),
                 background: withAlpha(colors.text.light, "05"),
@@ -1922,8 +1949,11 @@ function TrustSection() {
               {TRUST_TABS.map((tab) => (
                 <button
                   key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className="relative flex items-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-semibold transition-all duration-200"
+                  className="relative flex w-full min-w-0 items-center justify-start gap-2 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold transition-all duration-200 sm:justify-center sm:px-4 sm:text-center"
                   style={{
                     color:
                       activeTab === tab.id
@@ -2076,7 +2106,7 @@ function TrustSection() {
 function FinalCtaSection() {
   return (
     <section
-      className="relative overflow-hidden px-6 py-28 text-center md:py-36"
+      className="relative overflow-hidden px-4 py-20 text-center sm:px-6 sm:py-28 md:py-36"
       style={{ background: colors.surface[50] }}
     >
       <div

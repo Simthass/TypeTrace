@@ -394,10 +394,10 @@ function PanelHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-4 flex items-start justify-between gap-3">
+    <div className="mb-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
         <h2
-          className="truncate text-[15px] font-bold tracking-[-0.03em]"
+          className="text-anywhere text-[15px] font-bold tracking-[-0.03em] sm:truncate"
           style={{ color: colors.text.primary }}
         >
           {title}
@@ -408,20 +408,22 @@ function PanelHeader({
           </p>
         )}
       </div>
-      {action ?? (
-        <button
-          type="button"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border"
-          style={{
-            background: colors.surface[50],
-            borderColor: colors.surface[200],
-            color: colors.text.secondary,
-          }}
-          aria-label="More options"
-        >
-          <Icon type="more" size={15} />
-        </button>
-      )}
+      <div className="max-w-full self-start sm:self-auto">
+        {action ?? (
+          <button
+            type="button"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border"
+            style={{
+              background: colors.surface[50],
+              borderColor: colors.surface[200],
+              color: colors.text.secondary,
+            }}
+            aria-label="More options"
+          >
+            <Icon type="more" size={15} />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -655,7 +657,7 @@ function EvidenceTrendPanel({
         subtitle="Daily session count by model outcome. One y-axis, one unit: sessions."
         action={
           <div
-            className="flex items-center gap-1 rounded-md border p-1"
+            className="flex max-w-full flex-wrap items-center gap-1 rounded-md border p-1"
             style={{
               background: colors.surface[100],
               borderColor: colors.surface[200],
@@ -1101,7 +1103,112 @@ function LatestSessionsPanel({ sessions }: { sessions: StudentSession[] }) {
         }
       />
 
-      <div className="overflow-x-auto">
+      <div className="mobile-card-list -mx-1 px-1 xl:hidden">
+        {sessions.slice(0, 6).map((session) => {
+          const classification = classificationTone(
+            session.classification_bucket,
+          );
+          const review = reviewTone(session.review_status);
+          const confidence = normalizeEvidenceScore(session.confidence);
+
+          return (
+            <article key={session.id} className="mobile-record-card">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Link
+                    to={ROUTES.SESSION_DETAIL.replace(
+                      ":sessionId",
+                      String(session.id),
+                    )}
+                    className="text-anywhere text-[14px] font-bold leading-5"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {session.title}
+                  </Link>
+                  <p
+                    className="mt-1 text-[11px]"
+                    style={{ color: colors.text.muted }}
+                  >
+                    {session.course_name || "Personal session"} · {formatDate(session.created_at)}
+                  </p>
+                </div>
+                <StatusBadge
+                  label={classificationDisplayLabel(
+                    session.classification_bucket,
+                  )}
+                  tone={classification}
+                />
+              </div>
+
+              <div className="mt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="mobile-record-label">Human evidence score</p>
+                  <p
+                    className="font-mono text-[13px] font-bold tabular-nums"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {formatEvidenceScore(confidence)}%
+                  </p>
+                </div>
+                <div
+                  className="mt-2 h-1.5 rounded-md"
+                  style={{ background: colors.surface[150] }}
+                >
+                  <div
+                    className="h-1.5 rounded-md"
+                    style={{
+                      width: `${confidence}%`,
+                      background: getToneStyles(classification).accent,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="mobile-record-grid mt-4">
+                <div>
+                  <p className="mobile-record-label">Words</p>
+                  <p className="mobile-record-value">
+                    {formatNumber(session.word_count)}
+                  </p>
+                </div>
+                <div>
+                  <p className="mobile-record-label">Duration</p>
+                  <p className="mobile-record-value">
+                    {formatDuration(session.duration_seconds)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <StatusBadge
+                  label={
+                    session.review_status === "NOT_APPLICABLE"
+                      ? "Personal"
+                      : session.review_status || "Pending"
+                  }
+                  tone={review}
+                />
+                <Link
+                  to={ROUTES.SESSION_DETAIL.replace(
+                    ":sessionId",
+                    String(session.id),
+                  )}
+                  className="touch-target inline-flex items-center justify-center rounded-md border px-3 text-[12px] font-bold"
+                  style={{
+                    background: colors.surface[50],
+                    borderColor: colors.surface[200],
+                    color: colors.text.primary,
+                  }}
+                >
+                  Open session
+                </Link>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto xl:block">
         <table className="w-full min-w-[740px] border-collapse text-left">
           <thead>
             <tr style={{ borderBottom: `1px solid ${colors.surface[200]}` }}>
@@ -1487,7 +1594,7 @@ export default function DashboardPage() {
   const reviewBacklog = summary.pending_count + summary.flagged_count;
 
   return (
-    <div className="space-y-3 pb-6">
+    <div className="min-w-0 max-w-full space-y-3 overflow-x-clip pb-6">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           title="Total sessions"
@@ -1592,3 +1699,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+

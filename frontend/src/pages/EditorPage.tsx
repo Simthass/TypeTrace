@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { ROUTES } from "../constants/routes";
 import { useKeystrokeCapture } from "../hooks/useKeystrokeCapture";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import {
   useEditorDraftRecovery,
   type EditorDraftSnapshot,
@@ -310,7 +311,7 @@ function CourseSelectorModal({
   isSubmitting: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:px-4">
       {/* Backdrop */}
       <button
         type="button"
@@ -322,7 +323,7 @@ function CourseSelectorModal({
 
       {/* Modal */}
       <div
-        className="relative z-10 w-full max-w-[520px] rounded-md border bg-white"
+        className="safe-bottom relative z-10 max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border bg-white sm:max-w-[520px] sm:rounded-md"
         style={{
           borderColor: colors.surface[200],
           boxShadow: `0 32px 80px -16px rgba(15,23,42,0.22), 0 0 0 1px ${colors.surface[200]}`,
@@ -330,7 +331,7 @@ function CourseSelectorModal({
       >
         {/* Header */}
         <div
-          className="border-b px-6 py-5"
+          className="border-b px-4 py-4 sm:px-6 sm:py-5"
           style={{ borderColor: colors.surface[200] }}
         >
           <p
@@ -355,7 +356,7 @@ function CourseSelectorModal({
         </div>
 
         {/* Options */}
-        <div className="px-6 py-4 space-y-2">
+        <div className="scroll-region max-h-[52dvh] space-y-2 overflow-y-auto px-4 py-4 sm:max-h-none sm:px-6">
           {/* Personal option */}
           <button
             type="button"
@@ -460,7 +461,7 @@ function CourseSelectorModal({
 
         {/* Actions */}
         <div
-          className="flex items-center justify-end gap-3 border-t px-6 py-4"
+          className="flex flex-col-reverse gap-2 border-t px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:px-6"
           style={{ borderColor: colors.surface[200] }}
         >
           <button
@@ -531,13 +532,13 @@ function DraftRecoveryModal({
   const words = countWords(draft.text);
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:px-4">
       <div
         className="absolute inset-0"
         style={{ background: "rgba(15, 23, 42, 0.58)" }}
       />
       <div
-        className="relative z-10 w-full max-w-[560px] overflow-hidden rounded-md border bg-white"
+        className="safe-bottom relative z-10 max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border bg-white sm:max-w-[560px] sm:rounded-md"
         style={{
           borderColor: colors.surface[200],
           boxShadow: "0 34px 90px rgba(15,23,42,0.28)",
@@ -647,13 +648,13 @@ function EditorConsentModal({
   onLeave: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:px-4">
       <div
         className="absolute inset-0"
         style={{ background: "rgba(15, 23, 42, 0.64)" }}
       />
       <div
-        className="relative z-10 w-full max-w-[620px] overflow-hidden rounded-md border bg-white"
+        className="safe-bottom relative z-10 max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border bg-white sm:max-w-[620px] sm:rounded-md"
         style={{
           borderColor: colors.surface[200],
           boxShadow: "0 34px 100px rgba(15,23,42,0.34)",
@@ -786,7 +787,7 @@ function AnalysisResultModal({
   );
 
   return (
-    <div className="fixed inset-0 z-[65] flex items-center justify-center px-4 py-6">
+    <div className="fixed inset-0 z-[65] flex items-end justify-center sm:items-center sm:px-4 sm:py-6">
       <button
         type="button"
         className="absolute inset-0 cursor-default"
@@ -799,7 +800,7 @@ function AnalysisResultModal({
       />
 
       <div
-        className="relative z-10 flex max-h-[92vh] w-full max-w-[980px] flex-col overflow-hidden rounded-md border bg-white"
+        className="relative z-10 flex max-h-[94dvh] w-full max-w-[980px] flex-col overflow-hidden rounded-t-2xl border bg-white sm:max-h-[92dvh] sm:rounded-md"
         style={{
           borderColor: colors.surface[200],
           boxShadow: "0 34px 110px rgba(15,23,42,0.32)",
@@ -809,7 +810,7 @@ function AnalysisResultModal({
         aria-label="Behavioral analysis result"
       >
         <div
-          className="border-b px-6 py-5"
+          className="border-b px-4 py-4 sm:px-6 sm:py-5"
           style={{
             borderColor: colors.surface[200],
             background: colors.surface[50],
@@ -854,10 +855,10 @@ function AnalysisResultModal({
           </div>
         </div>
 
-        <div className="overflow-y-auto px-6 py-6">
+        <div className="scroll-region overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
           <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
             <section
-              className="rounded-md border p-6"
+              className="rounded-md border p-4 sm:p-6"
               style={{ borderColor: style.accent, background: style.bg }}
             >
               <div className="flex items-start justify-between gap-4">
@@ -936,7 +937,7 @@ function AnalysisResultModal({
                 </div>
               )}
 
-              <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {[
                   [
                     "Risk level",
@@ -994,7 +995,7 @@ function AnalysisResultModal({
               style={{ borderColor: colors.surface[200] }}
             >
               <SidebarLabel>Core behavioral metrics</SidebarLabel>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {[
                   ["Words per minute", result.stats.wpm],
                   ["Avg. IKI", `${result.stats.avgIki} ms`],
@@ -1198,6 +1199,12 @@ export default function EditorPage() {
     typeof window === "undefined"
       ? false
       : window.localStorage.getItem(EDITOR_CONSENT_STORAGE_KEY) !== "accepted",
+  );
+  useBodyScrollLock(
+    showCourseModal ||
+      showResultModal ||
+      showDraftRecoveryModal ||
+      showConsentModal,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveState, setSaveState] = useState<
@@ -1961,7 +1968,7 @@ export default function EditorPage() {
     >
       {/* ── Top Header ─────────────────────────────────────────────────────── */}
       <header
-        className="z-40 flex h-[52px] shrink-0 items-center justify-between border-b bg-white px-4"
+        className="z-40 flex min-h-[52px] shrink-0 items-center justify-between gap-2 border-b bg-white px-3 py-2 sm:px-4"
         style={{ borderColor: colors.surface[200] }}
       >
         {/* Left: Logo + session name */}
@@ -1995,11 +2002,13 @@ export default function EditorPage() {
         </div>
 
         {/* Right: status + actions */}
-        <div className="flex items-center gap-4">
-          <SaveIndicator
-            state={isSavingDraft ? "saving" : saveState}
-            offlineSafe={!isOnline}
-          />
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-4">
+          <div className="hidden md:block">
+            <SaveIndicator
+              state={isSavingDraft ? "saving" : saveState}
+              offlineSafe={!isOnline}
+            />
+          </div>
 
           {/* Capture status pill */}
           <div
@@ -2031,13 +2040,13 @@ export default function EditorPage() {
           </div>
 
           <div
-            className="h-4 w-px"
+            className="hidden h-4 w-px sm:block"
             style={{ background: colors.surface[200] }}
           />
 
           <Link
             to={ROUTES.DASHBOARD}
-            className="rounded-md border px-3 py-[6px] text-[12px] font-semibold transition-all duration-150 hover:brightness-95"
+            className="hidden rounded-md border px-3 py-[6px] text-[12px] font-semibold transition-all duration-150 hover:brightness-95 lg:inline-flex"
             style={{
               borderColor: colors.surface[200],
               color: colors.text.secondary,
@@ -2058,7 +2067,8 @@ export default function EditorPage() {
               background: colors.surface[50],
             }}
           >
-            Save draft
+            <span className="hidden sm:inline">Save draft</span>
+            <span className="sm:hidden">Save</span>
           </button>
 
           <button
@@ -2072,7 +2082,8 @@ export default function EditorPage() {
             {canAnalyze && (
               <span className="h-[6px] w-[6px] animate-pulse rounded-md bg-white opacity-80" />
             )}
-            Analyze session
+            <span className="hidden sm:inline">Analyze session</span>
+            <span className="sm:hidden">Analyze</span>
           </button>
         </div>
       </header>
@@ -2083,13 +2094,13 @@ export default function EditorPage() {
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* Editor toolbar strip */}
           <div
-            className="flex h-[40px] shrink-0 items-center justify-between border-b px-5"
+            className="flex min-h-[40px] shrink-0 items-center justify-between gap-3 border-b px-3 py-2 sm:px-5"
             style={{
               borderColor: colors.surface[200],
               background: colors.surface[50],
             }}
           >
-            <div className="flex items-center gap-5">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-5">
               <span
                 className="text-[11px] font-medium tabular-nums"
                 style={{ color: colors.text.muted }}
@@ -2114,7 +2125,7 @@ export default function EditorPage() {
               </span>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-4">
               {/* Live typing signal */}
               {isTyping && (
                 <div className="flex items-center gap-[5px]">
@@ -2148,8 +2159,53 @@ export default function EditorPage() {
             active={isTyping}
           />
 
+          <details
+            className="border-b bg-white px-4 py-2 xl:hidden"
+            style={{ borderColor: colors.surface[200] }}
+          >
+            <summary
+              className="touch-target flex cursor-pointer list-none items-center justify-between text-[12px] font-semibold"
+              style={{ color: colors.text.primary }}
+            >
+              <span>Session evidence</span>
+              <span style={{ color: colors.text.muted }}>
+                {liveStats.keystrokes} keys · {liveStats.wpm} WPM
+              </span>
+            </summary>
+            <div className="grid grid-cols-2 gap-3 pb-3 pt-2 sm:grid-cols-4">
+              {[
+                ["Words", wordCount],
+                ["Duration", formatDuration(liveStats.sessionSeconds)],
+                ["Pauses", liveStats.pauses],
+                ["Paste events", pasteEventCount],
+              ].map(([label, value]) => (
+                <div
+                  key={String(label)}
+                  className="rounded-md border p-3"
+                  style={{
+                    borderColor: colors.surface[200],
+                    background: colors.surface[100],
+                  }}
+                >
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-[0.12em]"
+                    style={{ color: colors.text.muted }}
+                  >
+                    {String(label)}
+                  </p>
+                  <p
+                    className="mt-1 font-mono text-[13px] font-bold tabular-nums"
+                    style={{ color: colors.text.primary }}
+                  >
+                    {String(value)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </details>
+
           {/* Textarea */}
-          <div className="flex-1 overflow-y-auto bg-white px-6 pt-6 pb-24 sm:px-10 md:px-16 lg:px-24">
+          <div className="scroll-region flex-1 overflow-y-auto bg-white px-4 pb-24 pt-5 sm:px-10 sm:pt-6 md:px-16 lg:px-24">
             <textarea
               ref={textareaRef}
               value={text}
@@ -2190,7 +2246,7 @@ export default function EditorPage() {
               onCut={handleCut}
               onSelect={handleSelectionChange}
               placeholder="Start writing here. TypeTrace quietly captures your behavioral evidence in the background - timing, pauses, deletions, and rhythm that only a human writer produces."
-              className="h-full min-h-[480px] w-full resize-none border-none bg-transparent text-[16px] leading-[1.85] outline-none placeholder:text-[15px]"
+              className="h-full min-h-[calc(100dvh-250px)] w-full resize-none border-none bg-transparent text-[16px] leading-[1.75] outline-none placeholder:text-[15px] sm:min-h-[480px] sm:leading-[1.85]"
               style={{
                 color: colors.text.primary,
               }}
@@ -2464,12 +2520,12 @@ export default function EditorPage() {
 
       {/* ── Bottom status bar ────────────────────────────────────────────────── */}
       <div
-        className="z-40 flex h-[36px] shrink-0 items-center justify-between border-t bg-white px-5"
+        className="z-40 flex min-h-[42px] shrink-0 items-center justify-between gap-3 border-t bg-white px-3 py-1 sm:h-[36px] sm:px-5"
         style={{ borderColor: colors.surface[200] }}
       >
         {/* Left: session breadcrumb */}
         <div
-          className="flex items-center gap-2 text-[11px]"
+          className="hidden min-w-0 items-center gap-2 text-[11px] sm:flex"
           style={{ color: colors.text.muted }}
         >
           <Link
@@ -2495,7 +2551,7 @@ export default function EditorPage() {
         </div>
 
         {/* Right: live stat chips */}
-        <div className="flex items-center gap-[18px]">
+        <div className="scroll-region flex min-w-0 flex-1 items-center justify-end gap-3 overflow-x-auto sm:gap-[18px]">
           {[
             { label: "Words", value: wordCount },
             { label: "Keys", value: liveStats.keystrokes },
@@ -2503,7 +2559,14 @@ export default function EditorPage() {
             { label: "WPM", value: liveStats.wpm },
             { label: "Time", value: formatDuration(liveStats.sessionSeconds) },
           ].map(({ label, value }) => (
-            <div key={label} className="flex items-center gap-[5px]">
+            <div
+              key={label}
+              className={`items-center gap-[5px] ${
+                label === "Keys" || label === "Paste" || label === "WPM"
+                  ? "hidden sm:flex"
+                  : "flex"
+              }`}
+            >
               <span
                 className="text-[10px] font-bold uppercase tracking-[0.14em]"
                 style={{ color: colors.text.muted }}

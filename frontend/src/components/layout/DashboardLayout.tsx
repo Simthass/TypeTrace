@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Link,
   NavLink,
@@ -12,6 +12,7 @@ import { colors } from "../../styles/colors";
 import { useAuthStore } from "../../store/authStore";
 import { NotificationBell } from "../ui/NotificationBell";
 import { useNotificationPolling } from "../../hooks/useNotificationPolling";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 
 function Icon({ type, size = 16 }: { type: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
@@ -202,7 +203,7 @@ const resourceLinks: StudentNavItem[] = [
   {
     label: "Help & Docs",
     path: ROUTES.HELP_DOCS,
-    icon: "helpCircle",
+    icon: "help",
     external: true,
   },
 ];
@@ -506,6 +507,18 @@ export default function DashboardLayout() {
 
   // Initiate polling
   useNotificationPolling();
+  useBodyScrollLock(mobileOpen);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false);
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [mobileOpen]);
 
   const title = useMemo(
     () => getPageTitle(location.pathname),
@@ -524,7 +537,7 @@ export default function DashboardLayout() {
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-screen max-w-full overflow-x-clip"
       style={{ backgroundColor: colors.surface[100] }}
     >
       <aside
@@ -563,7 +576,7 @@ export default function DashboardLayout() {
       </aside>
 
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-50 md:hidden" role="presentation">
           <button
             type="button"
             className="absolute inset-0"
@@ -573,7 +586,10 @@ export default function DashboardLayout() {
           />
 
           <aside
-            className="absolute bottom-0 left-0 right-0 max-h-[84dvh] rounded-md border p-3"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Student navigation"
+            className="safe-bottom absolute bottom-0 left-0 right-0 max-h-[90dvh] overflow-hidden rounded-t-2xl border p-3"
             style={{
               backgroundColor: colors.surface[50],
               borderColor: colors.surface[200],
@@ -601,7 +617,7 @@ export default function DashboardLayout() {
                 <Icon type="close" />
               </button>
             </div>
-            <div className="max-h-[76dvh] overflow-y-auto">
+            <div className="scroll-region max-h-[80dvh] overflow-y-auto">
               <SidebarContent
                 collapsed={false}
                 onClose={() => setMobileOpen(false)}
@@ -612,7 +628,7 @@ export default function DashboardLayout() {
       )}
 
       <div
-        className={`min-h-screen transition-all duration-200 ${
+        className={`min-h-screen min-w-0 max-w-full overflow-x-clip transition-all duration-200 ${
           collapsed ? "md:ml-[64px]" : "md:ml-[260px]"
         }`}
       >
@@ -623,12 +639,12 @@ export default function DashboardLayout() {
             borderColor: colors.surface[200],
           }}
         >
-          <div className="flex h-[56px] items-center justify-between gap-4 px-4 md:px-6">
+          <div className="flex h-[56px] min-w-0 items-center justify-between gap-2 px-3 sm:gap-4 sm:px-4 md:px-6">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
-                className="flex h-9 w-9 items-center justify-center rounded-md border md:hidden"
+                className="touch-target flex h-9 w-9 items-center justify-center rounded-md border md:hidden"
                 style={{
                   backgroundColor: colors.surface[50],
                   borderColor: colors.surface[200],
@@ -783,7 +799,7 @@ export default function DashboardLayout() {
         </header>
 
         <main
-          className="min-h-[calc(100vh-56px)] p-4 md:p-6"
+          className="min-h-[calc(100vh-56px)] min-w-0 max-w-full overflow-x-clip p-3 sm:p-4 md:p-6"
           style={{ backgroundColor: colors.surface[100] }}
         >
           <Outlet />

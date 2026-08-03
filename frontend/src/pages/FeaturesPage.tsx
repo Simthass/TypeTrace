@@ -176,7 +176,7 @@ export default function FeaturesPage() {
           {comparison.map((group, index) => (
             <div
               key={group.title}
-              className="rounded-md border p-6"
+              className="rounded-md border p-4 sm:p-6"
               style={{
                 borderColor: index === 0 ? brand.aiAccent : brand.humanAccent,
                 background: index === 0 ? brand.aiBg : brand.humanBg,

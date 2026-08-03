@@ -192,7 +192,7 @@ export default function HelpDocsPage() {
             {filteredDocs.map((group) => (
               <div
                 key={group.category}
-                className="rounded-md border bg-white p-6"
+                className="rounded-md border bg-white p-4 sm:p-6"
                 style={{
                   borderColor: colors.surface[200],
                   boxShadow: `0 20px 60px ${colors.shadow}`,

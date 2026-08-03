@@ -222,6 +222,121 @@ function StatusBadge({ ready }: { ready: boolean }) {
   );
 }
 
+
+function DraftMobileCard({
+  draft,
+  deleting,
+  onDelete,
+}: {
+  draft: EditorDraftSnapshot;
+  deleting: boolean;
+  onDelete: (draft: EditorDraftSnapshot) => void;
+}) {
+  const readiness = draftReadiness(draft);
+  const resumePath = `${ROUTES.EDITOR_NEW}?draftId=${encodeURIComponent(draft.draftId)}`;
+
+  return (
+    <article className="mobile-record-card">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3
+            className="text-anywhere text-[14px] font-semibold leading-5"
+            style={{ color: colors.text.primary }}
+          >
+            {titleForDraft(draft)}
+          </h3>
+          <p className="mt-1 text-[11px]" style={{ color: colors.text.muted }}>
+            Saved {formatDateTime(draft.savedAt)}
+          </p>
+        </div>
+        <StatusBadge ready={readiness.ready} />
+      </div>
+
+      <div className="mobile-record-grid mt-4">
+        <div>
+          <p className="mobile-record-label">Words</p>
+          <p className="mobile-record-value font-mono tabular-nums">
+            {readiness.words.toLocaleString()}
+          </p>
+        </div>
+        <div>
+          <p className="mobile-record-label">Duration</p>
+          <p className="mobile-record-value font-mono tabular-nums">
+            {formatDurationFromDraft(draft)}
+          </p>
+        </div>
+        <div>
+          <p className="mobile-record-label">Keys</p>
+          <p className="mobile-record-value font-mono tabular-nums">
+            {readiness.keydowns.toLocaleString()}
+          </p>
+        </div>
+        <div>
+          <p className="mobile-record-label">Evidence events</p>
+          <p className="mobile-record-value font-mono tabular-nums">
+            {draft.keystrokeLog.length.toLocaleString()}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <span
+          className="rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide"
+          style={{
+            background:
+              draft.syncStatus === "SYNCED"
+                ? colors.mintTint
+                : colors.surface[100],
+            borderColor: colors.surface[200],
+            color:
+              draft.syncStatus === "SYNCED"
+                ? brand.humanText
+                : colors.text.muted,
+          }}
+        >
+          {draft.syncStatus === "SYNCED"
+            ? "Cloud synced"
+            : draft.syncStatus === "CONFLICT"
+              ? "Sync conflict"
+              : "Local fallback"}
+        </span>
+        <span className="text-[11px]" style={{ color: colors.text.muted }}>
+          Created {formatDateTime(draft.createdAt)}
+        </span>
+      </div>
+
+      <div className="responsive-actions mt-4">
+        <Link
+          to={resumePath}
+          className="touch-target inline-flex items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-semibold"
+          style={{
+            borderColor: colors.surface[200],
+            color: colors.text.secondary,
+            background: colors.surface[50],
+          }}
+        >
+          <Icon type="editor" size={14} />
+          Resume draft
+        </Link>
+        <button
+          type="button"
+          disabled={deleting}
+          onClick={() => onDelete(draft)}
+          className="touch-target inline-flex items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
+          style={{
+            borderColor: colors.surface[200],
+            color: brand.aiText,
+            background: colors.surface[50],
+          }}
+        >
+          <Icon type="trash" size={14} />
+          Delete
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function EmptyState() {
   return (
     <section className="rounded-md border" style={panelStyle()}>
@@ -394,9 +509,9 @@ export default function DraftsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-4 px-0 pb-8">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
+    <div className="responsive-page space-y-4">
+      <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="min-w-0">
           <p
             className="text-[10px] font-bold uppercase tracking-[0.16em]"
             style={{ color: colors.text.muted }}
@@ -418,11 +533,11 @@ export default function DraftsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 xl:w-auto xl:flex-nowrap xl:justify-end">
           <button
             type="button"
             onClick={() => void loadDrafts()}
-            className="h-9 rounded-md border px-4 text-[13px] font-semibold"
+            className="h-9 shrink-0 rounded-md border px-4 text-[13px] font-semibold"
             style={{
               background: colors.surface[50],
               borderColor: colors.surface[200],
@@ -433,7 +548,7 @@ export default function DraftsPage() {
           </button>
           <Link
             to={ROUTES.EDITOR_NEW}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-4 text-[13px] font-semibold"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 text-[13px] font-semibold"
             style={{ background: colors.brand, color: colors.text.light }}
           >
             <Icon type="editor" size={15} />
@@ -601,8 +716,20 @@ export default function DraftsPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1120px] border-collapse text-left">
+            <>
+              <div className="mobile-card-list xl:hidden">
+                {filteredDrafts.map((draft) => (
+                  <DraftMobileCard
+                    key={draft.draftKey}
+                    draft={draft}
+                    deleting={deletingKey === draft.draftKey}
+                    onDelete={(item) => void deleteDraft(item)}
+                  />
+                ))}
+              </div>
+
+              <div className="hidden overflow-x-auto xl:block">
+                <table className="w-full min-w-[1120px] border-collapse text-left">
                 <thead>
                   <tr
                     className="border-b"
@@ -798,11 +925,14 @@ export default function DraftsPage() {
                     );
                   })}
                 </tbody>
-              </table>
-            </div>
+                </table>
+              </div>
+            </>
           )}
         </section>
       )}
     </div>
   );
 }
+
+

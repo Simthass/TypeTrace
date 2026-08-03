@@ -476,7 +476,7 @@ export function EvidenceBoard() {
           ))}
         </div>
 
-        <div className="mt-5 grid grid-cols-3 gap-3">
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {[
             { value: "38s", label: "total pauses" },
             { value: "12", label: "revisions" },
@@ -612,7 +612,7 @@ export function WorkflowGraphic() {
 
   return (
     <PublicCard className="p-8">
-      <div className="grid gap-6 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {steps.map((step, index) => (
           <div key={step.label} className="relative flex flex-col items-center">
             <div
