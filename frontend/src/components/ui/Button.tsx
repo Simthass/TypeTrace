@@ -1,6 +1,6 @@
 // frontend/src/components/ui/Button.tsx
 
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Link, type LinkProps } from "react-router-dom";
 
 import { brand, colors } from "../../styles/colors";
@@ -53,35 +53,41 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   rightIcon?: ReactNode;
 }
 
-export function Button({
-  variant = "primary",
-  size = "md",
-  leftIcon,
-  rightIcon,
-  children,
-  className = "",
-  ...props
-}: ButtonProps) {
-  const style = getButtonStyle(variant);
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  function Button(
+    {
+      variant = "primary",
+      size = "md",
+      leftIcon,
+      rightIcon,
+      children,
+      className = "",
+      ...props
+    },
+    ref,
+  ) {
+    const style = getButtonStyle(variant);
 
-  return (
-    <button
-      {...props}
-      className={`inline-flex items-center justify-center gap-2 rounded-md border font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${sizeClasses[size]} ${className}`}
-      style={{
-        ...style,
-        boxShadow:
-          variant === "primary"
-            ? `0 12px 28px -18px ${colors.brand}`
-            : undefined,
-      }}
-    >
-      {leftIcon}
-      {children}
-      {rightIcon}
-    </button>
-  );
-}
+    return (
+      <button
+        ref={ref}
+        {...props}
+        className={`inline-flex items-center justify-center gap-2 rounded-md border font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${sizeClasses[size]} ${className}`}
+        style={{
+          ...style,
+          boxShadow:
+            variant === "primary"
+              ? `0 12px 28px -18px ${colors.brand}`
+              : undefined,
+        }}
+      >
+        {leftIcon}
+        {children}
+        {rightIcon}
+      </button>
+    );
+  },
+);
 
 interface ButtonLinkProps extends LinkProps {
   variant?: ButtonVariant;

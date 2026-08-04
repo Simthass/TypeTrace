@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import AuthRedirectGuard from "./components/guards/AuthRedirectGuard";
@@ -17,38 +18,76 @@ import { ToastProvider } from "./components/ui/ToastProvider";
 
 import { ROUTES } from "./constants/routes";
 
-import AboutPage from "./pages/AboutPage";
-import AnalyticsPage from "./pages/AnalyticsPage";
-import CertificatesPage from "./pages/CertificatesPage";
-import CertificateVerificationResultPage from "./pages/CertificateVerificationResultPage";
-import DashboardPage from "./pages/DashboardPage";
-import DraftsPage from "./pages/DraftsPage";
-import EditorPage from "./pages/EditorPage";
-import FeaturesPage from "./pages/FeaturesPage";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import HelpDocsPage from "./pages/HelpDocsPage";
-import HomePage from "./pages/HomePage";
-import HowItWorksPage from "./pages/HowItWorksPage";
-import LoginPage from "./pages/LoginPage";
-import NotFoundPage from "./pages/NotFoundPage";
-import PrivacyPage from "./pages/PrivacyPage";
-import RegisterPage from "./pages/RegisterPage";
-import ReplayPage from "./pages/ReplayPage";
-import SessionsPage from "./pages/SessionsPage";
-import StudentSessionDetailPage from "./pages/student/StudentSessionDetailPage";
-import SettingsPage from "./pages/SettingsPage";
-import SettingsRedirectPage from "./pages/SettingsRedirectPage";
-import VerifyLookupPage from "./pages/VerifyLookupPage";
-import VerifyOtpPage from "./pages/VerifyOtpPage";
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
+const CertificatesPage = lazy(() => import("./pages/CertificatesPage"));
+const CertificateVerificationResultPage = lazy(
+  () => import("./pages/CertificateVerificationResultPage"),
+);
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const DraftsPage = lazy(() => import("./pages/DraftsPage"));
+const EditorPage = lazy(() => import("./pages/EditorPage"));
+const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
+const HelpDocsPage = lazy(() => import("./pages/HelpDocsPage"));
+const HomePage = lazy(() => import("./pages/HomePage"));
+const HowItWorksPage = lazy(() => import("./pages/HowItWorksPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
+const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const ReplayPage = lazy(() => import("./pages/ReplayPage"));
+const SessionsPage = lazy(() => import("./pages/SessionsPage"));
+const StudentSessionDetailPage = lazy(
+  () => import("./pages/student/StudentSessionDetailPage"),
+);
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const SettingsRedirectPage = lazy(
+  () => import("./pages/SettingsRedirectPage"),
+);
+const VerifyLookupPage = lazy(() => import("./pages/VerifyLookupPage"));
+const VerifyOtpPage = lazy(() => import("./pages/VerifyOtpPage"));
+const JoinCoursePage = lazy(
+  () => import("./pages/student/JoinCoursePage"),
+);
+const TeacherCourseDetailPage = lazy(
+  () => import("./pages/teacher/TeacherCourseDetailPage"),
+);
+const TeacherCoursesPage = lazy(
+  () => import("./pages/teacher/TeacherCoursesPage"),
+);
+const TeacherDashboard = lazy(
+  () => import("./pages/teacher/TeacherDashboard"),
+);
+const TeacherReviewPage = lazy(
+  () => import("./pages/teacher/TeacherReviewPage"),
+);
+const TeacherStudentsPage = lazy(
+  () => import("./pages/teacher/TeacherStudentsPage"),
+);
+const TeacherSubmissionsPage = lazy(
+  () => import("./pages/teacher/TeacherSubmissionsPage"),
+);
 
-import JoinCoursePage from "./pages/student/JoinCoursePage";
-
-import TeacherCourseDetailPage from "./pages/teacher/TeacherCourseDetailPage";
-import TeacherCoursesPage from "./pages/teacher/TeacherCoursesPage";
-import TeacherDashboard from "./pages/teacher/TeacherDashboard";
-import TeacherReviewPage from "./pages/teacher/TeacherReviewPage";
-import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage";
-import TeacherSubmissionsPage from "./pages/teacher/TeacherSubmissionsPage";
+function RouteLoadingFallback() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex min-h-[40vh] items-center justify-center px-4 py-12"
+    >
+      <div className="text-center">
+        <span
+          className="mx-auto block h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600"
+          aria-hidden="true"
+        />
+        <p className="mt-3 text-sm font-semibold text-slate-600">
+          Loading TypeTrace workspace…
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   return (
@@ -59,8 +98,9 @@ export default function App() {
           <AuthSessionGate>
             <ScrollToTop />
 
-            <Routes>
-              {/* Public routes */}
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <Routes>
+                {/* Public routes */}
               <Route element={<RootLayout />}>
                 <Route index element={<HomePage />} />
                 <Route
@@ -81,7 +121,7 @@ export default function App() {
                 />
               </Route>
 
-              {/* Auth routes */}
+                {/* Auth routes */}
               <Route element={<AuthRedirectGuard />}>
                 <Route element={<AuthLayout />}>
                   <Route path={ROUTES.LOGIN} element={<LoginPage />} />
@@ -99,7 +139,7 @@ export default function App() {
                 </Route>
               </Route>
 
-              {/* Shared authenticated routes */}
+                {/* Shared authenticated routes */}
               <Route
                 element={<RoleGuard allowedRoles={["STUDENT", "TEACHER"]} />}
               >
@@ -121,7 +161,7 @@ export default function App() {
                 <Route path={ROUTES.REPLAY} element={<ReplayPage />} />
               </Route>
 
-              {/* Student routes */}
+                {/* Student routes */}
               <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
                 <Route path={ROUTES.EDITOR} element={<EditorPage />} />
                 <Route path={ROUTES.EDITOR_NEW} element={<EditorPage />} />
@@ -146,7 +186,7 @@ export default function App() {
                 </Route>
               </Route>
 
-              {/* Teacher routes */}
+                {/* Teacher routes */}
               <Route element={<RoleGuard allowedRoles={["TEACHER"]} />}>
                 <Route element={<TeacherLayout />}>
                   <Route
@@ -177,7 +217,8 @@ export default function App() {
               </Route>
 
               <Route path={ROUTES.NOT_FOUND} element={<NotFoundPage />} />
-            </Routes>
+              </Routes>
+            </Suspense>
           </AuthSessionGate>
         </ErrorBoundary>
       </ToastProvider>

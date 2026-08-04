@@ -455,7 +455,7 @@ export default function SettingsPage() {
           <div>
             <Link
               to={accountHomeRoute}
-              className="inline-flex items-center gap-1.5 text-[13px] font-medium transition-colors hover:opacity-80"
+              className="touch-target inline-flex items-center gap-1.5 rounded-md py-2 text-[13px] font-medium transition-colors hover:opacity-80"
               style={{ color: colors.text.secondary }}
             >
               <Icon type="arrowLeft" size={14} /> Back to Dashboard
@@ -912,7 +912,7 @@ export default function SettingsPage() {
               </p>
               <Link
                 to={ROUTES.HELP_DOCS}
-                className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-semibold transition hover:opacity-80"
+                className="touch-target mt-4 inline-flex items-center gap-1.5 rounded-md py-2 text-[13px] font-semibold transition hover:opacity-80"
                 style={{ color: colors.brand }}
               >
                 Open Docs <Icon type="external" size={13} />

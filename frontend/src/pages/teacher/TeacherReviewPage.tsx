@@ -220,6 +220,7 @@ function ReviewOptionButton({
     <button
       type="button"
       onClick={onSelect}
+      aria-pressed={selected}
       className="w-full rounded-md border p-3 text-left transition-colors hover:bg-surface-100"
       style={{
         backgroundColor: style.bg,
@@ -255,7 +256,7 @@ function ReviewOptionButton({
 function DataRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div
-      className="flex items-start justify-between gap-4 border-b py-3 last:border-b-0"
+      className="flex min-w-0 flex-col gap-1 border-b py-3 last:border-b-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
       style={{ borderColor: colors.surface[200] }}
     >
       <span
@@ -265,7 +266,7 @@ function DataRow({ label, value }: { label: string; value: ReactNode }) {
         {label}
       </span>
       <span
-        className="max-w-[68%] text-right text-[13px] font-semibold"
+        className="text-anywhere min-w-0 text-left text-[13px] font-semibold sm:max-w-[68%] sm:text-right"
         style={{ color: colors.text.primary }}
       >
         {value || "-"}
@@ -466,8 +467,8 @@ export default function TeacherReviewPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-0 pb-10">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="teacher-page space-y-6 pb-10">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <button
             type="button"
@@ -485,14 +486,14 @@ export default function TeacherReviewPage() {
             Teacher review dossier
           </p>
           <h1
-            className="mt-1 max-w-4xl text-[24px] font-bold tracking-[-0.04em]"
+            className="text-anywhere mt-1 max-w-4xl text-[22px] font-bold tracking-[-0.04em] sm:text-[24px]"
             style={{ color: colors.text.primary }}
           >
             {submission.title || "Untitled submission"}
           </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto">
           <Badge tone={reviewTone(reviewStatus)}>
             {String(reviewStatus).replace("_", " ")}
           </Badge>
@@ -528,10 +529,10 @@ export default function TeacherReviewPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-3 xl:gap-6">
         {/* Main Decrypted Essay Content (66% space allocation) */}
-        <div className="lg:col-span-2 space-y-6">
-          <AppSurface className="flex h-full min-h-[600px] flex-col p-0">
+        <div className="min-w-0 space-y-6 xl:col-span-2">
+          <AppSurface className="flex h-full min-h-[420px] min-w-0 flex-col p-0 sm:min-h-[520px] xl:min-h-[600px]">
             <div
               className="flex items-center justify-between border-b p-5"
               style={{ borderColor: colors.surface[200] }}
@@ -550,7 +551,7 @@ export default function TeacherReviewPage() {
               </span>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 md:p-8">
+            <div className="scroll-region min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
               {submission.text_content ? (
                 <div
                   className="whitespace-pre-wrap font-serif text-[15px] leading-[1.8]"
@@ -601,6 +602,8 @@ export default function TeacherReviewPage() {
 
             <div className="p-5">
               <div
+                role="status"
+                aria-live="polite"
                 className="mb-4 flex items-center justify-between rounded-md border px-3 py-2 text-[11px] font-semibold"
                 style={{
                   borderColor: hasUnsavedReviewChanges
@@ -619,7 +622,7 @@ export default function TeacherReviewPage() {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
+                <div className="space-y-2" role="group" aria-label="Teacher decision options">
                   {reviewOptions.map((option) => (
                     <ReviewOptionButton
                       key={option.status}
@@ -668,7 +671,7 @@ export default function TeacherReviewPage() {
               className="border-b p-5"
               style={{ borderColor: colors.surface[200] }}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2
                     className="text-[15px] font-semibold tracking-tight"
@@ -725,7 +728,7 @@ export default function TeacherReviewPage() {
               </p>
 
               <div
-                className="mt-4 grid grid-cols-2 gap-3 border-t pt-4"
+                className="mt-4 grid grid-cols-1 gap-3 border-t pt-4 sm:grid-cols-2"
                 style={{ borderColor: colors.surface[200] }}
               >
                 <div>
@@ -758,7 +761,7 @@ export default function TeacherReviewPage() {
                     {Math.round(safeNumber(submission.wpm))} WPM
                   </p>
                 </div>
-                <div className="col-span-2 pt-2">
+                <div className="pt-2 sm:col-span-2">
                   <p
                     className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em]"
                     style={{ color: colors.text.muted }}
@@ -773,7 +776,7 @@ export default function TeacherReviewPage() {
                     {durationMins} minutes
                   </p>
                 </div>
-                <div className="col-span-2 pt-2">
+                <div className="pt-2 sm:col-span-2">
                   <p
                     className="text-[10px] font-bold uppercase tracking-[0.12em]"
                     style={{ color: colors.text.muted }}
@@ -799,7 +802,7 @@ export default function TeacherReviewPage() {
               >
                 Behavioral capture metrics
               </p>
-              <div className="mt-3 grid grid-cols-2 gap-3">
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {evidenceSummary.map(([label, value]) => (
                   <StatTile
                     key={String(label)}
@@ -919,6 +922,7 @@ export default function TeacherReviewPage() {
                     submission.certificate_id,
                   )}
                   target="_blank"
+                  rel="noreferrer"
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-3 text-[13px] font-bold transition hover:opacity-90"
                   style={{ background: colors.brand, color: colors.text.light }}
                 >

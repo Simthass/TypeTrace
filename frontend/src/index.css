@@ -304,3 +304,104 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* ─── Teacher responsive records ───────────────────────────────────────── */
+@layer components {
+  .teacher-page {
+    @apply mx-auto w-full min-w-0 max-w-[1440px] space-y-5;
+  }
+
+  .teacher-ledger-scroll {
+    @apply max-w-full overflow-x-auto;
+  }
+
+  .teacher-ledger {
+    min-width: 56rem;
+  }
+
+  .teacher-ledger-row > [data-label] {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 1279px) {
+  .teacher-ledger-scroll {
+    overflow: visible;
+  }
+
+  .teacher-ledger {
+    display: grid;
+    min-width: 0 !important;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .teacher-ledger-header {
+    display: none !important;
+  }
+
+  .teacher-ledger-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    min-height: 0 !important;
+    height: auto !important;
+    gap: 0.875rem !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 0.75rem;
+    padding: 1rem !important;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  .teacher-ledger-row > [data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.35rem;
+    color: #64748b;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .teacher-ledger-primary,
+  .teacher-ledger-actions {
+    grid-column: 1 / -1;
+  }
+
+  .teacher-ledger-actions {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start !important;
+    gap: 0.5rem;
+  }
+
+  .teacher-ledger-actions > a,
+  .teacher-ledger-actions > button {
+    min-height: 2.5rem;
+  }
+}
+
+@media (max-width: 479px) {
+  .teacher-ledger {
+    padding: 0.625rem;
+  }
+
+  .teacher-ledger-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+    padding: 0.875rem !important;
+  }
+
+  .teacher-ledger-primary,
+  .teacher-ledger-actions {
+    grid-column: auto;
+  }
+
+  .teacher-ledger-actions > a,
+  .teacher-ledger-actions > button {
+    flex: 1 1 auto;
+  }
+}

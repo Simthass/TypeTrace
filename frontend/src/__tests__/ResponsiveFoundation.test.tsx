@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { describe, expect, it } from "vitest";
 
 import { ResponsiveDataView } from "../components/ui/ResponsiveDataView";
@@ -22,6 +22,32 @@ function DialogHarness() {
         <button type="button" onClick={() => setOpen(false)}>
           Close details
         </button>
+      </ResponsiveDialog>
+    </>
+  );
+}
+
+function ExplicitReturnFocusHarness() {
+  const [open, setOpen] = useState(false);
+  const openerRef = useRef<HTMLButtonElement>(null);
+
+  return (
+    <>
+      <button type="button">Other focus target</button>
+      <button
+        ref={openerRef}
+        type="button"
+        onClick={() => setOpen(true)}
+      >
+        Open explicit dialog
+      </button>
+      <ResponsiveDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Explicit return focus"
+        returnFocusRef={openerRef}
+      >
+        <button type="button">Dialog action</button>
       </ResponsiveDialog>
     </>
   );
@@ -63,6 +89,21 @@ describe("responsive foundation", () => {
     expect(document.body.style.overflow).toBe("");
     expect(opener).toHaveFocus();
   });
+
+  it("restores focus to an explicit trigger when touch activation does not focus it", () => {
+    render(<ExplicitReturnFocusHarness />);
+
+    const other = screen.getByRole("button", { name: "Other focus target" });
+    const opener = screen.getByRole("button", { name: "Open explicit dialog" });
+
+    other.focus();
+    fireEvent.click(opener);
+    expect(screen.getByRole("dialog", { name: "Explicit return focus" })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("dialog", { name: "Explicit return focus" })).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
+
 });
-
-

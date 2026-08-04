@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Link,
   NavLink,
@@ -11,6 +11,7 @@ import { ROUTES } from "../../constants/routes";
 import { colors } from "../../styles/colors";
 import { useAuthStore } from "../../store/authStore";
 import { NotificationBell } from "../ui/NotificationBell";
+import { ResponsiveDialog } from "../ui/ResponsiveDialog";
 import { useNotificationPolling } from "../../hooks/useNotificationPolling";
 
 function Icon({ type, size = 16 }: { type: string; size?: number }) {
@@ -469,6 +470,7 @@ export default function TeacherLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const navigationButtonRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const location = useLocation();
@@ -486,35 +488,38 @@ export default function TeacherLayout() {
 
   const handleLogout = () => {
     setProfileOpen(false);
+    setMobileOpen(false);
     logout();
     navigate(ROUTES.LOGIN);
   };
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-screen min-w-0 max-w-full overflow-x-clip"
       style={{ backgroundColor: colors.surface[100] }}
     >
       <aside
-        className={`fixed inset-y-0 left-0 z-40 hidden border-r transition-all duration-200 md:flex md:flex-col ${
+        className={`fixed inset-y-0 left-0 z-40 hidden border-r transition-all duration-200 lg:flex lg:flex-col ${
           collapsed ? "w-[64px]" : "w-[260px]"
         }`}
         style={{
           backgroundColor: colors.surface[50],
           borderColor: colors.surface[200],
         }}
+        aria-label="Teacher sidebar"
       >
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}
-          className="absolute -right-3 top-16 z-50 flex h-5 w-5 items-center justify-center rounded-md border transition-colors duration-200 hover:bg-surface-100"
+          className="absolute -right-3 top-16 z-50 flex h-6 w-6 items-center justify-center rounded-md border transition-colors duration-200 hover:bg-surface-100"
           style={{
             backgroundColor: colors.surface[50],
             borderColor: colors.surface[200],
             color: colors.text.secondary,
             boxShadow: `0 1px 3px ${colors.shadow}`,
           }}
-          aria-label="Toggle sidebar"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
         >
           <span
             style={{
@@ -530,92 +535,98 @@ export default function TeacherLayout() {
         <SidebarContent collapsed={collapsed} />
       </aside>
 
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <button
-            type="button"
-            className="absolute inset-0"
-            style={{ backgroundColor: colors.shadowStrong }}
-            onClick={() => setMobileOpen(false)}
-            aria-label="Close menu"
-          />
-
-          <aside
-            className="absolute bottom-0 left-0 right-0 max-h-[84dvh] rounded-md border p-3"
-            style={{
-              backgroundColor: colors.surface[50],
-              borderColor: colors.surface[200],
-              boxShadow: `0 1px 3px ${colors.shadow}`,
-            }}
+      <ResponsiveDialog
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        title="Teacher navigation"
+        position="right"
+        returnFocusRef={navigationButtonRef}
+        panelClassName="h-[92dvh] max-h-[92dvh] sm:h-full sm:max-h-none sm:max-w-[360px]"
+      >
+        <div
+          className="flex min-h-0 flex-1 flex-col"
+          style={{ backgroundColor: colors.surface[50] }}
+        >
+          <div
+            className="flex items-center justify-between border-b px-4 py-3"
+            style={{ borderColor: colors.surface[200] }}
           >
-            <div className="mb-2 flex items-center justify-between px-1">
-              <span
+            <div>
+              <p
                 className="text-[10px] font-bold uppercase tracking-[0.14em]"
                 style={{ color: colors.text.muted }}
               >
-                Teacher navigation
-              </span>
-              <button
-                type="button"
-                onClick={() => setMobileOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-md border"
-                style={{
-                  backgroundColor: colors.surface[50],
-                  borderColor: colors.surface[200],
-                  color: colors.text.secondary,
-                }}
-                aria-label="Close navigation"
+                Teacher Console
+              </p>
+              <p
+                className="mt-0.5 text-[14px] font-bold"
+                style={{ color: colors.text.primary }}
               >
-                <Icon type="close" />
-              </button>
+                Navigation
+              </p>
             </div>
-            <div className="max-h-[76dvh] overflow-y-auto">
-              <SidebarContent
-                collapsed={false}
-                onClose={() => setMobileOpen(false)}
-              />
-            </div>
-          </aside>
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              className="touch-target flex items-center justify-center rounded-md border"
+              style={{
+                backgroundColor: colors.surface[50],
+                borderColor: colors.surface[200],
+                color: colors.text.secondary,
+              }}
+              aria-label="Close navigation"
+            >
+              <Icon type="close" />
+            </button>
+          </div>
+          <div className="scroll-region min-h-0 flex-1 overflow-y-auto safe-bottom">
+            <SidebarContent
+              collapsed={false}
+              onClose={() => setMobileOpen(false)}
+            />
+          </div>
         </div>
-      )}
+      </ResponsiveDialog>
 
       <div
-        className={`min-h-screen transition-all duration-200 ${
-          collapsed ? "md:ml-[64px]" : "md:ml-[260px]"
+        className={`min-h-screen min-w-0 max-w-full overflow-x-clip transition-all duration-200 ${
+          collapsed ? "lg:ml-[64px]" : "lg:ml-[260px]"
         }`}
       >
         <header
-          className="sticky top-0 z-30 h-[56px] border-b"
+          className="sticky top-0 z-30 min-w-0 max-w-full border-b"
           style={{
             backgroundColor: colors.surface[50],
             borderColor: colors.surface[200],
           }}
         >
-          <div className="flex h-[56px] items-center justify-between gap-4 px-4 md:px-6">
-            <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-h-[56px] min-w-0 items-center justify-between gap-2 px-3 sm:px-4 lg:gap-4 lg:px-6">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               <button
+                ref={navigationButtonRef}
                 type="button"
                 onClick={() => setMobileOpen(true)}
-                className="flex h-9 w-9 items-center justify-center rounded-md border md:hidden"
+                className="touch-target flex shrink-0 items-center justify-center rounded-md border lg:hidden"
                 style={{
                   backgroundColor: colors.surface[50],
                   borderColor: colors.surface[200],
                   color: colors.text.primary,
                 }}
                 aria-label="Open navigation"
+                aria-expanded={mobileOpen}
               >
                 <Icon type="menu" />
               </button>
 
               <div className="min-w-0">
                 <p
-                  className="text-[10px] font-bold uppercase tracking-[0.14em]"
+                  className="hidden text-[10px] font-bold uppercase tracking-[0.14em] sm:block"
                   style={{ color: colors.text.muted }}
                 >
                   Teacher Console
                 </p>
                 <h1
-                  className="truncate text-[18px] font-bold tracking-[-0.03em]"
+                  className="truncate text-[16px] font-bold tracking-[-0.03em] sm:text-[18px]"
                   style={{ color: colors.text.primary }}
                 >
                   {title}
@@ -623,20 +634,22 @@ export default function TeacherLayout() {
               </div>
             </div>
 
-            <div className="hidden min-w-0 flex-1 justify-center md:flex">
-              <div
-                className="flex h-9 w-full max-w-[440px] items-center gap-2 rounded-md border px-3"
+            <div className="hidden min-w-0 flex-1 justify-center xl:flex">
+              <label
+                className="flex h-9 w-full max-w-[440px] min-w-0 items-center gap-2 rounded-md border px-3"
                 style={{
                   backgroundColor: colors.surface[100],
                   borderColor: colors.surface[200],
                   color: colors.text.muted,
                 }}
               >
+                <span className="sr-only">Search teacher workspace</span>
                 <Icon type="search" size={15} />
                 <input
                   type="search"
+                  aria-label="Search teacher workspace"
                   placeholder="Search submissions, students, courses"
-                  className="h-full flex-1 bg-transparent text-[13px] outline-none placeholder:text-text-muted"
+                  className="h-full min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-text-muted"
                   style={{ color: colors.text.primary }}
                 />
                 <span
@@ -645,18 +658,19 @@ export default function TeacherLayout() {
                     borderColor: colors.surface[200],
                     color: colors.text.muted,
                   }}
+                  aria-hidden="true"
                 >
                   ⌘K
                 </span>
-              </div>
+              </label>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
               <NotificationBell />
 
               <Link
                 to={`${ROUTES.TEACHER_COURSES}?createCourse=1`}
-                className="hidden h-9 items-center gap-2 rounded-md px-3 text-[13px] font-semibold transition hover:opacity-90 md:inline-flex"
+                className="hidden h-9 items-center gap-2 whitespace-nowrap rounded-md px-3 text-[13px] font-semibold transition hover:opacity-90 xl:inline-flex"
                 style={{
                   backgroundColor: colors.brand,
                   color: colors.text.light,
@@ -670,15 +684,17 @@ export default function TeacherLayout() {
                 <button
                   type="button"
                   onClick={() => setProfileOpen((value) => !value)}
-                  className="flex h-9 items-center gap-1.5 rounded-md border pl-1 pr-2 transition-colors hover:bg-surface-100"
+                  className="touch-target flex items-center gap-1.5 rounded-md border pl-1 pr-2 transition-colors hover:bg-surface-100"
                   style={{
                     backgroundColor: colors.surface[50],
                     borderColor: colors.surface[200],
                   }}
                   aria-label="Account menu"
+                  aria-haspopup="menu"
+                  aria-expanded={profileOpen}
                 >
                   <span
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-[12px] font-bold"
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-[12px] font-bold"
                     style={{
                       backgroundColor: colors.brandSoft,
                       color: colors.brand,
@@ -697,10 +713,12 @@ export default function TeacherLayout() {
                       type="button"
                       className="fixed inset-0 z-30 cursor-default"
                       onClick={() => setProfileOpen(false)}
-                      aria-label="Close menu"
+                      aria-label="Close account menu"
                     />
                     <div
-                      className="absolute right-0 top-11 z-40 w-56 rounded-md border p-1"
+                      role="menu"
+                      aria-label="Teacher account"
+                      className="absolute right-0 top-12 z-40 w-[min(14rem,calc(100vw-1rem))] rounded-md border p-1"
                       style={{
                         backgroundColor: colors.surface[50],
                         borderColor: colors.surface[200],
@@ -726,8 +744,9 @@ export default function TeacherLayout() {
                       </div>
                       <Link
                         to={ROUTES.TEACHER_SETTINGS}
+                        role="menuitem"
                         onClick={() => setProfileOpen(false)}
-                        className="mt-1 flex h-9 items-center gap-2 rounded-md px-2 text-[13px] font-medium transition-colors hover:bg-surface-100"
+                        className="mt-1 flex h-10 items-center gap-2 rounded-md px-2 text-[13px] font-medium transition-colors hover:bg-surface-100"
                         style={{ color: colors.text.secondary }}
                       >
                         <Icon type="settings" size={15} />
@@ -738,8 +757,9 @@ export default function TeacherLayout() {
                       </Link>
                       <button
                         type="button"
+                        role="menuitem"
                         onClick={handleLogout}
-                        className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-[13px] font-medium transition-colors hover:bg-surface-100"
+                        className="flex h-10 w-full items-center gap-2 rounded-md px-2 text-[13px] font-medium transition-colors hover:bg-surface-100"
                         style={{ color: colors.text.secondary }}
                       >
                         <Icon type="logout" size={15} />
@@ -754,7 +774,9 @@ export default function TeacherLayout() {
         </header>
 
         <main
-          className="min-h-[calc(100vh-56px)] p-4 md:p-6"
+          id="main-content"
+          tabIndex={-1}
+          className="min-h-[calc(100vh-56px)] min-w-0 max-w-full overflow-x-clip p-3 sm:p-4 lg:p-6"
           style={{ backgroundColor: colors.surface[100] }}
         >
           <Outlet />

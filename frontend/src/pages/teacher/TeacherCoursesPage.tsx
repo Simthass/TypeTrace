@@ -1,4 +1,10 @@
-import { useState, useEffect, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type RefObject,
+} from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -10,6 +16,7 @@ import { colors, brand } from "../../styles/colors";
 import { Button } from "../../components/ui/Button";
 import { EmptyState, ErrorState } from "../../components/ui/AsyncState";
 import { CardGridSkeleton } from "../../components/ui/Skeleton";
+import { ResponsiveDialog } from "../../components/ui/ResponsiveDialog";
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -232,13 +239,13 @@ function CourseCard({ course, index }: { course: Course; index: number }) {
 
       {/* Footer / Actions */}
       <div
-        className="mt-auto flex items-center justify-between border-t p-4"
+        className="mt-auto flex flex-col items-stretch gap-3 border-t p-4 sm:flex-row sm:items-center sm:justify-between"
         style={{
           borderColor: colors.surface[200],
           background: colors.surface[100],
         }}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <span
             className="text-[11px] font-semibold uppercase tracking-wider"
             style={{ color: colors.text.muted }}
@@ -247,7 +254,7 @@ function CourseCard({ course, index }: { course: Course; index: number }) {
           </span>
           <button
             onClick={handleCopy}
-            className="group/btn flex items-center gap-2 rounded-md border px-2 py-1 text-[12px] font-mono font-bold transition-colors"
+            className="group/btn flex min-w-0 max-w-full items-center gap-2 rounded-md border px-2 py-1 text-[12px] font-mono font-bold transition-colors"
             style={{
               borderColor: copied ? brand.humanAccent : colors.surface[200],
               background: copied ? brand.humanBg : colors.surface[50],
@@ -255,7 +262,10 @@ function CourseCard({ course, index }: { course: Course; index: number }) {
             }}
             title="Copy invite code"
           >
-            {course.invite_code}
+            <span className="min-w-0 truncate">{course.invite_code}</span>
+            <span className="sr-only" aria-live="polite">
+              {copied ? "Invite code copied" : ""}
+            </span>
             <Icon
               name={copied ? "check" : "copy"}
               size={12}
@@ -291,9 +301,11 @@ function CourseCard({ course, index }: { course: Course; index: number }) {
 function CreateCourseModal({
   onClose,
   onSuccess,
+  returnFocusRef,
 }: {
   onClose: () => void;
   onSuccess: () => void;
+  returnFocusRef: RefObject<HTMLButtonElement | null>;
 }) {
   const [courseName, setCourseName] = useState("");
   const [courseCode, setCourseCode] = useState("");
@@ -301,8 +313,8 @@ function CreateCourseModal({
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
     if (!courseName.trim() || !courseCode.trim()) return;
 
     setIsSubmitting(true);
@@ -329,126 +341,146 @@ function CreateCourseModal({
   };
 
   return (
-    <>
+    <ResponsiveDialog
+      open
+      onClose={onClose}
+      title="Create new course"
+      returnFocusRef={returnFocusRef}
+      panelClassName="max-h-[92dvh] sm:max-w-md"
+      closeOnBackdrop={!isSubmitting}
+    >
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-md pointer-events-auto rounded-md border bg-white shadow-2xl"
+        initial={{ opacity: 0, scale: 0.98, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.98, y: 8 }}
+        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <div
+          className="flex items-center justify-between border-b px-4 py-4 sm:px-5"
           style={{ borderColor: colors.surface[200] }}
         >
-          <div
-            className="flex items-center justify-between border-b px-5 py-4"
-            style={{ borderColor: colors.surface[200] }}
-          >
+          <div>
             <h2
               className="text-[16px] font-bold tracking-tight"
               style={{ color: colors.text.primary }}
             >
               Create New Course
             </h2>
-            <button
-              onClick={onClose}
-              className="rounded-md p-1 transition-colors hover:bg-surface-100"
+            <p
+              className="mt-1 text-[12px]"
               style={{ color: colors.text.secondary }}
             >
-              <Icon name="x" size={16} />
-            </button>
+              Add a course and generate a student invite code.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="touch-target flex shrink-0 items-center justify-center rounded-md transition-colors hover:bg-surface-100 disabled:opacity-50"
+            style={{ color: colors.text.secondary }}
+            aria-label="Close create course dialog"
+          >
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+
+        <form
+          onSubmit={handleSubmit}
+          className="scroll-region min-h-0 flex-1 overflow-y-auto p-4 safe-bottom sm:p-5"
+        >
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor="teacher-course-name"
+                className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wider"
+                style={{ color: colors.text.secondary }}
+              >
+                Course Name
+              </label>
+              <input
+                id="teacher-course-name"
+                type="text"
+                value={courseName}
+                onChange={(event) => setCourseName(event.target.value)}
+                placeholder="e.g. Advanced Software Engineering"
+                className="h-11 w-full rounded-md border px-3 text-[14px] outline-none transition-colors focus:ring-2"
+                style={{
+                  borderColor: colors.surface[200],
+                  background: colors.surface[50],
+                  color: colors.text.primary,
+                }}
+                autoFocus
+                autoComplete="off"
+                disabled={isSubmitting}
+                required
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="teacher-course-code"
+                className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wider"
+                style={{ color: colors.text.secondary }}
+              >
+                Course Code
+              </label>
+              <input
+                id="teacher-course-code"
+                type="text"
+                value={courseCode}
+                onChange={(event) =>
+                  setCourseCode(event.target.value.toUpperCase())
+                }
+                placeholder="e.g. CS-401"
+                className="h-11 w-full rounded-md border px-3 text-[14px] uppercase outline-none transition-colors focus:ring-2"
+                style={{
+                  borderColor: colors.surface[200],
+                  background: colors.surface[50],
+                  color: colors.text.primary,
+                }}
+                autoComplete="off"
+                disabled={isSubmitting}
+                required
+              />
+            </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-5">
-            <div className="space-y-4">
-              <div>
-                <label
-                  className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wider"
-                  style={{ color: colors.text.secondary }}
-                >
-                  Course Name
-                </label>
-                <input
-                  type="text"
-                  value={courseName}
-                  onChange={(e) => setCourseName(e.target.value)}
-                  placeholder="e.g. Advanced Software Engineering"
-                  className="w-full rounded-md border px-3 py-2 text-[14px] outline-none transition-colors focus:ring-2"
-                  style={{
-                    borderColor: colors.surface[200],
-                    background: colors.surface[50],
-                    color: colors.text.primary,
-                  }}
-                  autoFocus
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div>
-                <label
-                  className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wider"
-                  style={{ color: colors.text.secondary }}
-                >
-                  Course Code
-                </label>
-                <input
-                  type="text"
-                  value={courseCode}
-                  onChange={(e) => setCourseCode(e.target.value.toUpperCase())}
-                  placeholder="e.g. CS-401"
-                  className="w-full rounded-md border px-3 py-2 text-[14px] uppercase outline-none transition-colors focus:ring-2"
-                  style={{
-                    borderColor: colors.surface[200],
-                    background: colors.surface[50],
-                    color: colors.text.primary,
-                  }}
-                  disabled={isSubmitting}
-                />
-              </div>
+          {error && (
+            <div
+              role="alert"
+              className="mt-4 rounded-md border px-3 py-2 text-[13px]"
+              style={{
+                background: brand.aiBg,
+                borderColor: brand.aiAccent,
+                color: brand.aiText,
+              }}
+            >
+              {error}
             </div>
+          )}
 
-            {error && (
-              <div
-                className="mt-4 rounded-md border px-3 py-2 text-[13px]"
-                style={{
-                  background: brand.aiBg,
-                  borderColor: brand.aiAccent,
-                  color: brand.aiText,
-                }}
-              >
-                {error}
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={onClose}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={
-                  !courseName.trim() || !courseCode.trim() || isSubmitting
-                }
-              >
-                {isSubmitting ? "Creating..." : "Create Course"}
-              </Button>
-            </div>
-          </form>
-        </motion.div>
-      </div>
-    </>
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={!courseName.trim() || !courseCode.trim() || isSubmitting}
+            >
+              {isSubmitting ? "Creating..." : "Create Course"}
+            </Button>
+          </div>
+        </form>
+      </motion.div>
+    </ResponsiveDialog>
   );
 }
 
@@ -461,6 +493,7 @@ export default function TeacherCoursesPage() {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const createCourseButtonRef = useRef<HTMLButtonElement>(null);
 
   const fetchCourses = async () => {
     try {
@@ -499,9 +532,9 @@ export default function TeacherCoursesPage() {
   }, [searchParams, setSearchParams]);
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-6">
+    <div className="teacher-page max-w-[1200px] space-y-6">
       {/* Header Section */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p
             className="text-[11px] font-bold uppercase tracking-[0.16em]"
@@ -524,8 +557,9 @@ export default function TeacherCoursesPage() {
             classes.
           </p>
         </div>
-        <div className="shrink-0">
+        <div className="w-full shrink-0 sm:w-auto">
           <Button
+            ref={createCourseButtonRef}
             variant="primary"
             onClick={() => setIsModalOpen(true)}
             leftIcon={<Icon name="plus" />}
@@ -559,7 +593,7 @@ export default function TeacherCoursesPage() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 xl:gap-5">
           {courses.map((course, index) => (
             <CourseCard key={course.id} course={course} index={index} />
           ))}
@@ -572,6 +606,7 @@ export default function TeacherCoursesPage() {
           <CreateCourseModal
             onClose={() => setIsModalOpen(false)}
             onSuccess={fetchCourses}
+            returnFocusRef={createCourseButtonRef}
           />
         )}
       </AnimatePresence>

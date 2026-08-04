@@ -683,6 +683,7 @@ export default function DashboardLayout() {
                 <Icon type="search" size={15} />
                 <input
                   type="search"
+                  aria-label="Search drafts, sessions, and certificates"
                   placeholder="Search drafts, sessions, certificates"
                   className="h-full flex-1 bg-transparent text-[13px] outline-none placeholder:text-text-muted"
                   style={{ color: colors.text.primary }}
@@ -799,6 +800,8 @@ export default function DashboardLayout() {
         </header>
 
         <main
+          id="main-content"
+          tabIndex={-1}
           className="min-h-[calc(100vh-56px)] min-w-0 max-w-full overflow-x-clip p-3 sm:p-4 md:p-6"
           style={{ backgroundColor: colors.surface[100] }}
         >

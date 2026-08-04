@@ -367,7 +367,7 @@ export default function VerifyLookupPage() {
     >
       <Toast toast={toast} onClose={closeToast} />
 
-      <main className="relative z-10 px-5 pb-16 pt-8 sm:px-8 sm:pb-20 sm:pt-12 lg:pt-16">
+      <section className="relative z-10 px-5 pb-16 pt-8 sm:px-8 sm:pb-20 sm:pt-12 lg:pt-16">
         <div className="mx-auto flex max-w-[960px] flex-col items-center text-center">
           <div
             className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5"
@@ -647,7 +647,7 @@ export default function VerifyLookupPage() {
             check the certificate record.
           </p>
         </div>
-      </main>
+      </section>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import {
   useId,
   useRef,
   type ReactNode,
+  type RefObject,
 } from "react";
 
 import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
@@ -28,6 +29,7 @@ interface ResponsiveDialogProps {
   className?: string;
   panelClassName?: string;
   closeOnBackdrop?: boolean;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
 /**
@@ -45,30 +47,36 @@ export function ResponsiveDialog({
   className = "",
   panelClassName = "",
   closeOnBackdrop = true,
+  returnFocusRef,
 }: ResponsiveDialogProps) {
   const generatedTitleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   useBodyScrollLock(open);
 
   useEffect(() => {
     if (!open) return;
 
-    restoreFocusRef.current =
-      document.activeElement instanceof HTMLElement
+    const returnFocusTarget =
+      returnFocusRef?.current ??
+      (document.activeElement instanceof HTMLElement
         ? document.activeElement
-        : null;
+        : null);
 
     const panel = panelRef.current;
     const firstFocusable = panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
     (firstFocusable ?? panel)?.focus();
 
     return () => {
-      restoreFocusRef.current?.focus();
-      restoreFocusRef.current = null;
+      if (returnFocusTarget?.isConnected) {
+        try {
+          returnFocusTarget.focus({ preventScroll: true });
+        } catch {
+          returnFocusTarget.focus();
+        }
+      }
     };
-  }, [open]);
+  }, [open, returnFocusRef]);
 
   useEffect(() => {
     if (!open) return;

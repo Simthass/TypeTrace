@@ -92,6 +92,8 @@ export default defineConfig({
         /public-cross-browser\.spec\.ts/,
         /responsive-public\.spec\.ts/,
         /responsive-student\.spec\.ts/,
+        /responsive-teacher\.spec\.ts/,
+        /accessibility\.spec\.ts/,
       ],
       dependencies: ["auth-setup"],
       use: {
@@ -124,6 +126,7 @@ export default defineConfig({
       testMatch: [
         /responsive-public\.spec\.ts/,
         /responsive-student\.spec\.ts/,
+        /responsive-teacher\.spec\.ts/,
       ],
       dependencies: ["auth-setup"],
       use: {
@@ -135,10 +138,19 @@ export default defineConfig({
       testMatch: [
         /responsive-public\.spec\.ts/,
         /responsive-student\.spec\.ts/,
+        /responsive-teacher\.spec\.ts/,
       ],
       dependencies: ["auth-setup"],
       use: {
         ...devices["iPad Mini"],
+      },
+    },
+    {
+      name: "chromium-accessibility",
+      testMatch: /accessibility\.spec\.ts/,
+      dependencies: ["auth-setup"],
+      use: {
+        ...devices["Desktop Chrome"],
       },
     },
   ],

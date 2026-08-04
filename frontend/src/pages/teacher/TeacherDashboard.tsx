@@ -701,8 +701,8 @@ export default function TeacherDashboard() {
   const teacherName = user?.first_name || data.teacher?.first_name || "Teacher";
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 px-0 pb-8">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div className="teacher-page pb-8">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <h1
             className="text-[22px] font-bold tracking-[-0.03em]"
@@ -719,10 +719,10 @@ export default function TeacherDashboard() {
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center xl:w-auto">
           <Link
             to={ROUTES.TEACHER_SUBMISSIONS}
-            className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-[13px] font-semibold"
+            className="inline-flex h-10 w-full items-center justify-center rounded-md border px-4 text-[13px] font-semibold sm:w-auto"
             style={{
               background: colors.surface[50],
               borderColor: colors.surface[200],
@@ -733,7 +733,7 @@ export default function TeacherDashboard() {
           </Link>
           <Link
             to={ROUTES.TEACHER_COURSES}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-4 text-[13px] font-semibold"
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md px-4 text-[13px] font-semibold sm:w-auto"
             style={{ background: colors.brand, color: colors.text.light }}
           >
             <Icon type="plus" size={15} />
@@ -1172,10 +1172,10 @@ export default function TeacherDashboard() {
         </div>
 
         {data.recent_submissions.length ? (
-          <div className="overflow-x-auto">
-            <div className="min-w-[900px]">
+          <div className="teacher-ledger-scroll">
+            <div className="teacher-ledger">
               <div
-                className="grid grid-cols-[minmax(230px,1fr)_150px_120px_100px_110px_96px] items-center gap-4 border-b px-5 py-3"
+                className="teacher-ledger-header grid grid-cols-[minmax(230px,1fr)_150px_120px_100px_110px_96px] items-center gap-4 border-b px-5 py-3"
                 style={{
                   background: colors.surface[100],
                   borderColor: colors.surface[200],
@@ -1210,10 +1210,13 @@ export default function TeacherDashboard() {
                       ":sessionId",
                       String(submission.id),
                     )}
-                    className="grid h-[64px] grid-cols-[minmax(230px,1fr)_150px_120px_100px_110px_96px] items-center gap-4 border-b px-5 transition-colors duration-100 hover:bg-surface-100"
+                    className="teacher-ledger-row grid h-[64px] grid-cols-[minmax(230px,1fr)_150px_120px_100px_110px_96px] items-center gap-4 border-b px-5 transition-colors duration-100 hover:bg-surface-100"
                     style={{ borderColor: colors.surface[200] }}
                   >
-                    <div className="min-w-0">
+                    <div
+                      className="teacher-ledger-primary min-w-0"
+                      data-label="Document"
+                    >
                       <p
                         className="truncate text-[13px] font-semibold"
                         style={{ color: colors.text.primary }}
@@ -1230,7 +1233,7 @@ export default function TeacherDashboard() {
                       </p>
                     </div>
 
-                    <div className="min-w-0">
+                    <div className="min-w-0" data-label="Student">
                       <p
                         className="truncate text-[12px] font-semibold"
                         style={{ color: colors.text.primary }}
@@ -1245,14 +1248,16 @@ export default function TeacherDashboard() {
                       </p>
                     </div>
 
-                    <StatusBadge
-                      value={
-                        submission.classification_bucket ||
-                        submission.classification
-                      }
-                    />
+                    <div data-label="Classification">
+                      <StatusBadge
+                        value={
+                          submission.classification_bucket ||
+                          submission.classification
+                        }
+                      />
+                    </div>
 
-                    <div>
+                    <div data-label="Human score">
                       <p
                         className="font-mono text-[13px] font-bold tabular-nums"
                         style={{ color: colors.text.primary }}
@@ -1273,12 +1278,17 @@ export default function TeacherDashboard() {
                       </div>
                     </div>
 
-                    <StatusBadge
-                      value={submission.review_status}
-                      mode="review"
-                    />
+                    <div data-label="Review">
+                      <StatusBadge
+                        value={submission.review_status}
+                        mode="review"
+                      />
+                    </div>
 
-                    <div className="flex items-center justify-end">
+                    <div
+                      className="teacher-ledger-actions flex items-center justify-end"
+                      data-label="Action"
+                    >
                       <span
                         className="inline-flex h-7 items-center justify-center rounded-md border px-2 text-[11px] font-semibold"
                         style={{

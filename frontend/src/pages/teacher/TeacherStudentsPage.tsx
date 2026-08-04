@@ -549,8 +549,8 @@ export default function TeacherStudentsPage() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 px-0">
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+    <div className="teacher-page">
+      <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
         <div>
           <p
             className="text-[11px] font-bold uppercase tracking-[0.16em]"
@@ -566,10 +566,10 @@ export default function TeacherStudentsPage() {
           </h1>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex w-full flex-wrap gap-2 xl:w-auto">
           <Link
             to={ROUTES.TEACHER_COURSES}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-bold"
+            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-bold sm:flex-none"
             style={{
               background: colors.surface[50],
               borderColor: colors.surface[200],
@@ -581,7 +581,7 @@ export default function TeacherStudentsPage() {
           </Link>
           <Link
             to={ROUTES.TEACHER_SUBMISSIONS}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-[12px] font-bold"
+            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md px-3 text-[12px] font-bold sm:flex-none"
             style={{ background: colors.brand, color: colors.text.light }}
           >
             <Icon type="submissions" size={14} />
@@ -618,7 +618,7 @@ export default function TeacherStudentsPage() {
       </div>
 
       <Card className="p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-2">
             <div
               className="flex h-8 w-8 items-center justify-center rounded-md"
@@ -636,7 +636,7 @@ export default function TeacherStudentsPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-[260px_170px_170px_170px_100px]">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[260px_170px_170px_170px_100px]">
             <div className="relative">
               <span
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
@@ -651,6 +651,7 @@ export default function TeacherStudentsPage() {
                   setPage(0);
                 }}
                 placeholder="Search student, email, ID..."
+                aria-label="Search students"
                 className="h-9 w-full rounded-md border pl-9 pr-9 text-[12px] font-medium outline-none"
                 style={{
                   background: colors.surface[50],
@@ -675,6 +676,7 @@ export default function TeacherStudentsPage() {
             </div>
 
             <select
+              aria-label="Filter students by course"
               value={courseFilter}
               onChange={(event) => {
                 setCourseFilter(event.target.value);
@@ -696,6 +698,7 @@ export default function TeacherStudentsPage() {
             </select>
 
             <select
+              aria-label="Filter students by status"
               value={statusFilter}
               onChange={(event) => {
                 setStatusFilter(event.target.value as StatusFilter);
@@ -716,6 +719,7 @@ export default function TeacherStudentsPage() {
             </select>
 
             <select
+              aria-label="Sort students"
               value={sortKey}
               onChange={(event) => {
                 setSortKey(event.target.value as SortKey);
@@ -798,10 +802,10 @@ export default function TeacherStudentsPage() {
           />
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <div className="min-w-[1050px]">
+            <div className="teacher-ledger-scroll">
+              <div className="teacher-ledger">
                 <div
-                  className="grid grid-cols-[minmax(260px,1.3fr)_190px_140px_200px_220px] items-center gap-4 border-b px-4 py-2.5"
+                  className="teacher-ledger-header grid grid-cols-[minmax(260px,1.3fr)_190px_140px_200px_220px] items-center gap-4 border-b px-4 py-2.5"
                   style={{
                     background: colors.surface[100],
                     borderColor: colors.surface[200],
@@ -829,10 +833,13 @@ export default function TeacherStudentsPage() {
                   return (
                     <div
                       key={`${student.id}-${student.course_id}`}
-                      className="grid min-h-[74px] grid-cols-[minmax(260px,1.3fr)_190px_140px_200px_220px] items-center gap-4 border-b px-4 py-3 transition-colors hover:bg-surface-100"
+                      className="teacher-ledger-row grid min-h-[74px] grid-cols-[minmax(260px,1.3fr)_190px_140px_200px_220px] items-center gap-4 border-b px-4 py-3 transition-colors hover:bg-surface-100"
                       style={{ borderColor: colors.surface[200] }}
                     >
-                      <div className="min-w-0">
+                      <div
+                        className="teacher-ledger-primary min-w-0"
+                        data-label="Student"
+                      >
                         <div className="flex items-center gap-2">
                           <div
                             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[12px] font-bold"
@@ -862,7 +869,7 @@ export default function TeacherStudentsPage() {
                         </div>
                       </div>
 
-                      <div className="min-w-0">
+                      <div className="min-w-0" data-label="Course">
                         <p
                           className="truncate text-[12px] font-bold"
                           style={{ color: colors.text.primary }}
@@ -877,7 +884,7 @@ export default function TeacherStudentsPage() {
                         </p>
                       </div>
 
-                      <div>
+                      <div data-label="Submissions">
                         <p
                           className="font-mono text-[13px] font-bold tabular-nums"
                           style={{ color: colors.text.primary }}
@@ -892,7 +899,7 @@ export default function TeacherStudentsPage() {
                         </p>
                       </div>
 
-                      <div className="space-y-1">
+                      <div className="space-y-1" data-label="Status">
                         <StatusBadge value={status} />
                         {(safeNumber(student.pending_count) > 0 ||
                           safeNumber(student.flagged_count) > 0) && (
@@ -911,7 +918,10 @@ export default function TeacherStudentsPage() {
                         )}
                       </div>
 
-                      <div>
+                      <div
+                        className="teacher-ledger-actions"
+                        data-label="Last activity"
+                      >
                         <p
                           className="text-[12px] font-semibold"
                           style={{ color: colors.text.primary }}
@@ -953,7 +963,7 @@ export default function TeacherStudentsPage() {
 
             {filteredStudents.length > PAGE_SIZE && (
               <div
-                className="flex items-center justify-between gap-3 border-t px-4 py-3"
+                className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                 style={{ borderColor: colors.surface[200] }}
               >
                 <p

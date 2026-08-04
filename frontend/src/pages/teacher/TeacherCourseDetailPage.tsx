@@ -436,8 +436,8 @@ export default function TeacherCourseDetailPage() {
   const { course, students, submissions } = data;
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="teacher-page">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <Link
             to={ROUTES.TEACHER_COURSES}
@@ -476,11 +476,11 @@ export default function TeacherCourseDetailPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto">
           <button
             type="button"
             onClick={copyInvite}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-bold"
+            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-bold sm:flex-none"
             style={{
               background: colors.surface[50],
               borderColor: colors.surface[200],
@@ -496,7 +496,7 @@ export default function TeacherCourseDetailPage() {
                 ":sessionId",
                 String(nextSubmission.id),
               )}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-[12px] font-bold"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md px-3 text-[12px] font-bold sm:flex-none"
               style={{ background: colors.brand, color: colors.text.light }}
             >
               Review next
@@ -536,7 +536,7 @@ export default function TeacherCourseDetailPage() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-5">
           <Card className="p-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2
                   className="text-[14px] font-bold"
@@ -552,7 +552,9 @@ export default function TeacherCourseDetailPage() {
                 </p>
               </div>
               <div
-                className="flex w-fit rounded-md border p-1"
+                role="tablist"
+                aria-label="Course workspace view"
+                className="grid w-full grid-cols-2 rounded-md border p-1 sm:w-fit"
                 style={{
                   background: colors.surface[100],
                   borderColor: colors.surface[200],
@@ -567,6 +569,8 @@ export default function TeacherCourseDetailPage() {
                     <button
                       key={value}
                       type="button"
+                      role="tab"
+                      aria-selected={active}
                       onClick={() => setView(value as CourseView)}
                       className="h-8 rounded-md px-3 text-[12px] font-bold"
                       style={{
@@ -618,10 +622,10 @@ export default function TeacherCourseDetailPage() {
                   message="Students will appear here after they attach a writing session to this course."
                 />
               ) : (
-                <div className="overflow-x-auto">
-                  <div className="min-w-[980px]">
+                <div className="teacher-ledger-scroll">
+                  <div className="teacher-ledger">
                     <div
-                      className="grid grid-cols-[minmax(260px,1.2fr)_170px_130px_160px_190px] items-center gap-4 border-b px-4 py-2.5"
+                      className="teacher-ledger-header grid grid-cols-[minmax(260px,1.2fr)_170px_130px_160px_190px] items-center gap-4 border-b px-4 py-2.5"
                       style={{
                         background: colors.surface[100],
                         borderColor: colors.surface[200],
@@ -647,10 +651,13 @@ export default function TeacherCourseDetailPage() {
                     {submissions.map((submission: TeacherSubmission) => (
                       <div
                         key={submission.id}
-                        className="grid min-h-[72px] grid-cols-[minmax(260px,1.2fr)_170px_130px_160px_190px] items-center gap-4 border-b px-4 py-3 hover:bg-surface-100"
+                        className="teacher-ledger-row grid min-h-[72px] grid-cols-[minmax(260px,1.2fr)_170px_130px_160px_190px] items-center gap-4 border-b px-4 py-3 hover:bg-surface-100"
                         style={{ borderColor: colors.surface[200] }}
                       >
-                        <div className="min-w-0">
+                        <div
+                          className="teacher-ledger-primary min-w-0"
+                          data-label="Submission"
+                        >
                           <p
                             className="truncate text-[13px] font-bold"
                             style={{ color: colors.text.primary }}
@@ -666,7 +673,7 @@ export default function TeacherCourseDetailPage() {
                             {Math.round(safeNumber(submission.wpm))} WPM
                           </p>
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0" data-label="Student">
                           <p
                             className="truncate text-[12px] font-semibold"
                             style={{ color: colors.text.primary }}
@@ -680,7 +687,7 @@ export default function TeacherCourseDetailPage() {
                             {submission.student_id}
                           </p>
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5" data-label="Outcome">
                           <StatusBadge
                             value={submission.classification_bucket}
                           />
@@ -691,7 +698,7 @@ export default function TeacherCourseDetailPage() {
                             {formatEvidenceScore(submission.confidence)}%
                           </span>
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5" data-label="Review">
                           <StatusBadge
                             value={submission.review_status || "PENDING"}
                           />
@@ -704,7 +711,10 @@ export default function TeacherCourseDetailPage() {
                               : "No certificate"}
                           </p>
                         </div>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div
+                          className="teacher-ledger-actions flex flex-wrap gap-1.5"
+                          data-label="Actions"
+                        >
                           <Link
                             to={ROUTES.TEACHER_REVIEW.replace(
                               ":sessionId",
@@ -790,10 +800,10 @@ export default function TeacherCourseDetailPage() {
                   message="Share the invite code so students can join this course."
                 />
               ) : (
-                <div className="overflow-x-auto">
-                  <div className="min-w-[900px]">
+                <div className="teacher-ledger-scroll">
+                  <div className="teacher-ledger">
                     <div
-                      className="grid grid-cols-[minmax(260px,1.2fr)_130px_140px_140px_170px] items-center gap-4 border-b px-4 py-2.5"
+                      className="teacher-ledger-header grid grid-cols-[minmax(260px,1.2fr)_130px_140px_140px_170px] items-center gap-4 border-b px-4 py-2.5"
                       style={{
                         background: colors.surface[100],
                         borderColor: colors.surface[200],
@@ -819,10 +829,13 @@ export default function TeacherCourseDetailPage() {
                     {students.map((student: CourseStudent) => (
                       <div
                         key={student.id}
-                        className="grid min-h-[68px] grid-cols-[minmax(260px,1.2fr)_130px_140px_140px_170px] items-center gap-4 border-b px-4 py-3 hover:bg-surface-100"
+                        className="teacher-ledger-row grid min-h-[68px] grid-cols-[minmax(260px,1.2fr)_130px_140px_140px_170px] items-center gap-4 border-b px-4 py-3 hover:bg-surface-100"
                         style={{ borderColor: colors.surface[200] }}
                       >
-                        <div className="min-w-0">
+                        <div
+                          className="teacher-ledger-primary min-w-0"
+                          data-label="Student"
+                        >
                           <p
                             className="truncate text-[13px] font-bold"
                             style={{ color: colors.text.primary }}
@@ -843,24 +856,28 @@ export default function TeacherCourseDetailPage() {
                           </p>
                         </div>
                         <p
+                          data-label="Submissions"
                           className="font-mono text-[13px] font-bold tabular-nums"
                           style={{ color: colors.text.primary }}
                         >
                           {student.submission_count}
                         </p>
                         <p
+                          data-label="Average WPM"
                           className="font-mono text-[13px] font-bold tabular-nums"
                           style={{ color: colors.text.primary }}
                         >
                           {Math.round(safeNumber(student.avg_wpm))}
                         </p>
                         <p
+                          data-label="Human score"
                           className="font-mono text-[13px] font-bold tabular-nums"
                           style={{ color: colors.text.primary }}
                         >
                           {Math.round(safeNumber(student.avg_confidence))}%
                         </p>
                         <p
+                          data-label="Last activity"
                           className="text-[12px]"
                           style={{ color: colors.text.secondary }}
                         >

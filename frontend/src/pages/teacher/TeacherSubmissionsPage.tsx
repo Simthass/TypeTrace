@@ -663,8 +663,8 @@ export default function TeacherSubmissionsPage() {
   );
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="teacher-page">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <p
             className="text-[11px] font-bold uppercase tracking-[0.16em]"
@@ -680,10 +680,10 @@ export default function TeacherSubmissionsPage() {
           </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto">
           <Link
             to={ROUTES.TEACHER_COURSES}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-bold"
+            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-bold sm:flex-none"
             style={{
               background: colors.surface[50],
               borderColor: colors.surface[200],
@@ -699,7 +699,7 @@ export default function TeacherSubmissionsPage() {
                 ":sessionId",
                 String(nextSubmission.id),
               )}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-[12px] font-bold"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md px-3 text-[12px] font-bold sm:flex-none"
               style={{ background: colors.brand, color: colors.text.light }}
             >
               <Icon type="review" size={14} />
@@ -754,7 +754,7 @@ export default function TeacherSubmissionsPage() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(260px,1fr)_190px_160px_160px_170px_auto]">
+        <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_190px_160px_160px_170px_auto]">
           <div>
             <span
               className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.14em]"
@@ -773,6 +773,7 @@ export default function TeacherSubmissionsPage() {
                 value={search}
                 onChange={(event) => updateSearch(event.target.value)}
                 placeholder="Student, title, email, course..."
+                aria-label="Search submissions"
                 className="h-9 w-full rounded-md border pl-9 pr-9 text-[12px] font-medium outline-none"
                 style={{
                   borderColor: colors.surface[200],
@@ -907,10 +908,10 @@ export default function TeacherSubmissionsPage() {
             />
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <div className="min-w-[1020px]">
+              <div className="teacher-ledger-scroll">
+                <div className="teacher-ledger">
                   <div
-                    className="grid grid-cols-[minmax(280px,1.4fr)_190px_170px_170px_140px] items-center gap-4 border-b px-4 py-2.5"
+                    className="teacher-ledger-header grid grid-cols-[minmax(280px,1.4fr)_190px_170px_170px_140px] items-center gap-4 border-b px-4 py-2.5"
                     style={{
                       background: colors.surface[100],
                       borderColor: colors.surface[200],
@@ -948,7 +949,7 @@ export default function TeacherSubmissionsPage() {
                     return (
                       <div
                         key={submission.id}
-                        className="grid min-h-[72px] grid-cols-[minmax(280px,1.4fr)_190px_170px_170px_140px] items-center gap-4 border-b py-3 pl-3 pr-4 transition-colors hover:bg-surface-100"
+                        className="teacher-ledger-row grid min-h-[72px] grid-cols-[minmax(280px,1.4fr)_190px_170px_170px_140px] items-center gap-4 border-b py-3 pl-3 pr-4 transition-colors hover:bg-surface-100"
                         style={{
                           borderColor: colors.surface[200],
                           borderLeft: `3px solid ${
@@ -956,7 +957,10 @@ export default function TeacherSubmissionsPage() {
                           }`,
                         }}
                       >
-                        <div className="min-w-0">
+                        <div
+                          className="teacher-ledger-primary min-w-0"
+                          data-label="Submission"
+                        >
                           <p
                             className="truncate text-[13px] font-bold"
                             style={{ color: colors.text.primary }}
@@ -972,7 +976,7 @@ export default function TeacherSubmissionsPage() {
                           </p>
                         </div>
 
-                        <div className="min-w-0">
+                        <div className="min-w-0" data-label="Student">
                           <p
                             className="truncate text-[12px] font-semibold"
                             style={{ color: colors.text.primary }}
@@ -989,7 +993,7 @@ export default function TeacherSubmissionsPage() {
                           </p>
                         </div>
 
-                        <div className="min-w-0">
+                        <div className="min-w-0" data-label="Course">
                           <p
                             className="truncate text-[12px] font-bold"
                             style={{ color: colors.text.primary }}
@@ -1004,7 +1008,7 @@ export default function TeacherSubmissionsPage() {
                           </p>
                         </div>
 
-                        <div className="space-y-1">
+                        <div className="space-y-1" data-label="Status">
                           <StatusBadge value={reviewStatusValue} />
                           <p
                             className="flex items-center gap-1.5 text-[11px]"
@@ -1022,7 +1026,10 @@ export default function TeacherSubmissionsPage() {
                           </p>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <div
+                          className="teacher-ledger-actions flex flex-wrap items-center gap-1.5"
+                          data-label="Actions"
+                        >
                           <Link
                             to={ROUTES.TEACHER_REVIEW.replace(
                               ":sessionId",
@@ -1063,7 +1070,7 @@ export default function TeacherSubmissionsPage() {
 
               {sortedSubmissions.length > PAGE_SIZE && (
                 <div
-                  className="flex items-center justify-between gap-3 border-t px-4 py-3"
+                  className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                   style={{ borderColor: colors.surface[200] }}
                 >
                   <p
