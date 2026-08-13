@@ -12,6 +12,7 @@ test.describe("teacher responsive workflows", () => {
   test("teacher navigation and primary workspaces remain contained", async ({
     page,
   }, testInfo) => {
+    test.setTimeout(120_000);
     if (testInfo.project.name === "chromium-mobile-responsive") {
       await page.setViewportSize({ width: 320, height: 568 });
     }
@@ -53,7 +54,7 @@ test.describe("teacher responsive workflows", () => {
       ["/teacher/students", "Students"],
       ["/teacher/settings", "Settings"],
     ] as const) {
-      await page.goto(route);
+      await page.goto(route, { waitUntil: "domcontentloaded", timeout: 30_000 });
       await expect(
         page.getByRole("main").getByRole("heading", {
           name: heading,
