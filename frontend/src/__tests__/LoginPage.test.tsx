@@ -52,13 +52,26 @@ describe("LoginPage", () => {
 
     renderLogin();
 
-    fireEvent.change(screen.getByLabelText("Email address"), {
+    const emailInput = screen.getByLabelText(
+      "Email address",
+    ) as HTMLInputElement;
+    const submitButton = screen.getByRole("button", { name: "Sign in" });
+
+    fireEvent.change(emailInput, {
       target: { value: "not-an-email" },
     });
     fireEvent.change(screen.getByLabelText("Password"), {
       target: { value: "Password123" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    // The real browser blocks a button-driven submit first because the input
+    // is type=email. Assert that native guard, then dispatch submit directly
+    // to exercise LoginPage's defensive application-level validation branch.
+    expect(emailInput).toBeInvalid();
+
+    const form = submitButton.closest("form");
+    expect(form).not.toBeNull();
+    fireEvent.submit(form as HTMLFormElement);
 
     expect(post).not.toHaveBeenCalled();
     expect(showToast).toHaveBeenCalledWith(

@@ -198,3 +198,13 @@ frontend/playwright/.auth/
 
 # Local E2E secrets
 frontend/.env.e2e
+
+
+backend/.coverage
+backend/coverage-app.json
+backend/coverage-html-app/
+frontend/coverage/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/playwright/.auth/
