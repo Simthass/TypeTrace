@@ -543,6 +543,9 @@ function DraftRecoveryModal({
           borderColor: colors.surface[200],
           boxShadow: "0 34px 90px rgba(15,23,42,0.28)",
         }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="editor-draft-recovery-title"
       >
         <div className="px-6 pb-5 pt-6">
           <div
@@ -561,6 +564,7 @@ function DraftRecoveryModal({
           </div>
 
           <h2
+            id="editor-draft-recovery-title"
             className="text-[26px] font-extrabold leading-tight tracking-[-0.045em]"
             style={{ color: colors.text.primary }}
           >
@@ -1568,9 +1572,18 @@ export default function EditorPage() {
     syncCaptureTelemetry,
   ]);
 
-  // Show recovery prompt only after local draft lookup finishes.
+  // Consent is the first-run privacy gate and must own the modal layer.
+  // Recovery is deliberately deferred until consent closes so the two prompts
+  // can never compete for focus or pointer input.
   useEffect(() => {
-    if (routeDraftId || !hasCheckedDraft || !recoveredDraft) return;
+    if (
+      showConsentModal ||
+      routeDraftId ||
+      !hasCheckedDraft ||
+      !recoveredDraft
+    ) {
+      return;
+    }
     if (recoveredDraft.saveReason === "manual") return;
     if (title.trim() || text.trim() || hasCapturedEvents) return;
 
@@ -1584,6 +1597,7 @@ export default function EditorPage() {
     hasCheckedDraft,
     recoveredDraft,
     routeDraftId,
+    showConsentModal,
     text,
     title,
   ]);
@@ -2627,7 +2641,7 @@ export default function EditorPage() {
         />
       )}
 
-      {showDraftRecoveryModal && recoveredDraft && (
+      {!showConsentModal && showDraftRecoveryModal && recoveredDraft && (
         <DraftRecoveryModal
           draft={recoveredDraft}
           onContinue={continueRecoveredDraft}

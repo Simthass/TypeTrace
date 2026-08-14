@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import { STUDENT_AUTH_STATE } from "./support/env";
 
 const EDITOR_CONSENT_STORAGE_KEY = "typetrace.editorEvidenceConsent.v1";
+const RECOVERY_DIALOG_NAME = "Continue your previous unfinished session?";
 
 test.use({ storageState: STUDENT_AUTH_STATE });
 
@@ -17,33 +18,38 @@ test("editor captures genuine keyboard evidence before analysis", async ({ page 
     name: "TypeTrace writing evidence consent",
     exact: true,
   });
-  if (await consentDialog.isVisible().catch(() => false)) {
-    await consentDialog
-      .getByRole("button", {
-        name: "I understand, start capturing",
-        exact: true,
-      })
-      .click();
-    await expect(consentDialog).toBeHidden();
-  }
-
-  const recoveryHeading = page.getByRole("heading", {
-    name: "Continue your previous unfinished session?",
+  const recoveryDialog = page.getByRole("dialog", {
+    name: RECOVERY_DIALOG_NAME,
     exact: true,
   });
-  if (
-    await recoveryHeading
-      .waitFor({ state: "visible", timeout: 3_000 })
-      .then(() => true)
-      .catch(() => false)
-  ) {
-    await page
+
+  // This test deliberately clears consent, so the privacy gate must appear.
+  // Recovery may be discovered in parallel, but it must not render above or
+  // beneath the consent dialog until consent has been accepted.
+  await expect(consentDialog).toBeVisible();
+  await expect(recoveryDialog).toHaveCount(0);
+
+  await consentDialog
+    .getByRole("button", {
+      name: "I understand, start capturing",
+      exact: true,
+    })
+    .click();
+  await expect(consentDialog).toHaveCount(0);
+
+  const recoveryAppeared = await recoveryDialog
+    .waitFor({ state: "visible", timeout: 5_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (recoveryAppeared) {
+    await recoveryDialog
       .getByRole("button", {
         name: "Discard local draft",
         exact: true,
       })
       .click();
-    await expect(recoveryHeading).toBeHidden();
+    await expect(recoveryDialog).toHaveCount(0);
   }
 
   const title = page.getByLabel("Document title", { exact: true });
@@ -65,8 +71,12 @@ test("editor captures genuine keyboard evidence before analysis", async ({ page 
   );
 
   const evidencePanel = page.getByRole("complementary");
-  await expect(evidencePanel.getByText("Capture threshold", { exact: true })).toBeVisible();
-  await expect(evidencePanel.getByText("Ready", { exact: true })).toBeVisible();
+  await expect(
+    evidencePanel.getByText("Capture threshold", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    evidencePanel.getByText("Ready", { exact: true }),
+  ).toBeVisible();
   await expect(analyze).toBeEnabled();
 
   const textValue = await workspace.inputValue();

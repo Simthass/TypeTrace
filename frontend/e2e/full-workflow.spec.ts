@@ -94,12 +94,12 @@ test("student submits evidence, teacher reviews it, and the certificate verifies
      * starting this new isolated workflow. This handles both IndexedDB/local
      * mirrors and server-synced drafts through the application's real UI path.
      */
-    const recoveryHeading = studentPage.getByRole("heading", {
+    const recoveryDialog = studentPage.getByRole("dialog", {
       name: "Continue your previous unfinished session?",
       exact: true,
     });
 
-    const recoveryAppeared = await recoveryHeading
+    const recoveryAppeared = await recoveryDialog
       .waitFor({
         state: "visible",
         timeout: 5_000,
@@ -108,14 +108,14 @@ test("student submits evidence, teacher reviews it, and the certificate verifies
       .catch(() => false);
 
     if (recoveryAppeared) {
-      await studentPage
+      await recoveryDialog
         .getByRole("button", {
           name: "Discard local draft",
           exact: true,
         })
         .click();
 
-      await expect(recoveryHeading).toBeHidden();
+      await expect(recoveryDialog).toHaveCount(0);
     }
 
     const titleInput = studentPage.getByLabel("Document title", {
