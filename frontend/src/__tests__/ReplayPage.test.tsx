@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ReplayPage from "../pages/ReplayPage";
 import { api } from "../lib/api";
@@ -183,6 +183,10 @@ describe("ReplayPage", () => {
     });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("fails closed for malformed session identifiers without calling the API", async () => {
     const get = vi.spyOn(api, "get");
 
@@ -220,4 +224,146 @@ describe("ReplayPage", () => {
     expect(screen.getByText("Something went wrong. Please try again.")).toBeVisible();
     await waitFor(() => expect(api.get).toHaveBeenCalledTimes(1));
   });
+
+  it("switches to the event stream, seeks with transport controls, and restarts", async () => {
+    vi.spyOn(api, "get").mockResolvedValue({ data: replayResponse });
+    renderReplay("/session/157/replay");
+
+    await screen.findByRole("heading", { name: "Replay Audit: Replay contract" });
+    fireEvent.click(screen.getByRole("button", { name: "Event Stream" }));
+    expect(screen.getByText("keydown", { exact: true })).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Forward 5 seconds" }));
+    expect(screen.getByText("c", { exact: true })).toBeVisible();
+    expect(screen.getByText(/0:03 \/ 0:03/)).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Restart" }));
+    expect(screen.getByText(/0:00 \/ 0:03/)).toBeVisible();
+  });
+
+  it("changes playback speed and automatically stops at the end of the replay", async () => {
+    vi.spyOn(api, "get").mockResolvedValue({ data: replayResponse });
+    renderReplay("/session/157/replay");
+    await screen.findByRole("heading", { name: "Replay Audit: Replay contract" });
+
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: "4x" }));
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    expect(screen.getByRole("button", { name: "Pause" })).toBeEnabled();
+
+    act(() => {
+      vi.advanceTimersByTime(800);
+    });
+
+    expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
+    expect(screen.getByText(/0:03 \/ 0:03/)).toBeVisible();
+  });
+
+  it("supports keyboard seek shortcuts while leaving modified shortcuts alone", async () => {
+    vi.spyOn(api, "get").mockResolvedValue({ data: replayResponse });
+    renderReplay("/session/157/replay");
+    await screen.findByRole("heading", { name: "Replay Audit: Replay contract" });
+
+    fireEvent.keyDown(window, { key: "End", code: "End" });
+    await waitFor(() => {
+      expect(screen.getByText(/0:03 \/ 0:03/)).toBeVisible();
+    });
+
+    fireEvent.keyDown(window, { key: "Home", code: "Home" });
+    await waitFor(() => {
+      expect(screen.getByText(/0:00 \/ 0:03/)).toBeVisible();
+    });
+
+    fireEvent.keyDown(window, { key: "ArrowRight", code: "ArrowRight" });
+    await waitFor(() => {
+      expect(screen.getByText(/0:03 \/ 0:03/)).toBeVisible();
+    });
+
+    fireEvent.keyDown(window, { key: "Home", code: "Home", ctrlKey: true });
+    await waitFor(() => {
+      expect(screen.getByText(/0:03 \/ 0:03/)).toBeVisible();
+    });
+  });
+
+  it("seeks from the scrub bar and from timeline marker controls", async () => {
+    const withMarker: ReplayResponse = {
+      ...replayResponse,
+      timeline_markers: [
+        {
+          type: "pause",
+          event_index: 2,
+          relative_time_ms: 2_000,
+          label: "Long pause",
+          key: "Pause",
+        },
+      ],
+    };
+    vi.spyOn(api, "get").mockResolvedValue({ data: withMarker });
+    renderReplay("/session/157/replay");
+    await screen.findByRole("heading", { name: "Replay Audit: Replay contract" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Long pause/ }));
+    expect(screen.getByText(/0:02 \/ 0:03/)).toBeVisible();
+
+    const scrub = screen.getByTitle(/Pause: Long pause at/).closest("div.relative") as HTMLDivElement;
+    Object.defineProperty(scrub, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        right: 100,
+        width: 100,
+        top: 0,
+        bottom: 10,
+        height: 10,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }),
+    });
+    fireEvent.click(scrub, { clientX: 50 });
+    expect(screen.getByText(/0:01 \/ 0:03/)).toBeVisible();
+  });
+
+  it("surfaces reconstruction-integrity mismatches instead of presenting them as exact", async () => {
+    const inconsistent: ReplayResponse = {
+      ...replayResponse,
+      events: replayResponse.events.map((event, index) =>
+        index === replayResponse.events.length - 1
+          ? { ...event, documentLength: 99, documentLengthAfter: 99 }
+          : event,
+      ),
+    };
+    vi.spyOn(api, "get").mockResolvedValue({ data: inconsistent });
+    renderReplay("/session/157/replay");
+
+    expect(
+      await screen.findByText("Reconstruction may be incomplete"),
+    ).toBeVisible();
+    expect(screen.getByText(/supporting evidence only/)).toBeVisible();
+  });
+
+  it("shows a non-playable state when the authorized replay contains no events", async () => {
+    const emptyReplay: ReplayResponse = {
+      ...replayResponse,
+      events: [],
+      timeline_markers: [],
+      audit: {
+        ...replayResponse.audit,
+        total_raw_events: 0,
+        total_normalized_events: 0,
+        is_truncated: false,
+        max_events_returned: 0,
+      },
+    };
+    vi.spyOn(api, "get").mockResolvedValue({ data: emptyReplay });
+    renderReplay("/session/157/replay");
+
+    expect(
+      await screen.findByText("No replayable keystroke events"),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
+    expect(screen.getByText("No paste, deletion, or pause markers detected.")).toBeVisible();
+  });
+
 });
