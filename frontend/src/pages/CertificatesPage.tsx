@@ -147,13 +147,6 @@ function Icon({ type, size = 16 }: { type: string; size?: number }) {
         <path d="m9 15 2 2 4-5" />
       </>
     ),
-    external: (
-      <>
-        <path d="M15 3h6v6" />
-        <path d="M10 14 21 3" />
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-      </>
-    ),
     hash: (
       <>
         <path d="M4 9h16" />
@@ -372,12 +365,24 @@ function ledgerStatusLabel(status: CertificateLedgerStatus): string {
 
 function ledgerStatusStyle(status: CertificateLedgerStatus) {
   if (status === "VALID") {
-    return { background: colors.mintTint, color: brand.humanText, borderColor: colors.mintTint };
+    return {
+      background: colors.mintTint,
+      color: brand.humanText,
+      borderColor: colors.mintTint,
+    };
   }
   if (status === "REVIEW_REQUIRED" || status === "LEGACY_UNSIGNED") {
-    return { background: colors.amberTint, color: brand.suspiciousText, borderColor: colors.amberTint };
+    return {
+      background: colors.amberTint,
+      color: brand.suspiciousText,
+      borderColor: colors.amberTint,
+    };
   }
-  return { background: colors.roseTint, color: brand.aiText, borderColor: colors.roseTint };
+  return {
+    background: colors.roseTint,
+    color: brand.aiText,
+    borderColor: colors.roseTint,
+  };
 }
 
 function LedgerStatusBadge({ status }: { status: CertificateLedgerStatus }) {
@@ -391,7 +396,6 @@ function LedgerStatusBadge({ status }: { status: CertificateLedgerStatus }) {
     </span>
   );
 }
-
 
 function CertificateMobileCard({
   certificate,
@@ -428,7 +432,8 @@ function CertificateMobileCard({
             {certificate.title || "Untitled Document"}
           </h3>
           <p className="mt-1 text-[11px]" style={{ color: colors.text.muted }}>
-            {certificate.course_code || "Personal"} · {formatShortDate(certificate.created_at)}
+            {certificate.course_code || "Personal"} ·{" "}
+            {formatShortDate(certificate.created_at)}
           </p>
         </button>
         <LedgerStatusBadge status={certificate.status} />
@@ -444,7 +449,10 @@ function CertificateMobileCard({
             {formatEvidenceScore(confidence)}%
           </p>
         </div>
-        <div className="mt-2 h-1.5 rounded-md" style={{ background: colors.surface[200] }}>
+        <div
+          className="mt-2 h-1.5 rounded-md"
+          style={{ background: colors.surface[200] }}
+        >
           <div
             className="h-1.5 rounded-md"
             style={{ background: barColor, width: `${confidence}%` }}
@@ -455,37 +463,36 @@ function CertificateMobileCard({
       <div className="mobile-record-grid mt-4">
         <div>
           <p className="mobile-record-label">Risk level</p>
-          <div className="mt-1"><StatusBadge value={certificate.risk_level || "LOW"} /></div>
+          <div className="mt-1">
+            <StatusBadge value={certificate.risk_level || "LOW"} />
+          </div>
         </div>
         <div>
           <p className="mobile-record-label">Review</p>
           <p className="mobile-record-value text-anywhere">
-            {certificate.review_outcome || certificate.review_status || "Pending"}
+            {certificate.review_outcome ||
+              certificate.review_status ||
+              "Pending"}
           </p>
         </div>
       </div>
 
       {certificate.degraded_analysis && (
-        <p className="mt-3 text-[11px] leading-5" style={{ color: colors.amber }}>
-          {certificate.decision_source || "FALLBACK_RULES"} · trained model unavailable
+        <p
+          className="mt-3 text-[11px] leading-5"
+          style={{ color: colors.amber }}
+        >
+          {certificate.decision_source || "FALLBACK_RULES"} · trained model
+          unavailable
         </p>
       )}
 
       <div className="responsive-actions mt-4">
         <Link
-          to={`/verify/${certificate.certificate_id}`}
-          className="touch-target inline-flex items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-semibold"
-          style={{
-            borderColor: colors.surface[200],
-            color: colors.text.secondary,
-            background: colors.surface[50],
-          }}
-        >
-          <Icon type="external" size={14} />
-          Verify
-        </Link>
-        <Link
-          to={ROUTES.REPLAY.replace(":sessionId", String(certificate.session_id))}
+          to={ROUTES.REPLAY.replace(
+            ":sessionId",
+            String(certificate.session_id),
+          )}
           className="touch-target inline-flex items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-semibold"
           style={{
             borderColor: colors.surface[200],
@@ -1071,7 +1078,9 @@ export default function CertificatesPage() {
                   certificate={certificate}
                   downloading={downloadingId === certificate.certificate_id}
                   onSelect={setSelectedCertificate}
-                  onDownload={(item) => void downloadCertificate(item.certificate_id)}
+                  onDownload={(item) =>
+                    void downloadCertificate(item.certificate_id)
+                  }
                 />
               ))}
             </div>
@@ -1098,7 +1107,7 @@ export default function CertificatesPage() {
                     ].map((heading) => (
                       <th
                         key={heading}
-                        className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em]"
+                        className="whitespace-nowrap px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em]"
                         style={{ color: colors.text.muted }}
                       >
                         {heading}
@@ -1143,7 +1152,9 @@ export default function CertificatesPage() {
                                 {shortHash(certificate.document_hash)}
                               </p>
                               <div className="mt-1.5">
-                                <LedgerStatusBadge status={certificate.status} />
+                                <LedgerStatusBadge
+                                  status={certificate.status}
+                                />
                               </div>
                             </button>
                             <span className="relative shrink-0">
@@ -1215,7 +1226,10 @@ export default function CertificatesPage() {
                         <td className="px-4 py-3 align-middle">
                           <StatusBadge value={certificate.classification} />
                           {certificate.degraded_analysis && (
-                            <p className="mt-1 text-[10px] font-semibold" style={{ color: colors.amber }}>
+                            <p
+                              className="mt-1 text-[10px] font-semibold"
+                              style={{ color: colors.amber }}
+                            >
                               Fallback rules
                             </p>
                           )}
@@ -1257,26 +1271,14 @@ export default function CertificatesPage() {
                           {formatShortDate(certificate.created_at)}
                         </td>
 
-                        <td className="px-4 py-3 align-middle">
-                          <div className="flex items-center gap-1.5">
-                            <Link
-                              to={`/verify/${certificate.certificate_id}`}
-                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold"
-                              style={{
-                                borderColor: colors.surface[200],
-                                color: colors.text.secondary,
-                                background: colors.surface[50],
-                              }}
-                            >
-                              <Icon type="external" size={13} />
-                              Verify
-                            </Link>
+                        <td className="whitespace-nowrap px-4 py-3 align-middle">
+                          <div className="flex flex-nowrap items-center gap-1.5">
                             <Link
                               to={ROUTES.REPLAY.replace(
                                 ":sessionId",
                                 String(certificate.session_id),
                               )}
-                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold"
+                              className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold"
                               style={{
                                 borderColor: colors.surface[200],
                                 color: colors.text.secondary,
@@ -1297,7 +1299,7 @@ export default function CertificatesPage() {
                                   certificate.certificate_id,
                                 )
                               }
-                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                               style={{
                                 borderColor: colors.surface[200],
                                 color: colors.text.secondary,
@@ -1439,14 +1441,22 @@ export default function CertificatesPage() {
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <LedgerStatusBadge status={selectedCertificate.status} />
                   {selectedCertificate.degraded_analysis && (
-                    <span className="text-[11px] font-semibold" style={{ color: colors.amber }}>
-                      {selectedCertificate.decision_source || "FALLBACK_RULES"} · trained model unavailable
+                    <span
+                      className="text-[11px] font-semibold"
+                      style={{ color: colors.amber }}
+                    >
+                      {selectedCertificate.decision_source || "FALLBACK_RULES"}{" "}
+                      · trained model unavailable
                     </span>
                   )}
                 </div>
                 {!selectedCertificate.certificate_active && (
-                  <p className="mt-2 text-[12px] leading-5" style={{ color: colors.text.secondary }}>
-                    This record is not an active verified certificate. Open the public audit for the exact ledger reason.
+                  <p
+                    className="mt-2 text-[12px] leading-5"
+                    style={{ color: colors.text.secondary }}
+                  >
+                    This record is not an active verified certificate. Open the
+                    public audit for the exact ledger reason.
                   </p>
                 )}
               </div>
@@ -1586,14 +1596,6 @@ export default function CertificatesPage() {
 
               <div className="space-y-2 pt-2">
                 <Link
-                  to={`/verify/${selectedCertificate.certificate_id}`}
-                  className="flex h-11 w-full items-center justify-center gap-2 rounded-md text-[13px] font-semibold"
-                  style={{ background: colors.brand, color: colors.text.light }}
-                >
-                  <Icon type="external" size={14} />
-                  Verify Certificate
-                </Link>
-                <Link
                   to={ROUTES.REPLAY.replace(
                     ":sessionId",
                     String(selectedCertificate.session_id),
@@ -1634,5 +1636,3 @@ export default function CertificatesPage() {
     </div>
   );
 }
-
-

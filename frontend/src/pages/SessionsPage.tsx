@@ -366,7 +366,6 @@ function StatusBadge({ value }: { value?: string }) {
   );
 }
 
-
 function SessionMobileCard({ session }: { session: SessionItem }) {
   const bucket = getBucket(session);
   const confidence = normalizeEvidenceScore(session.confidence);
@@ -378,17 +377,15 @@ function SessionMobileCard({ session }: { session: SessionItem }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <Link
-            to={ROUTES.SESSION_DETAIL.replace(
-              ":sessionId",
-              String(session.id),
-            )}
+            to={ROUTES.SESSION_DETAIL.replace(":sessionId", String(session.id))}
             className="text-anywhere text-[14px] font-semibold leading-5 hover:underline"
             style={{ color: colors.text.primary }}
           >
             {session.title || "Untitled Document"}
           </Link>
           <p className="mt-1 text-[11px]" style={{ color: colors.text.muted }}>
-            {session.course_code || "Personal"} · {formatShortDate(session.created_at)}
+            {session.course_code || "Personal"} ·{" "}
+            {formatShortDate(session.created_at)}
           </p>
         </div>
         <StatusBadge value={bucket} />
@@ -404,7 +401,10 @@ function SessionMobileCard({ session }: { session: SessionItem }) {
             {formatEvidenceScore(confidence)}%
           </p>
         </div>
-        <div className="mt-2 h-1.5 rounded-md" style={{ background: colors.surface[200] }}>
+        <div
+          className="mt-2 h-1.5 rounded-md"
+          style={{ background: colors.surface[200] }}
+        >
           <div
             className="h-1.5 rounded-md"
             style={{ background: barColor, width: `${confidence}%` }}
@@ -442,7 +442,10 @@ function SessionMobileCard({ session }: { session: SessionItem }) {
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <StatusBadge value={session.review_status || "PENDING"} />
         {session.review_outcome && (
-          <p className="text-[11px] leading-4" style={{ color: colors.text.muted }}>
+          <p
+            className="text-[11px] leading-4"
+            style={{ color: colors.text.muted }}
+          >
             {session.review_outcome}
           </p>
         )}
@@ -613,6 +616,7 @@ export default function SessionsPage() {
   const { showToast } = useToast();
 
   const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [totalSessions, setTotalSessions] = useState(0);
   const [selectedFilter, setSelectedFilter] =
     useState<ClassificationFilter>("ALL");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("ALL");
@@ -641,6 +645,9 @@ export default function SessionsPage() {
 
         if (!mounted) return;
         setSessions(response.data.sessions || []);
+        setTotalSessions(
+          Number(response.data.total ?? response.data.sessions?.length ?? 0),
+        );
       } catch (error) {
         if (!mounted) return;
         const message = getApiErrorMessage(error);
@@ -844,7 +851,7 @@ export default function SessionsPage() {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Captured sessions"
-          value={stats.total}
+          value={totalSessions}
           helper="Every writing session saved in your evidence library"
           icon="list"
         />
@@ -1077,7 +1084,7 @@ export default function SessionsPage() {
                     ].map((heading) => (
                       <th
                         key={heading}
-                        className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em]"
+                        className="whitespace-nowrap px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em]"
                         style={{ color: colors.text.muted }}
                       >
                         {heading}
@@ -1218,10 +1225,10 @@ export default function SessionsPage() {
                           </div>
                         </td>
 
-                        <td className="px-4 py-3 align-middle">
+                        <td className="whitespace-nowrap px-4 py-3 align-middle">
                           {hasCertificate ? (
                             <span
-                              className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold"
+                              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-semibold"
                               style={{
                                 background: colors.mintTint,
                                 borderColor: colors.mintTint,
@@ -1233,7 +1240,7 @@ export default function SessionsPage() {
                             </span>
                           ) : (
                             <span
-                              className="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold"
+                              className="inline-flex items-center whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-semibold"
                               style={{
                                 background: colors.surface[100],
                                 borderColor: colors.surface[200],
@@ -1245,14 +1252,14 @@ export default function SessionsPage() {
                           )}
                         </td>
 
-                        <td className="px-4 py-3 align-middle">
-                          <div className="flex items-center gap-1.5">
+                        <td className="whitespace-nowrap px-4 py-3 align-middle">
+                          <div className="flex flex-nowrap items-center gap-1.5">
                             <Link
                               to={ROUTES.REPLAY.replace(
                                 ":sessionId",
                                 String(session.id),
                               )}
-                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold hover:bg-surface-100"
+                              className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold hover:bg-surface-100"
                               style={{
                                 borderColor: colors.surface[200],
                                 color: colors.text.secondary,
@@ -1266,7 +1273,7 @@ export default function SessionsPage() {
                             {session.certificate_id && (
                               <Link
                                 to={`/verify/${session.certificate_id}`}
-                                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold hover:bg-surface-100"
+                                className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold hover:bg-surface-100"
                                 style={{
                                   borderColor: colors.surface[200],
                                   color: colors.text.secondary,
@@ -1342,5 +1349,3 @@ export default function SessionsPage() {
     </div>
   );
 }
-
-
