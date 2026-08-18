@@ -85,6 +85,8 @@ export const API_ROUTES = {
   courses: {
     join: "/courses/join",
     enrolled: "/courses/enrolled",
+    manage: "/courses/manage",
+    detail: (courseId: string | number) => `/courses/manage/${courseId}`,
   },
 
   model: {

@@ -188,7 +188,12 @@ const navSections: StudentNavSection[] = [
   {
     label: "Academic",
     items: [
-      { label: "Join Course", path: ROUTES.JOIN_COURSE, icon: "course" },
+      {
+        label: "Course Management",
+        path: ROUTES.STUDENT_COURSES,
+        icon: "course",
+      },
+      { label: "Join Course", path: ROUTES.JOIN_COURSE, icon: "plus" },
       {
         label: "Settings",
         path: ROUTES.STUDENT_SETTINGS,
@@ -215,6 +220,7 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith(ROUTES.SESSIONS)) return "Sessions";
   if (pathname.startsWith(ROUTES.CERTIFICATES)) return "Certificates";
   if (pathname.startsWith(ROUTES.ANALYTICS)) return "Analytics";
+  if (pathname.startsWith(ROUTES.STUDENT_COURSES)) return "Course Management";
   if (pathname.startsWith(ROUTES.JOIN_COURSE)) return "Join Course";
   if (pathname.startsWith(ROUTES.STUDENT_SETTINGS)) return "Settings";
   if (pathname.startsWith(ROUTES.VERIFY_LOOKUP)) return "Verify Certificate";

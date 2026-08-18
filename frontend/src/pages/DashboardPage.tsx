@@ -1024,6 +1024,19 @@ function CourseDistributionPanel({
       <PanelHeader
         title="Course distribution"
         subtitle="Where evidence is being submitted"
+        action={
+          <Link
+            to={ROUTES.STUDENT_COURSES}
+            className="inline-flex h-8 items-center rounded-md border px-3 text-[12px] font-bold"
+            style={{
+              background: colors.surface[50],
+              borderColor: colors.surface[200],
+              color: colors.text.primary,
+            }}
+          >
+            Manage courses
+          </Link>
+        }
       />
       {courses.length ? (
         <div className="space-y-4">

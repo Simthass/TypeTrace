@@ -117,3 +117,70 @@ export interface StudentAnalyticsResponse {
   courses: StudentCourseSummary[];
   bests: StudentBestStats;
 }
+export interface StudentManagedCourse {
+  id: number;
+  course_name: string;
+  course_code: string;
+  is_archived: boolean;
+  created_at: string;
+  joined_at: string;
+  teacher_name: string;
+  teacher_university_name: string | null;
+  teacher_department: string | null;
+  submission_count: number;
+  approved_count: number;
+  pending_count: number;
+  flagged_count: number;
+  discussion_count: number;
+  feedback_count: number;
+  certificate_count: number;
+  avg_confidence: number;
+  avg_wpm: number;
+  last_submission_at: string;
+}
+
+export interface StudentCourseManagementResponse {
+  status: string;
+  courses: StudentManagedCourse[];
+}
+
+export interface StudentCourseSession {
+  id: number;
+  title: string;
+  classification: string;
+  classification_bucket: ClassificationBucket;
+  confidence: number;
+  risk_level: string;
+  review_status: string;
+  review_outcome: string;
+  review_notes: string;
+  wpm: number;
+  duration_seconds: number;
+  total_keystrokes: number;
+  deletions: number;
+  pauses: number;
+  avg_iki: number;
+  word_count: number;
+  certificate_id: string | null;
+  document_hash: string | null;
+  created_at: string;
+  review_saved_at: string;
+}
+
+export interface StudentCourseDetailResponse {
+  status: string;
+  course: StudentManagedCourse;
+  summary: {
+    submission_count: number;
+    approved_count: number;
+    pending_count: number;
+    flagged_count: number;
+    discussion_count: number;
+    feedback_count: number;
+    certificate_count: number;
+    avg_confidence: number;
+    avg_wpm: number;
+  };
+  sessions: StudentCourseSession[];
+}
+

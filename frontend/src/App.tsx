@@ -50,6 +50,12 @@ const VerifyOtpPage = lazy(() => import("./pages/VerifyOtpPage"));
 const JoinCoursePage = lazy(
   () => import("./pages/student/JoinCoursePage"),
 );
+const StudentCoursesPage = lazy(
+  () => import("./pages/student/StudentCoursesPage"),
+);
+const StudentCourseDetailPage = lazy(
+  () => import("./pages/student/StudentCourseDetailPage"),
+);
 const TeacherCourseDetailPage = lazy(
   () => import("./pages/teacher/TeacherCourseDetailPage"),
 );
@@ -182,6 +188,14 @@ export default function App() {
                   <Route
                     path={ROUTES.JOIN_COURSE}
                     element={<JoinCoursePage />}
+                  />
+                  <Route
+                    path={ROUTES.STUDENT_COURSES}
+                    element={<StudentCoursesPage />}
+                  />
+                  <Route
+                    path={ROUTES.STUDENT_COURSE_DETAIL}
+                    element={<StudentCourseDetailPage />}
                   />
                 </Route>
               </Route>

@@ -292,6 +292,18 @@ class EnrolledCoursesResponse(StrictResponseModel):
     courses: list[CourseSummary]
 
 
+class StudentCourseManagementResponse(StrictResponseModel):
+    status: Literal["success"]
+    courses: list[dict[str, Any]]
+
+
+class StudentCourseDetailResponse(StrictResponseModel):
+    status: Literal["success"]
+    course: dict[str, Any]
+    summary: dict[str, Any]
+    sessions: list[dict[str, Any]]
+
+
 class TeacherCourseCreateResponse(StrictResponseModel):
     status: Literal["success"]
     message: str

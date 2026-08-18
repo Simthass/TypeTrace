@@ -26,6 +26,8 @@ export const ROUTES = {
   ANALYTICS: "/analytics",
   REPLAY: "/session/:sessionId/replay",
   JOIN_COURSE: "/join-course",
+  STUDENT_COURSES: "/courses",
+  STUDENT_COURSE_DETAIL: "/courses/:courseId",
 
   // Public Certificate Verification
   VERIFY_LOOKUP: "/verify",

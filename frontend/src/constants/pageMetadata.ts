@@ -167,6 +167,19 @@ export const PAGE_METADATA_ROUTES: PageMetadataRoute[] = [
       "Join a TypeTrace course using an instructor invite code and attach writing evidence to teacher review workflows.",
   },
   {
+    path: ROUTES.STUDENT_COURSES,
+    title: "Course Management",
+    description:
+      "Manage joined TypeTrace courses, course-linked submissions, certificates, review status, and teacher feedback.",
+  },
+  {
+    path: ROUTES.STUDENT_COURSE_DETAIL,
+    title: ({ courseId }) =>
+      courseId ? `Course ${shortId(courseId)}` : "Course Detail",
+    description:
+      "Review an enrolled TypeTrace course with your submitted sessions, certificates, review outcomes, and teacher feedback.",
+  },
+  {
     path: ROUTES.TEACHER_DASHBOARD,
     title: "Teacher Dashboard",
     description:
