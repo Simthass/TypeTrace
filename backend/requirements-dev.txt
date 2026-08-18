@@ -1,0 +1,15 @@
+# TypeTrace local research/training dependencies
+# Install this file only when performing offline ML research/training.
+-r requirements.txt
+
+# Sync PostgreSQL tooling used by older/offline workflows
+psycopg2-binary==2.9.9
+
+# Offline research/training packages
+imbalanced-learn==0.12.3
+xgboost==2.1.1
+optuna==3.6.1
+shap==0.46.0
+
+# Uvicorn development extras
+uvicorn[standard]==0.30.6
