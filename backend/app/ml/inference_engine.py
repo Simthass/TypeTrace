@@ -1,20 +1,3 @@
-"""Production inference engine for TypeTrace.
-
-The Isolation Forest evaluates only the cross-domain timing feature family that
-is present in both the public liveness dataset and live TypeTrace telemetry.
-Writing-process features such as WPM, paste activity, deletion behavior, active
-duration, and idle breaks remain in the independent behavioral rule layer.
-
-The API exposes one Human Writing Evidence Score from 0 to 100:
-
-    score >= 80  -> HUMAN       / LOW risk
-    score >= 50  -> SUSPICIOUS  / MEDIUM risk
-    score <  50  -> SYNTHETIC   / HIGH risk
-
-The percentage is an evidence score, not a calibrated probability and not proof
-of misconduct or authorship.
-"""
-
 from __future__ import annotations
 
 import hashlib

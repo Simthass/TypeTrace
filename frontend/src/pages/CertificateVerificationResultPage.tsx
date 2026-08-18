@@ -55,13 +55,6 @@ function formatDate(dateStr?: string) {
   }
 }
 
-function formatPercent(value: unknown): string {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return "0%";
-  const percent = numeric <= 1 ? numeric * 100 : numeric;
-  return `${Math.round(Math.max(0, Math.min(100, percent)))}%`;
-}
-
 // ─── Icon primitives ──────────────────────────────────────────────────────────
 
 function Icon({
@@ -463,8 +456,19 @@ export default function VerifyCertificatePage() {
       />
     );
 
-  const confidence = Number(result.confidence || 0);
-  const confidenceLabel = formatPercent(result.confidence);
+  const rawEvidenceScore = Number(
+    result.human_evidence_score ?? result.confidence ?? 0,
+  );
+  const confidence = Number.isFinite(rawEvidenceScore)
+    ? Math.max(
+        0,
+        Math.min(
+          100,
+          rawEvidenceScore <= 1 ? rawEvidenceScore * 100 : rawEvidenceScore,
+        ),
+      )
+    : 0;
+  const confidenceLabel = `${Math.round(confidence)}%`;
   const ledgerVerified = result.ledger_verified !== false;
   const signatureLabel =
     result.signature_status || result.ledger_status || "Unknown";
@@ -481,23 +485,42 @@ export default function VerifyCertificatePage() {
   // Determine decision styling
   const decisionLabel =
     result.classification_label || result.classification || "Unknown";
-  const isHumanWritten =
-    decisionLabel.toLowerCase().includes("human") ||
-    decisionLabel.toLowerCase().includes("original");
+  const normalizedDecisionLabel = decisionLabel.toLowerCase();
+  const normalizedClassification = String(
+    result.classification || "",
+  ).toUpperCase();
+  const normalizedRiskLevel = String(result.risk_level || "").toUpperCase();
+
   const isSynthetic =
-    decisionLabel.toLowerCase().includes("synthetic") ||
-    decisionLabel.toLowerCase().includes("ai") ||
-    decisionLabel.toLowerCase().includes("generated");
+    normalizedClassification === "SYNTHETIC" ||
+    normalizedClassification === "AI" ||
+    normalizedClassification === "AI-GENERATED" ||
+    normalizedDecisionLabel.includes("synthetic") ||
+    normalizedDecisionLabel.includes("ai") ||
+    normalizedDecisionLabel.includes("generated") ||
+    normalizedDecisionLabel.includes("high risk") ||
+    normalizedRiskLevel === "HIGH";
   const isReviewRequired =
-    decisionLabel.toLowerCase().includes("review") ||
-    decisionLabel.toLowerCase().includes("suspicious");
+    !isSynthetic &&
+    (normalizedClassification === "SUSPICIOUS" ||
+      normalizedDecisionLabel.includes("review") ||
+      normalizedDecisionLabel.includes("suspicious") ||
+      result.status === "REVIEW_REQUIRED" ||
+      normalizedRiskLevel === "MEDIUM");
+  const isHumanWritten =
+    !isSynthetic &&
+    !isReviewRequired &&
+    (normalizedClassification === "HUMAN" ||
+      normalizedDecisionLabel.includes("human") ||
+      normalizedDecisionLabel.includes("original") ||
+      result.status === "VALID");
 
   const decisionColor = isHumanWritten
     ? colors.green
-    : isSynthetic
-      ? colors.red
-      : isReviewRequired
-        ? colors.amber
+    : isReviewRequired
+      ? colors.amber
+      : isSynthetic
+        ? colors.red
         : colors.text.primary;
   const decisionBg = isHumanWritten
     ? withAlpha(colors.green, "0.06")

@@ -518,15 +518,15 @@ function CourseSelectorModal({
   );
 }
 
-/** Draft recovery prompt shown when an unfinished local draft exists */
+/** Draft recovery prompt shown when the most recent unfinished draft exists */
 function DraftRecoveryModal({
   draft,
   onContinue,
-  onDiscard,
+  onStartNew,
 }: {
   draft: EditorDraftSnapshot;
   onContinue: () => void;
-  onDiscard: () => void;
+  onStartNew: () => void;
 }) {
   const savedDate = new Date(draft.savedAt).toLocaleString();
   const words = countWords(draft.text);
@@ -560,7 +560,7 @@ function DraftRecoveryModal({
               className="h-2 w-2 rounded-md"
               style={{ background: colors.amber }}
             />
-            Unsaved writing session found
+            Saved writing session found
           </div>
 
           <h2
@@ -568,16 +568,16 @@ function DraftRecoveryModal({
             className="text-[26px] font-extrabold leading-tight tracking-[-0.045em]"
             style={{ color: colors.text.primary }}
           >
-            Continue your previous unfinished session?
+            Continue your most recently saved draft?
           </h2>
           <p
             className="mt-3 max-w-[48ch] text-[14px] leading-7"
             style={{ color: colors.text.secondary }}
           >
-            TypeTrace found a locally saved editor draft. Continuing restores
-            the document text, course selection, captured keystroke evidence,
-            and timing state so the session can keep building a single evidence
-            trail.
+            TypeTrace found your most recently saved unfinished draft.
+            Continuing restores its document text, course selection, captured
+            keystroke evidence, and timing state. Starting a new session keeps
+            this draft safely stored in Draft Management.
           </p>
 
           <div
@@ -610,7 +610,7 @@ function DraftRecoveryModal({
           </div>
 
           <p className="mt-3 text-[12px]" style={{ color: colors.text.muted }}>
-            Last saved locally: {savedDate}
+            Last saved: {savedDate}
           </p>
         </div>
 
@@ -620,7 +620,7 @@ function DraftRecoveryModal({
         >
           <button
             type="button"
-            onClick={onDiscard}
+            onClick={onStartNew}
             className="rounded-md border px-4 py-[10px] text-[13px] font-semibold transition hover:brightness-95"
             style={{
               borderColor: colors.surface[200],
@@ -628,7 +628,7 @@ function DraftRecoveryModal({
               color: colors.text.secondary,
             }}
           >
-            Discard local draft
+            Start new session
           </button>
           <button
             type="button"
@@ -1250,9 +1250,10 @@ export default function EditorPage() {
     hasCheckedDraft,
     isSavingDraft,
     saveDraft,
-    clearDraft,
     clearLocalDraft,
     dismissRecoveredDraft,
+    resumeRecoveredDraft,
+    startNewDraft,
   } = useEditorDraftRecovery({ userId: userDraftId, draftId: routeDraftId });
 
   const [captureTelemetry, setCaptureTelemetry] = useState({
@@ -1584,7 +1585,6 @@ export default function EditorPage() {
     ) {
       return;
     }
-    if (recoveredDraft.saveReason === "manual") return;
     if (title.trim() || text.trim() || hasCapturedEvents) return;
 
     const timer = window.setTimeout(() => {
@@ -1633,6 +1633,7 @@ export default function EditorPage() {
   const continueRecoveredDraft = () => {
     if (!recoveredDraft) return;
 
+    resumeRecoveredDraft();
     setTitle(recoveredDraft.title || "");
     setText(recoveredDraft.text || "");
     setSelectedCourseId(recoveredDraft.selectedCourseId ?? null);
@@ -1655,30 +1656,22 @@ export default function EditorPage() {
     showToast({
       type: "success",
       title: "Session restored",
-      message:
-        "Your unfinished document and captured evidence were restored locally.",
+      message: "Your unfinished document and captured evidence were restored.",
     });
   };
 
-  const discardRecoveredDraft = async () => {
-    try {
-      await clearDraft(recoveredDraft?.draftId);
-      dismissRecoveredDraft();
-      setShowDraftRecoveryModal(false);
+  const startFreshSessionFromRecovery = () => {
+    startNewDraft();
+    dismissRecoveredDraft();
+    setShowDraftRecoveryModal(false);
+    setHasHydratedRouteDraft(null);
+    setSearchParams({}, { replace: true });
 
-      showToast({
-        type: "info",
-        title: "Draft discarded",
-        message:
-          "The unfinished session was removed from this browser and server.",
-      });
-    } catch (error) {
-      showToast({
-        type: "error",
-        title: "Draft deletion failed",
-        message: getApiErrorMessage(error),
-      });
-    }
+    showToast({
+      type: "info",
+      title: "New session started",
+      message: "Your saved draft remains available in Draft Management.",
+    });
   };
 
   const saveCurrentSessionAsDraft = async () => {
@@ -1955,6 +1948,8 @@ export default function EditorPage() {
   };
 
   const newSession = () => {
+    startNewDraft();
+    setHasHydratedRouteDraft(null);
     setTitle("");
     setText("");
     setSelectedCourseId(null);
@@ -2645,7 +2640,7 @@ export default function EditorPage() {
         <DraftRecoveryModal
           draft={recoveredDraft}
           onContinue={continueRecoveredDraft}
-          onDiscard={discardRecoveredDraft}
+          onStartNew={startFreshSessionFromRecovery}
         />
       )}
 

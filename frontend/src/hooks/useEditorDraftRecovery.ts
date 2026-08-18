@@ -67,7 +67,7 @@ export function useEditorDraftRecovery({
           const draft = await readEditorDraft(safeUser, requestedDraftId);
           if (!mounted) return;
           setRecoveredDraft(draft);
-          if (draft) {
+          if (draft && requestedDraftId) {
             setActiveCreatedAt(draft.createdAt);
             setActiveDraftId(draft.draftId);
           }
@@ -153,7 +153,6 @@ export function useEditorDraftRecovery({
     [activeDraftId, safeUser],
   );
 
-
   const clearLocalDraft = useCallback(
     async (draftIdToClear?: string | null) => {
       const targetDraftId = draftIdToClear || activeDraftId;
@@ -179,6 +178,23 @@ export function useEditorDraftRecovery({
 
   const dismissRecoveredDraft = useCallback(() => {
     setRecoveredDraft(null);
+  }, []);
+
+  const resumeRecoveredDraft = useCallback(() => {
+    if (!recoveredDraft) return null;
+
+    setActiveDraftId(recoveredDraft.draftId);
+    setActiveCreatedAt(recoveredDraft.createdAt);
+    return recoveredDraft;
+  }, [recoveredDraft]);
+
+  const startNewDraft = useCallback(() => {
+    const nextDraftId = createEditorDraftId();
+    setActiveDraftId(nextDraftId);
+    setActiveCreatedAt(null);
+    setRecoveredDraft(null);
+    setHasCheckedDraft(true);
+    return nextDraftId;
   }, []);
 
   const refreshDrafts = useCallback(
@@ -207,6 +223,8 @@ export function useEditorDraftRecovery({
     clearLocalDraft,
     deleteDraftByKey,
     dismissRecoveredDraft,
+    resumeRecoveredDraft,
+    startNewDraft,
     refreshDrafts,
   };
 }
