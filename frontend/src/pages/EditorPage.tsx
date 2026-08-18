@@ -1809,13 +1809,15 @@ export default function EditorPage() {
     }
 
     setIsSubmitting(true);
+    setAnalysisResult(null);
+    setShowResultModal(false);
     suspendingDraftRef.current = true;
     let analysisCompleted = false;
 
     try {
       const savedDraft = await saveDraft(
         {
-          title,
+          title: finalTitle,
           text: finalText,
           selectedCourseId,
           keystrokeLog: evidence,
@@ -1844,14 +1846,19 @@ export default function EditorPage() {
       setSaveState("saved");
       const submittedDraftId = savedDraft.draftId;
       const submissionId = `draft:${submittedDraftId}`;
+      const syncedTitle = savedDraft.title || finalTitle;
+      const syncedActiveDurationMs = Math.max(
+        0,
+        Math.round(savedDraft.activeDurationMs || 0),
+      );
       const response = await api.post(API_ROUTES.sessions.analyze, {
         submission_id: submissionId,
-        title: finalTitle,
+        title: syncedTitle,
         text_content: finalText,
         keystroke_array: evidence,
         stats: finalStats,
         course_id: selectedCourseId,
-        active_duration_ms: submitSnapshot.activeDurationMs,
+        active_duration_ms: syncedActiveDurationMs,
         draft_id: submittedDraftId,
         client_metadata: {
           source: routeDraftId ? "draft_resume" : "editor",
