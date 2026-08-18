@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import List
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -231,10 +232,30 @@ class Settings(BaseSettings):
 
     @property
     def sync_database_url(self) -> str:
-        return (
+        value = (
             self.DATABASE_URL
             .replace("+asyncpg", "")
             .replace("+psycopg", "")
+        )
+
+        parts = urlsplit(value)
+        query = []
+
+        for key, item_value in parse_qsl(parts.query, keep_blank_values=True):
+            if key == "ssl":
+                query.append(("sslmode", item_value))
+                continue
+
+            query.append((key, item_value))
+
+        return urlunsplit(
+            (
+                parts.scheme,
+                parts.netloc,
+                parts.path,
+                urlencode(query),
+                parts.fragment,
+            )
         )
 
     @property
