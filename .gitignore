@@ -122,8 +122,8 @@ logs/
 backend/logs/
 
 # ── ML binary artifacts ──────────────────────────────────────────────────────
-# Do not commit pickled/joblib model files to normal Git. Use local artifacts,
-# GitHub Releases, or Git LFS only if your supervisor explicitly needs them.
+# TypeTrace production model artifacts are intentionally version-controlled
+# because the Vercel production API requires them at runtime.
 *.joblib
 *.pkl
 *.pickle
@@ -134,6 +134,9 @@ backend/logs/
 *.pt
 *.pth
 *.sav
+
+# Production TypeTrace ML artifacts
+!backend/app/ml/artifacts/*.joblib
 
 # Keep lightweight model documentation/metadata in the repo.
 !backend/app/ml/artifacts/.gitkeep
