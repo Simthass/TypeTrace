@@ -42,11 +42,14 @@ function formatDuration(seconds: number) {
   return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
 }
 
-function reviewTone(status: string): "neutral" | "human" | "suspicious" | "danger" {
+function reviewTone(
+  status: string,
+): "neutral" | "human" | "suspicious" | "danger" {
   const normalized = String(status || "").toUpperCase();
   if (normalized === "APPROVED") return "human";
   if (normalized === "FLAGGED") return "danger";
-  if (normalized === "PENDING" || normalized === "NEEDS_DISCUSSION") return "suspicious";
+  if (normalized === "PENDING" || normalized === "NEEDS_DISCUSSION")
+    return "suspicious";
   return "neutral";
 }
 
@@ -65,15 +68,23 @@ function SubmissionCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={classificationTone(session.classification_bucket)}>
-              {session.classification_bucket === "SUSPICIOUS" ? "REVIEW REQUIRED" : session.classification_bucket}
+              {session.classification_bucket === "SUSPICIOUS"
+                ? "REVIEW REQUIRED"
+                : session.classification_bucket}
             </Badge>
-            <Badge tone={reviewTone(session.review_status)}>{session.review_outcome}</Badge>
+            <Badge tone={reviewTone(session.review_status)}>
+              {session.review_outcome}
+            </Badge>
           </div>
-          <h3 className="mt-3 text-[16px] font-bold" style={{ color: colors.text.primary }}>
+          <h3
+            className="mt-3 text-[16px] font-bold"
+            style={{ color: colors.text.primary }}
+          >
             {session.title}
           </h3>
           <p className="mt-1 text-[11px]" style={{ color: colors.text.muted }}>
-            Submitted {formatDate(session.created_at)} · {session.word_count} words · {formatDuration(session.duration_seconds)}
+            Submitted {formatDate(session.created_at)} · {session.word_count}{" "}
+            words · {formatDuration(session.duration_seconds)}
           </p>
         </div>
 
@@ -101,24 +112,42 @@ function SubmissionCard({
               disabled={downloadingId === session.certificate_id}
               leftIcon={<InternalIcon name="download" size={14} />}
             >
-              {downloadingId === session.certificate_id ? "Downloading..." : "PDF"}
+              {downloadingId === session.certificate_id
+                ? "Downloading..."
+                : "PDF"}
             </Button>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-px border-y sm:grid-cols-4" style={{ background: colors.surface[200], borderColor: colors.surface[200] }}>
+      <div
+        className="grid grid-cols-2 gap-px border-y sm:grid-cols-4"
+        style={{
+          background: colors.surface[200],
+          borderColor: colors.surface[200],
+        }}
+      >
         {[
           ["Human evidence", `${formatEvidenceScore(session.confidence)}%`],
           ["WPM", session.wpm],
           ["Keystrokes", session.total_keystrokes],
           ["Risk", session.risk_level],
         ].map(([label, value]) => (
-          <div key={String(label)} className="p-3" style={{ background: colors.surface[50] }}>
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colors.text.muted }}>
+          <div
+            key={String(label)}
+            className="p-3"
+            style={{ background: colors.surface[50] }}
+          >
+            <p
+              className="text-[10px] font-bold uppercase tracking-wider"
+              style={{ color: colors.text.muted }}
+            >
               {label}
             </p>
-            <p className="mt-1 text-[13px] font-bold" style={{ color: colors.text.primary }}>
+            <p
+              className="mt-1 text-[13px] font-bold"
+              style={{ color: colors.text.primary }}
+            >
               {value}
             </p>
           </div>
@@ -126,7 +155,10 @@ function SubmissionCard({
       </div>
 
       <div className="p-5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: colors.text.muted }}>
+        <p
+          className="text-[10px] font-bold uppercase tracking-[0.12em]"
+          style={{ color: colors.text.muted }}
+        >
           Teacher feedback
         </p>
         {session.review_notes ? (
@@ -141,7 +173,10 @@ function SubmissionCard({
             {session.review_notes}
           </div>
         ) : (
-          <p className="mt-2 text-[12px] italic" style={{ color: colors.text.muted }}>
+          <p
+            className="mt-2 text-[12px] italic"
+            style={{ color: colors.text.muted }}
+          >
             No written feedback has been added to this submission yet.
           </p>
         )}
@@ -241,18 +276,33 @@ export default function StudentCourseDetailPage() {
         <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <StatusPill label={course.is_archived ? "Archived" : "Active"} tone={course.is_archived ? "neutral" : "good"} />
-              <span className="text-[11px] font-medium" style={{ color: colors.text.muted }}>
+              <StatusPill
+                label={course.is_archived ? "Archived" : "Active"}
+                tone={course.is_archived ? "neutral" : "good"}
+              />
+              <span
+                className="text-[11px] font-medium"
+                style={{ color: colors.text.muted }}
+              >
                 Joined {formatDate(course.joined_at)}
               </span>
             </div>
-            <h2 className="mt-4 text-[14px] font-bold" style={{ color: colors.text.primary }}>
+            <h2
+              className="mt-4 text-[14px] font-bold"
+              style={{ color: colors.text.primary }}
+            >
               Instructor
             </h2>
-            <p className="mt-1 text-[14px] font-semibold" style={{ color: colors.text.primary }}>
+            <p
+              className="mt-1 text-[14px] font-semibold"
+              style={{ color: colors.text.primary }}
+            >
               {course.teacher_name}
             </p>
-            <p className="mt-1 text-[12px]" style={{ color: colors.text.secondary }}>
+            <p
+              className="mt-1 text-[12px]"
+              style={{ color: colors.text.secondary }}
+            >
               {[course.teacher_department, course.teacher_university_name]
                 .filter(Boolean)
                 .join(" · ") || "Instructor details not provided"}
@@ -260,48 +310,108 @@ export default function StudentCourseDetailPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-md border p-3" style={{ borderColor: colors.surface[200], background: colors.surface[100] }}>
-              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colors.text.muted }}>Course created</p>
-              <p className="mt-1 text-[12px] font-semibold" style={{ color: colors.text.primary }}>{formatDate(course.created_at)}</p>
+            <div
+              className="rounded-md border p-3"
+              style={{
+                borderColor: colors.surface[200],
+                background: colors.surface[100],
+              }}
+            >
+              <p
+                className="text-[10px] font-bold uppercase tracking-wider"
+                style={{ color: colors.text.muted }}
+              >
+                Course created
+              </p>
+              <p
+                className="mt-1 text-[12px] font-semibold"
+                style={{ color: colors.text.primary }}
+              >
+                {formatDate(course.created_at)}
+              </p>
             </div>
-            <div className="rounded-md border p-3" style={{ borderColor: colors.surface[200], background: colors.surface[100] }}>
-              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colors.text.muted }}>Last submission</p>
-              <p className="mt-1 text-[12px] font-semibold" style={{ color: colors.text.primary }}>{formatDate(course.last_submission_at)}</p>
+            <div
+              className="rounded-md border p-3"
+              style={{
+                borderColor: colors.surface[200],
+                background: colors.surface[100],
+              }}
+            >
+              <p
+                className="text-[10px] font-bold uppercase tracking-wider"
+                style={{ color: colors.text.muted }}
+              >
+                Last submission
+              </p>
+              <p
+                className="mt-1 text-[12px] font-semibold"
+                style={{ color: colors.text.primary }}
+              >
+                {formatDate(course.last_submission_at)}
+              </p>
             </div>
           </div>
         </div>
       </AppSurface>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricTile icon="document" label="Submissions" value={summary.submission_count} detail="Your sessions linked to this course" />
-        <MetricTile icon="review" label="Feedback received" value={summary.feedback_count} detail="Submissions with written teacher notes" />
-        <MetricTile icon="check" label="Approved" value={summary.approved_count} detail={`${summary.pending_count + summary.discussion_count} awaiting follow-up`} />
-        <MetricTile icon="certificate" label="Certificates" value={summary.certificate_count} detail={`${Math.round(summary.avg_confidence)}% avg. evidence score`} />
+        <MetricTile
+          icon="document"
+          label="Submissions"
+          value={summary.submission_count}
+          detail="Your sessions linked to this course"
+        />
+        <MetricTile
+          icon="review"
+          label="Feedback received"
+          value={summary.feedback_count}
+          detail="Submissions with written teacher notes"
+        />
+        <MetricTile
+          icon="check"
+          label="Approved"
+          value={summary.approved_count}
+          detail={`${summary.pending_count + summary.discussion_count} awaiting follow-up`}
+        />
+        <MetricTile
+          icon="certificate"
+          label="Certificates"
+          value={summary.certificate_count}
+          detail={`${Math.round(summary.avg_confidence)}% avg. evidence score`}
+        />
       </div>
 
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-[18px] font-bold tracking-[-0.025em]" style={{ color: colors.text.primary }}>
+          <h2
+            className="text-[18px] font-bold tracking-[-0.025em]"
+            style={{ color: colors.text.primary }}
+          >
             Submitted sessions
           </h2>
-          <p className="mt-1 text-[12px]" style={{ color: colors.text.secondary }}>
-            All writing sessions you submitted to this course, including teacher review status and feedback.
+          <p
+            className="mt-1 text-[12px]"
+            style={{ color: colors.text.secondary }}
+          >
+            All writing sessions you submitted to this course, including teacher
+            review status and feedback.
           </p>
         </div>
       </div>
 
       {sessions.length === 0 ? (
         <EmptyState
-          icon="session"
           title="No course submissions yet"
-          description={
+          message={
             course.is_archived
               ? "This archived course does not contain any submissions from your account."
               : "Start a writing session and select this course before submitting to create your first course-linked evidence record."
           }
           action={
             !course.is_archived ? (
-              <ButtonLink to={ROUTES.EDITOR_NEW}>Start a writing session</ButtonLink>
+              <ButtonLink to={ROUTES.EDITOR_NEW}>
+                Start a writing session
+              </ButtonLink>
             ) : undefined
           }
         />

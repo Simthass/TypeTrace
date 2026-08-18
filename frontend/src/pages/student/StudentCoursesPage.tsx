@@ -33,7 +33,10 @@ function formatDate(value: string) {
 function CourseCard({ course }: { course: StudentManagedCourse }) {
   return (
     <AppSurface className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-start justify-between gap-4 border-b p-5" style={{ borderColor: colors.surface[200] }}>
+      <div
+        className="flex items-start justify-between gap-4 border-b p-5"
+        style={{ borderColor: colors.surface[200] }}
+      >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span
@@ -57,11 +60,17 @@ function CourseCard({ course }: { course: StudentManagedCourse }) {
           >
             {course.course_name}
           </h2>
-          <p className="mt-1 text-[12px]" style={{ color: colors.text.secondary }}>
+          <p
+            className="mt-1 text-[12px]"
+            style={{ color: colors.text.secondary }}
+          >
             Instructor: {course.teacher_name}
           </p>
           {(course.teacher_department || course.teacher_university_name) && (
-            <p className="mt-1 text-[11px] leading-5" style={{ color: colors.text.muted }}>
+            <p
+              className="mt-1 text-[11px] leading-5"
+              style={{ color: colors.text.muted }}
+            >
               {[course.teacher_department, course.teacher_university_name]
                 .filter(Boolean)
                 .join(" · ")}
@@ -76,56 +85,91 @@ function CourseCard({ course }: { course: StudentManagedCourse }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-px" style={{ background: colors.surface[200] }}>
+      <div
+        className="grid grid-cols-2 gap-px"
+        style={{ background: colors.surface[200] }}
+      >
         {[
           ["Submissions", course.submission_count],
           ["Feedback", course.feedback_count],
           ["Approved", course.approved_count],
           ["Certificates", course.certificate_count],
         ].map(([label, value]) => (
-          <div key={String(label)} className="p-4" style={{ background: colors.surface[50] }}>
-            <p className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: colors.text.muted }}>
+          <div
+            key={String(label)}
+            className="p-4"
+            style={{ background: colors.surface[50] }}
+          >
+            <p
+              className="text-[10px] font-bold uppercase tracking-[0.12em]"
+              style={{ color: colors.text.muted }}
+            >
               {label}
             </p>
-            <p className="mt-2 text-xl font-bold tabular-nums" style={{ color: colors.text.primary }}>
+            <p
+              className="mt-2 text-xl font-bold tabular-nums"
+              style={{ color: colors.text.primary }}
+            >
               {value}
             </p>
           </div>
         ))}
       </div>
 
-      <div className="space-y-2 p-5 text-[12px]" style={{ color: colors.text.secondary }}>
+      <div
+        className="space-y-2 p-5 text-[12px]"
+        style={{ color: colors.text.secondary }}
+      >
         <div className="flex items-center justify-between gap-3">
           <span>Joined</span>
-          <span className="font-semibold" style={{ color: colors.text.primary }}>
+          <span
+            className="font-semibold"
+            style={{ color: colors.text.primary }}
+          >
             {formatDate(course.joined_at)}
           </span>
         </div>
         <div className="flex items-center justify-between gap-3">
           <span>Last submission</span>
-          <span className="font-semibold" style={{ color: colors.text.primary }}>
+          <span
+            className="font-semibold"
+            style={{ color: colors.text.primary }}
+          >
             {formatDate(course.last_submission_at)}
           </span>
         </div>
         <div className="flex items-center justify-between gap-3">
           <span>Review queue</span>
-          <span className="font-semibold" style={{ color: colors.text.primary }}>
-            {course.pending_count + course.discussion_count} pending · {course.flagged_count} flagged
+          <span
+            className="font-semibold"
+            style={{ color: colors.text.primary }}
+          >
+            {course.pending_count + course.discussion_count} pending ·{" "}
+            {course.flagged_count} flagged
           </span>
         </div>
       </div>
 
       <div
         className="mt-auto flex items-center justify-between gap-3 border-t px-5 py-4"
-        style={{ borderColor: colors.surface[200], background: colors.surface[100] }}
+        style={{
+          borderColor: colors.surface[200],
+          background: colors.surface[100],
+        }}
       >
-        <span className="text-[11px] font-medium" style={{ color: colors.text.muted }}>
+        <span
+          className="text-[11px] font-medium"
+          style={{ color: colors.text.muted }}
+        >
           {course.submission_count > 0
             ? `${Math.round(course.avg_confidence)}% avg. evidence score`
             : "No submissions yet"}
         </span>
         <Link
-          to={ROUTES.STUDENT_COURSE_DETAIL.replace(":courseId", String(course.id))}
+          to={ROUTES.STUDENT_COURSE_DETAIL.replace(
+            ":courseId",
+            String(course.id),
+          )}
           className="inline-flex items-center gap-1.5 text-[13px] font-bold"
           style={{ color: colors.brand }}
         >
@@ -177,8 +221,14 @@ export default function StudentCoursesPage() {
     );
   }, [courses, search]);
 
-  const totalSubmissions = courses.reduce((sum, course) => sum + course.submission_count, 0);
-  const totalFeedback = courses.reduce((sum, course) => sum + course.feedback_count, 0);
+  const totalSubmissions = courses.reduce(
+    (sum, course) => sum + course.submission_count,
+    0,
+  );
+  const totalFeedback = courses.reduce(
+    (sum, course) => sum + course.feedback_count,
+    0,
+  );
   const activeCourses = courses.filter((course) => !course.is_archived).length;
 
   if (isLoading) return <LoadingState label="Loading your courses..." />;
@@ -214,10 +264,30 @@ export default function StudentCoursesPage() {
       />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricTile icon="course" label="Joined courses" value={courses.length} detail="Active and archived enrollments" />
-        <MetricTile icon="check" label="Active courses" value={activeCourses} detail="Available for new submissions" />
-        <MetricTile icon="document" label="Course submissions" value={totalSubmissions} detail="Sessions submitted to courses" />
-        <MetricTile icon="review" label="Feedback received" value={totalFeedback} detail="Teacher notes across submissions" />
+        <MetricTile
+          icon="course"
+          label="Joined courses"
+          value={courses.length}
+          detail="Active and archived enrollments"
+        />
+        <MetricTile
+          icon="check"
+          label="Active courses"
+          value={activeCourses}
+          detail="Available for new submissions"
+        />
+        <MetricTile
+          icon="document"
+          label="Course submissions"
+          value={totalSubmissions}
+          detail="Sessions submitted to courses"
+        />
+        <MetricTile
+          icon="review"
+          label="Feedback received"
+          value={totalFeedback}
+          detail="Teacher notes across submissions"
+        />
       </div>
 
       {courses.length > 0 && (
@@ -249,17 +319,16 @@ export default function StudentCoursesPage() {
 
       {courses.length === 0 ? (
         <EmptyState
-          icon="course"
           title="You have not joined a course yet"
-          description="Join a course using the invite code provided by your instructor. Once enrolled, this page will show course details, submissions, certificates, review status, and teacher feedback."
-          action={<ButtonLink to={ROUTES.JOIN_COURSE}>Join a course</ButtonLink>}
+          message="Join a course using the invite code provided by your instructor. Once enrolled, this page will show course details, submissions, certificates, review status, and teacher feedback."
+          action={
+            <ButtonLink to={ROUTES.JOIN_COURSE}>Join a course</ButtonLink>
+          }
         />
       ) : filteredCourses.length === 0 ? (
         <EmptyState
-          icon="search"
           title="No matching courses"
-          description="Try a different course name, course code, or instructor name."
-          compact
+          message="Try a different course name, course code, or instructor name."
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
