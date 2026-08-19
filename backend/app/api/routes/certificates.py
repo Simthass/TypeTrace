@@ -23,7 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_teacher
-from app.core.config import PROJECT_ROOT, settings
+from app.core.config import BACKEND_DIR, PROJECT_ROOT, settings
 from app.db.database import get_db
 from app.core.rate_limit import limiter, per_minute
 from app.models.user import User
@@ -60,13 +60,21 @@ CERT_ID_PATTERN = re.compile(r"^[A-Za-z0-9\-_]{8,80}$")
 # Professional certificate asset locations. These keep the feature production-safe:
 # if the assets are missing in a deployed backend container, the PDF still renders
 # with a clean text fallback instead of crashing.
+BACKEND_ASSETS_DIR = BACKEND_DIR / "app" / "assets"
 FRONTEND_PUBLIC_DIR = PROJECT_ROOT / "frontend" / "public"
+
 BRAND_LOGO_CANDIDATES = (
+    BACKEND_ASSETS_DIR / "Logo.png",
+    BACKEND_ASSETS_DIR / "logo.png",
+    BACKEND_ASSETS_DIR / "QR-Logo.png",
     FRONTEND_PUBLIC_DIR / "Logo.png",
     FRONTEND_PUBLIC_DIR / "logo.png",
     FRONTEND_PUBLIC_DIR / "QR-Logo.png",
 )
 QR_LOGO_CANDIDATES = (
+    BACKEND_ASSETS_DIR / "QR-Logo.png",
+    BACKEND_ASSETS_DIR / "Logo.png",
+    BACKEND_ASSETS_DIR / "logo.png",
     FRONTEND_PUBLIC_DIR / "QR-Logo.png",
     FRONTEND_PUBLIC_DIR / "Logo.png",
     FRONTEND_PUBLIC_DIR / "logo.png",
