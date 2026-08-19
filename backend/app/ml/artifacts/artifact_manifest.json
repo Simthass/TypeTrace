@@ -23,7 +23,7 @@
       "size_bytes": 2367
     }
   },
-  "generated_at": "2026-07-19T19:39:25.924966+00:00",
+  "generated_at": "2026-08-19T06:14:39.992263+00:00",
   "manifest_version": 1,
   "model_name": "TypeTrace Isolation Forest",
   "model_version": "isolation-forest-v2-timing-only"
