@@ -1121,14 +1121,13 @@ function AnnouncementBanner({ onDismiss }: { onDismiss: () => void }) {
         alignItems: "center",
         justifyContent: "center",
         gap: 12,
-        padding: "0 48px 0 20px",
+        padding: "0 48px", // symmetric padding for true centering
         position: "relative",
         overflow: "hidden",
       }}
     >
       <span
         style={{
-          flex: "1 1 auto",
           minWidth: 0,
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -1137,6 +1136,7 @@ function AnnouncementBanner({ onDismiss }: { onDismiss: () => void }) {
           color: colors.text.light,
           letterSpacing: "-0.01em",
           whiteSpace: "nowrap",
+          // maxWidth: "calc(100% - 120px)", // optional to avoid overlap
         }}
       >
         TypeTrace v1.0 - Writing-process evidence for fair academic review
@@ -1155,7 +1155,7 @@ function AnnouncementBanner({ onDismiss }: { onDismiss: () => void }) {
           padding: "2px 9px",
           textDecoration: "none",
           letterSpacing: "-0.01em",
-          flexShrink: 0,
+          flexShrink: 0, // keep button from shrinking
         }}
       >
         Get Started {Icon.arrow}
