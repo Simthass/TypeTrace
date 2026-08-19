@@ -22,36 +22,36 @@ import {
 } from "../components/public/PublicVisualSystem";
 
 // ─── Image paths ──────────────────────────────────────────────────────────────
-const HERO_BG_ARROW_SRC = "/bg-arrow.png";
+const HERO_BG_ARROW_SRC = "/bg-arrow.webp";
 // Concentric-circle background for the "Why choose us" section.
 // Save the uploaded circles image into your /public folder at this path.
-const WHY_CHOOSE_BG_SRC = "/circles-bg.png";
+const WHY_CHOOSE_BG_SRC = "/circles-bg.webp";
 
 const IMAGE_PATHS = {
-  capture: "/photo-capture-session.png",
-  analysis: "/photo-analysis-review.png",
-  certificate: "/photo-certificate-handoff.png",
+  capture: "/photo-capture-session.webp",
+  analysis: "/photo-analysis-review.webp",
+  certificate: "/photo-certificate-handoff.webp",
 };
 
 // Trust avatar images — replace these paths with your actual images
 const TRUST_AVATARS = [
-  "/avatar-1.jpg",
-  "/avatar-2.jpg",
-  "/avatar-3.jpg",
-  "/avatar-4.jpg",
+  "/avatar-1.webp",
+  "/avatar-2.webp",
+  "/avatar-3.webp",
+  "/avatar-4.webp",
 ];
 
 // Student images for WritingSessionsCard — replace with your own
 const STUDENT_AVATARS = [
-  "/student-js.jpg",
-  "/student-ak.jpg",
-  "/student-mp.jpg",
-  "/student-rt.jpg",
-  "/student-ln.jpg",
-  "/student-qw.jpg",
-  "/student-be.jpg",
-  "/student-od.jpg",
-  "/student-cf.jpg",
+  "/student-js.webp",
+  "/student-ak.webp",
+  "/student-mp.webp",
+  "/student-rt.webp",
+  "/student-ln.webp",
+  "/student-qw.webp",
+  "/student-be.webp",
+  "/student-od.webp",
+  "/student-cf.webp",
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1379,10 +1379,7 @@ function ComparisonRow({
             >
               {String(label)}
             </p>
-            {renderCell(
-              value as boolean | string,
-              Boolean(isTypeTraceValue),
-            )}
+            {renderCell(value as boolean | string, Boolean(isTypeTraceValue))}
           </div>
         ))}
       </div>
