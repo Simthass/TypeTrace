@@ -3,27 +3,27 @@
   "feature_schema_version": 2,
   "files": {
     "feature_schema.json": {
-      "sha256": "0eb51a336f1d5f51b3ae20c322a8f8e38b734c98decfd4308d0b482170ecbf8f",
-      "size_bytes": 1608
+      "sha256": "2e84dca91c24308219023562411035fda57897b0164e394175856a9d110a1b36",
+      "size_bytes": 1539
     },
     "isolation_forest.joblib": {
       "sha256": "c89f9e62c7df762aa1bcf7051213642e6d29ec56c489902e1c248973ab386e86",
       "size_bytes": 3389565
     },
     "metrics.json": {
-      "sha256": "2537be2794477678b1707fbbc67c15970fcffd352ab08223ce4b9c385c2bb10b",
-      "size_bytes": 3170
+      "sha256": "dd9b67f41cb5d2a5bfb575f7be721f4a34d7c1aed9d7b897234df447bce5591a",
+      "size_bytes": 3040
     },
     "model_card.json": {
-      "sha256": "f1ec86173c474526ba409779a15376745dcf4b8ffa34bd137ad2466164c5eda7",
-      "size_bytes": 4287
+      "sha256": "2623b317c94b6c783d7cbb1bc27e2aed8ce2ebb1861a8d8c9a0ddb2fb499f151",
+      "size_bytes": 4144
     },
     "scaler.joblib": {
       "sha256": "e4176a9b762f176d2b54bae8403b4c462e80ebaa643a9c879d35ef6ed51a0b9a",
       "size_bytes": 2367
     }
   },
-  "generated_at": "2026-08-19T06:14:39.992263+00:00",
+  "generated_at": "2026-08-19T06:36:19.922639+00:00",
   "manifest_version": 1,
   "model_name": "TypeTrace Isolation Forest",
   "model_version": "isolation-forest-v2-timing-only"
