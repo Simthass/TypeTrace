@@ -1,0 +1,8 @@
+# Force consistent LF line endings for ML artifact JSON files regardless of
+# platform or core.autocrlf settings, so their bytes (and SHA-256 hashes)
+# are identical on Windows, Linux, and in CI/Vercel builds.
+backend/app/ml/artifacts/*.json text eol=lf
+backend/app/ml/artifacts_v1_backup/*.json text eol=lf
+
+# These are binary and must never be touched by line-ending conversion.
+backend/app/ml/artifacts/*.joblib binary
