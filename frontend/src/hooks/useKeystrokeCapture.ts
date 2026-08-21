@@ -516,8 +516,7 @@ function isDeletionEvidence(event: KeystrokeEvent): boolean {
   if (isKeyUpEvent(event)) return false;
 
   const hasExplicitDeletionCount =
-    event.chars_deleted !== undefined ||
-    event.deletedCharacters !== undefined;
+    event.chars_deleted !== undefined || event.deletedCharacters !== undefined;
 
   return (
     getDeletedCharacters(event) > 0 ||
@@ -1511,8 +1510,8 @@ export function useKeystrokeCapture({
   );
 
   const getStats = useCallback((): SessionStats => {
-    const keydownEvents = logRef.current.filter(
-      (event) => isWritingKeydownEvent(event),
+    const keydownEvents = logRef.current.filter((event) =>
+      isWritingKeydownEvent(event),
     );
     const flightTimes = keydownEvents
       .map((event) => sanitizeFlightTime(event.flight_time))

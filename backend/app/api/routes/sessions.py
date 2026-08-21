@@ -314,6 +314,15 @@ def _verify_draft_matches_submission(
         client_active_duration_ms=int(draft.active_duration_ms or 0),
     )
     if draft_canonical.evidence_hash != submission_evidence_hash:
+        import logging
+        logging.getLogger(__name__).warning(
+            "DRAFT_MISMATCH_DEBUG title=%r/%r text_len=%s/%s events=%s/%s dur=%s/%s stats=%r",
+            normalize_title(draft.title), normalize_title(payload.title),
+            len(draft_text), len(payload.text_content),
+            len(draft_events), len(payload.event_dicts()),
+            int(draft.active_duration_ms or 0), payload.active_duration_ms,
+            payload.stats,
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
