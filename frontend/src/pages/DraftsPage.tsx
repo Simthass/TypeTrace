@@ -222,7 +222,6 @@ function StatusBadge({ ready }: { ready: boolean }) {
   );
 }
 
-
 function DraftMobileCard({
   draft,
   deleting,
@@ -509,7 +508,10 @@ export default function DraftsPage() {
   }
 
   return (
-    <div className="responsive-page space-y-4">
+    <div
+      className="responsive-page space-y-4"
+      style={{ paddingLeft: 12, paddingRight: 12 }}
+    >
       <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div className="min-w-0">
           <p
@@ -730,201 +732,225 @@ export default function DraftsPage() {
 
               <div className="hidden overflow-x-auto xl:block">
                 <table className="w-full min-w-[1120px] border-collapse text-left">
-                <thead>
-                  <tr
-                    className="border-b"
-                    style={{
-                      background: colors.surface[100],
-                      borderColor: colors.surface[200],
-                    }}
-                  >
-                    {[
-                      "Draft",
-                      "Progress",
-                      "Evidence",
-                      "Timing",
-                      "Status",
-                      "Actions",
-                    ].map((heading) => (
-                      <th
-                        key={heading}
-                        className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em]"
-                        style={{ color: colors.text.muted }}
-                      >
-                        {heading}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredDrafts.map((draft) => {
-                    const readiness = draftReadiness(draft);
-                    const resumePath = `${ROUTES.EDITOR_NEW}?draftId=${encodeURIComponent(draft.draftId)}`;
+                  <thead>
+                    <tr
+                      className="border-b"
+                      style={{
+                        background: colors.surface[100],
+                        borderColor: colors.surface[200],
+                      }}
+                    >
+                      {[
+                        "Draft",
+                        "Progress",
+                        "Evidence",
+                        "Timing",
+                        "Status",
+                        "Actions",
+                      ].map((heading) => (
+                        <th
+                          key={heading}
+                          className={`px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                            heading === "Actions" ? "sticky right-0" : ""
+                          }`}
+                          style={{
+                            color: colors.text.muted,
+                            ...(heading === "Actions"
+                              ? {
+                                  background: colors.surface[100],
+                                  zIndex: 10,
+                                }
+                              : {}),
+                          }}
+                        >
+                          {heading}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredDrafts.map((draft) => {
+                      const readiness = draftReadiness(draft);
+                      const resumePath = `${ROUTES.EDITOR_NEW}?draftId=${encodeURIComponent(draft.draftId)}`;
 
-                    return (
-                      <tr
-                        key={draft.draftKey}
-                        className="border-b transition-colors duration-100 hover:bg-surface-100"
-                        style={{ borderColor: colors.surface[200] }}
-                      >
-                        <td className="px-4 py-3 align-middle">
-                          <div className="min-w-0">
-                            <p
-                              className="max-w-[360px] truncate text-[13px] font-semibold"
-                              style={{ color: colors.text.primary }}
-                            >
-                              {titleForDraft(draft)}
-                            </p>
-                            <p
-                              className="mt-0.5 text-[11px]"
-                              style={{ color: colors.text.muted }}
-                            >
-                              Saved {formatDateTime(draft.savedAt)}
-                            </p>
-                          </div>
-                        </td>
+                      return (
+                        <tr
+                          key={draft.draftKey}
+                          className="border-b transition-colors duration-100 hover:bg-surface-100"
+                          style={{ borderColor: colors.surface[200] }}
+                        >
+                          <td className="px-4 py-3 align-middle">
+                            <div className="min-w-0">
+                              <p
+                                className="max-w-[260px] truncate text-[13px] font-semibold"
+                                style={{ color: colors.text.primary }}
+                              >
+                                {titleForDraft(draft)}
+                              </p>
+                              <p
+                                className="mt-0.5 text-[11px]"
+                                style={{ color: colors.text.muted }}
+                              >
+                                Saved {formatDateTime(draft.savedAt)}
+                              </p>
+                            </div>
+                          </td>
 
-                        <td className="px-4 py-3 align-middle">
-                          <div
-                            className="grid grid-cols-2 gap-2 text-[11px]"
-                            style={{ color: colors.text.secondary }}
+                          <td className="px-4 py-3 align-middle">
+                            <div
+                              className="grid grid-cols-2 gap-2 text-[11px]"
+                              style={{ color: colors.text.secondary }}
+                            >
+                              <div>
+                                <p style={{ color: colors.text.muted }}>
+                                  Words
+                                </p>
+                                <p
+                                  className="font-mono font-bold tabular-nums"
+                                  style={{ color: colors.text.primary }}
+                                >
+                                  {readiness.words.toLocaleString()}
+                                </p>
+                              </div>
+                              <div>
+                                <p style={{ color: colors.text.muted }}>
+                                  Chars
+                                </p>
+                                <p
+                                  className="font-mono font-bold tabular-nums"
+                                  style={{ color: colors.text.primary }}
+                                >
+                                  {draft.text.length.toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-3 align-middle">
+                            <div
+                              className="grid grid-cols-3 gap-2 text-[11px]"
+                              style={{ color: colors.text.secondary }}
+                            >
+                              <div>
+                                <p style={{ color: colors.text.muted }}>Keys</p>
+                                <p
+                                  className="font-mono font-bold tabular-nums"
+                                  style={{ color: colors.text.primary }}
+                                >
+                                  {readiness.keydowns.toLocaleString()}
+                                </p>
+                              </div>
+                              <div>
+                                <p style={{ color: colors.text.muted }}>
+                                  Paste
+                                </p>
+                                <p
+                                  className="font-mono font-bold tabular-nums"
+                                  style={{ color: colors.text.primary }}
+                                >
+                                  {readiness.pasteEvents}
+                                </p>
+                              </div>
+                              <div>
+                                <p style={{ color: colors.text.muted }}>
+                                  Events
+                                </p>
+                                <p
+                                  className="font-mono font-bold tabular-nums"
+                                  style={{ color: colors.text.primary }}
+                                >
+                                  {draft.keystrokeLog.length.toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-3 align-middle">
+                            <div
+                              className="text-[12px]"
+                              style={{ color: colors.text.secondary }}
+                            >
+                              <p
+                                className="font-mono font-bold tabular-nums"
+                                style={{ color: colors.text.primary }}
+                              >
+                                {formatDurationFromDraft(draft)}
+                              </p>
+                              <p
+                                className="mt-0.5 text-[11px]"
+                                style={{ color: colors.text.muted }}
+                              >
+                                Created {formatDateTime(draft.createdAt)}
+                              </p>
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-3 align-middle">
+                            <div className="flex flex-col items-start gap-1.5">
+                              <StatusBadge ready={readiness.ready} />
+                              <span
+                                className="rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                                style={{
+                                  background:
+                                    draft.syncStatus === "SYNCED"
+                                      ? colors.mintTint
+                                      : colors.surface[100],
+                                  borderColor: colors.surface[200],
+                                  color:
+                                    draft.syncStatus === "SYNCED"
+                                      ? brand.humanText
+                                      : colors.text.muted,
+                                }}
+                              >
+                                {draft.syncStatus === "SYNCED"
+                                  ? "Cloud synced"
+                                  : draft.syncStatus === "CONFLICT"
+                                    ? "Sync conflict"
+                                    : "Local fallback"}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td
+                            className="sticky right-0 whitespace-nowrap px-4 py-3 align-middle"
+                            style={{
+                              background: colors.surface[50],
+                              zIndex: 10,
+                            }}
                           >
-                            <div>
-                              <p style={{ color: colors.text.muted }}>Words</p>
-                              <p
-                                className="font-mono font-bold tabular-nums"
-                                style={{ color: colors.text.primary }}
+                            <div className="flex flex-nowrap items-center gap-1.5">
+                              <Link
+                                to={resumePath}
+                                className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold"
+                                style={{
+                                  borderColor: colors.surface[200],
+                                  color: colors.text.secondary,
+                                  background: colors.surface[50],
+                                }}
                               >
-                                {readiness.words.toLocaleString()}
-                              </p>
-                            </div>
-                            <div>
-                              <p style={{ color: colors.text.muted }}>Chars</p>
-                              <p
-                                className="font-mono font-bold tabular-nums"
-                                style={{ color: colors.text.primary }}
+                                <Icon type="editor" size={13} />
+                                Resume
+                              </Link>
+                              <button
+                                type="button"
+                                disabled={deletingKey === draft.draftKey}
+                                onClick={() => void deleteDraft(draft)}
+                                className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold disabled:opacity-50"
+                                style={{
+                                  borderColor: colors.surface[200],
+                                  color: brand.aiText,
+                                  background: colors.surface[50],
+                                }}
                               >
-                                {draft.text.length.toLocaleString()}
-                              </p>
+                                <Icon type="trash" size={13} />
+                                Delete
+                              </button>
                             </div>
-                          </div>
-                        </td>
-
-                        <td className="px-4 py-3 align-middle">
-                          <div
-                            className="grid grid-cols-3 gap-2 text-[11px]"
-                            style={{ color: colors.text.secondary }}
-                          >
-                            <div>
-                              <p style={{ color: colors.text.muted }}>Keys</p>
-                              <p
-                                className="font-mono font-bold tabular-nums"
-                                style={{ color: colors.text.primary }}
-                              >
-                                {readiness.keydowns.toLocaleString()}
-                              </p>
-                            </div>
-                            <div>
-                              <p style={{ color: colors.text.muted }}>Paste</p>
-                              <p
-                                className="font-mono font-bold tabular-nums"
-                                style={{ color: colors.text.primary }}
-                              >
-                                {readiness.pasteEvents}
-                              </p>
-                            </div>
-                            <div>
-                              <p style={{ color: colors.text.muted }}>Events</p>
-                              <p
-                                className="font-mono font-bold tabular-nums"
-                                style={{ color: colors.text.primary }}
-                              >
-                                {draft.keystrokeLog.length.toLocaleString()}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="px-4 py-3 align-middle">
-                          <div
-                            className="text-[12px]"
-                            style={{ color: colors.text.secondary }}
-                          >
-                            <p
-                              className="font-mono font-bold tabular-nums"
-                              style={{ color: colors.text.primary }}
-                            >
-                              {formatDurationFromDraft(draft)}
-                            </p>
-                            <p
-                              className="mt-0.5 text-[11px]"
-                              style={{ color: colors.text.muted }}
-                            >
-                              Created {formatDateTime(draft.createdAt)}
-                            </p>
-                          </div>
-                        </td>
-
-                        <td className="px-4 py-3 align-middle">
-                          <div className="flex flex-col items-start gap-1.5">
-                            <StatusBadge ready={readiness.ready} />
-                            <span
-                              className="rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                              style={{
-                                background:
-                                  draft.syncStatus === "SYNCED"
-                                    ? colors.mintTint
-                                    : colors.surface[100],
-                                borderColor: colors.surface[200],
-                                color:
-                                  draft.syncStatus === "SYNCED"
-                                    ? brand.humanText
-                                    : colors.text.muted,
-                              }}
-                            >
-                              {draft.syncStatus === "SYNCED"
-                                ? "Cloud synced"
-                                : draft.syncStatus === "CONFLICT"
-                                  ? "Sync conflict"
-                                  : "Local fallback"}
-                            </span>
-                          </div>
-                        </td>
-
-                        <td className="px-4 py-3 align-middle">
-                          <div className="flex items-center gap-1.5">
-                            <Link
-                              to={resumePath}
-                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold"
-                              style={{
-                                borderColor: colors.surface[200],
-                                color: colors.text.secondary,
-                                background: colors.surface[50],
-                              }}
-                            >
-                              <Icon type="editor" size={13} />
-                              Resume
-                            </Link>
-                            <button
-                              type="button"
-                              disabled={deletingKey === draft.draftKey}
-                              onClick={() => void deleteDraft(draft)}
-                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold disabled:opacity-50"
-                              style={{
-                                borderColor: colors.surface[200],
-                                color: brand.aiText,
-                                background: colors.surface[50],
-                              }}
-                            >
-                              <Icon type="trash" size={13} />
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
                 </table>
               </div>
             </>
@@ -934,5 +960,3 @@ export default function DraftsPage() {
     </div>
   );
 }
-
-

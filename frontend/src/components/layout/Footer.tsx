@@ -1,31 +1,90 @@
 import { Link } from "react-router-dom";
-import { brand, colors } from "../../styles/colors";
+import { colors } from "../../styles/colors";
 import { ROUTES } from "../../constants/routes";
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
-function ShieldCheck() {
+function ArrowRight() {
   return (
     <svg
-      width="13"
-      height="13"
-      viewBox="0 0 13 13"
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
       fill="none"
       aria-hidden="true"
     >
       <path
-        d="M6.5 1.5L2 3.5v3c0 2.8 1.95 5.1 4.5 5.8C9.05 11.6 11 9.3 11 6.5v-3L6.5 1.5z"
+        d="M2.5 6h7M6.5 2.5l3.5 3.5-3.5 3.5"
         stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M4.5 6.5l1.5 1.5 2.5-2.5"
-        stroke="currentColor"
-        strokeWidth="1.2"
+        strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+function HashIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 11 11"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M4.1 1.3 3 9.7M8 1.3 6.9 9.7M1.3 3.9h8.4M0.8 7.1h8.4"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+// ─── Keystroke rhythm — the footer's signature motif ─────────────────────────
+// A static readout of an inter-key interval sequence: short bars are fast
+// keystrokes, tall bars are pauses/hesitations, the occasional accent bar
+// marks a corrected keystroke. It's the same signal TypeTrace analyzes,
+// rendered as a quiet piece of typography rather than a decoration.
+
+const RHYTHM_PATTERN = [
+  3, 4, 3, 5, 8, 3, 4, 3, 3, 11, 4, 3, 5, 4, 3, 14, 3, 4, 3, 6, 4, 3, 9, 3, 4,
+  5, 3, 4, 12, 3, 4, 3, 5, 4, 7, 3, 4, 3, 10, 4, 3, 5, 3, 4, 6, 3, 13, 4, 3, 5,
+  4, 3, 8, 4, 3, 4,
+];
+
+function KeystrokeRhythm() {
+  const barWidth = 3;
+  const gap = 5;
+  const height = 22;
+  const width = RHYTHM_PATTERN.length * (barWidth + gap);
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      width="100%"
+      height={height}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+      style={{ display: "block" }}
+    >
+      {RHYTHM_PATTERN.map((h, i) => {
+        const isAccent = h > 9;
+        return (
+          <rect
+            key={i}
+            x={i * (barWidth + gap)}
+            y={height - h}
+            width={barWidth}
+            height={h}
+            rx={1}
+            fill={isAccent ? colors.brand : colors.surface[300]}
+            opacity={isAccent ? 0.5 : 1}
+          />
+        );
+      })}
     </svg>
   );
 }
@@ -63,35 +122,12 @@ const FOOTER_COLUMNS = [
   },
 ] as const;
 
-// ─── Trust badges ─────────────────────────────────────────────────────────────
-
-const TRUST_BADGES = [
-  {
-    label: "Privacy-conscious design",
-    color: colors.text.secondary,
-    bg: colors.surface[100],
-    border: colors.surface[200],
-  },
-  {
-    label: "Keyboard-accessible interface",
-    color: colors.text.secondary,
-    bg: colors.surface[100],
-    border: colors.surface[200],
-  },
-  {
-    label: "SHA-256 evidence hashing",
-    color: brand.humanText,
-    bg: brand.humanBg,
-    border: brand.humanAccent,
-  },
-] as const;
-
-// ─── Stat items ───────────────────────────────────────────────────────────────
+// ─── Signature stats (rendered as a mono readout, not stat cards) ────────────
 
 const STATS = [
-  { value: "43", label: "Timing features" },
-  { value: "133", label: "Controlled validation sessions" },
-  { value: "3", label: "Evidence layers" },
+  { value: "43", label: "timing features" },
+  { value: "133", label: "validation sessions" },
+  { value: "3", label: "evidence layers" },
 ] as const;
 
 // ─── Footer link component ────────────────────────────────────────────────────
@@ -133,10 +169,23 @@ export default function Footer() {
         minWidth: 0,
         maxWidth: "100%",
         backgroundColor: colors.surface[50],
-        borderTop: `1px solid ${colors.surface[200]}`,
         fontFamily: "inherit",
       }}
     >
+      {/* ── Keystroke rhythm strip — the footer's one signature element ── */}
+      <div
+        style={{
+          borderTop: `1px solid ${colors.surface[200]}`,
+          borderBottom: `1px solid ${colors.surface[200]}`,
+          backgroundColor: colors.surface[50],
+          padding: "10px 32px",
+        }}
+      >
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <KeystrokeRhythm />
+        </div>
+      </div>
+
       {/* ── Top CTA band ── */}
       <div
         style={{
@@ -159,7 +208,10 @@ export default function Footer() {
             flexWrap: "wrap",
           }}
         >
-          <div className="tt-footer-cta-copy" style={{ minWidth: 0, maxWidth: 520 }}>
+          <div
+            className="tt-footer-cta-copy"
+            style={{ minWidth: 0, maxWidth: 520 }}
+          >
             <p
               style={{
                 margin: "0 0 6px",
@@ -234,21 +286,7 @@ export default function Footer() {
               }}
             >
               Start free session
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 12 12"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  d="M2.5 6h7M6.5 2.5l3.5 3.5-3.5 3.5"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <ArrowRight />
             </Link>
             <Link
               to={ROUTES.VERIFY_LOOKUP}
@@ -298,13 +336,20 @@ export default function Footer() {
           style={{
             display: "grid",
             minWidth: 0,
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: "32px 48px",
+            gridTemplateColumns: "minmax(0, 1.4fr) repeat(3, minmax(0, 1fr))",
+            gap: "40px 48px",
           }}
           className="tt-footer-grid"
         >
           {/* ── Brand column ── */}
-          <div style={{ display: "flex", minWidth: 0, flexDirection: "column", gap: 20 }}>
+          <div
+            style={{
+              display: "flex",
+              minWidth: 0,
+              flexDirection: "column",
+              gap: 20,
+            }}
+          >
             {/* Logo */}
             <Link
               to={ROUTES.HOME}
@@ -335,44 +380,71 @@ export default function Footer() {
                 fontSize: 13.5,
                 lineHeight: 1.7,
                 color: colors.text.secondary,
-                maxWidth: 240,
+                maxWidth: 280,
               }}
             >
               Writing-process evidence that supports fair academic review in the
               generative AI era.
             </p>
 
-            {/* Stats mini-grid */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {STATS.map((stat) => (
+            {/* Signature stat readout — mono, not stat cards */}
+            <dl
+              className="tt-footer-stats"
+              style={{
+                display: "flex",
+                margin: 0,
+                gap: 18,
+                flexWrap: "wrap",
+              }}
+            >
+              {STATS.map((stat, i) => (
                 <div
                   key={stat.label}
-                  style={{ display: "flex", alignItems: "center", gap: 10 }}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2,
+                    paddingLeft: i === 0 ? 0 : 18,
+                    borderLeft:
+                      i === 0 ? "none" : `1px solid ${colors.surface[200]}`,
+                  }}
                 >
-                  <span
+                  <dt
                     style={{
+                      fontFamily:
+                        "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
                       fontSize: 15,
-                      fontWeight: 700,
-                      letterSpacing: "-0.025em",
+                      fontWeight: 600,
+                      letterSpacing: "-0.02em",
                       color: colors.text.primary,
-                      minWidth: 48,
                     }}
                   >
                     {stat.value}
-                  </span>
-                  <span style={{ fontSize: 12, color: colors.text.secondary }}>
+                  </dt>
+                  <dd
+                    style={{
+                      margin: 0,
+                      fontSize: 11.5,
+                      color: colors.text.muted,
+                    }}
+                  >
                     {stat.label}
-                  </span>
+                  </dd>
                 </div>
               ))}
-            </div>
+            </dl>
           </div>
 
           {/* ── Link columns ── */}
           {FOOTER_COLUMNS.map((col) => (
             <div
               key={col.heading}
-              style={{ display: "flex", minWidth: 0, flexDirection: "column", gap: 16 }}
+              style={{
+                display: "flex",
+                minWidth: 0,
+                flexDirection: "column",
+                gap: 16,
+              }}
             >
               <h3
                 style={{
@@ -467,11 +539,15 @@ export default function Footer() {
               }}
             >
               Built by{" "}
-              <span
+              <a
+                href="https://simthass.dev/"
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{
                   fontWeight: 600,
                   color: colors.text.primary,
-                  cursor: "default",
+                  cursor: "pointer",
+                  textDecoration: "none",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.color = colors.brand;
@@ -481,47 +557,28 @@ export default function Footer() {
                 }}
               >
                 Simthass Mohammed
-              </span>{" "}
+              </a>{" "}
               · BSc Computer Science · University of Bedfordshire
             </p>
           </div>
 
-          {/* Right: trust badges */}
-          <div
-            className="tt-footer-trust"
+          {/* Right: one concrete, verifiable technical fact — not a badge wall */}
+          <p
             style={{
-              display: "flex",
-              minWidth: 0,
-              maxWidth: "100%",
+              display: "inline-flex",
               alignItems: "center",
               gap: 6,
-              flexWrap: "wrap",
+              margin: 0,
+              fontFamily:
+                "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+              fontSize: 11.5,
+              color: colors.text.muted,
+              letterSpacing: "-0.01em",
             }}
           >
-            {TRUST_BADGES.map(({ label, color, bg, border }) => (
-              <span
-                key={label}
-                style={{
-                  display: "inline-flex",
-                  maxWidth: "100%",
-                  alignItems: "center",
-                  gap: 5,
-                  fontSize: 11.5,
-                  fontWeight: 600,
-                  color,
-                  backgroundColor: bg,
-                  border: `1px solid ${border}`,
-                  borderRadius: 6,
-                  padding: "4px 9px",
-                  whiteSpace: "nowrap",
-                  letterSpacing: "-0.005em",
-                }}
-              >
-                <ShieldCheck />
-                {label}
-              </span>
-            ))}
-          </div>
+            <HashIcon />
+            SHA-256 evidence hashing
+          </p>
         </div>
       </div>
 
@@ -534,10 +591,6 @@ export default function Footer() {
 
           .tt-footer-bottom {
             align-items: flex-start !important;
-          }
-
-          .tt-footer-trust {
-            width: 100%;
           }
         }
 
@@ -575,11 +628,15 @@ export default function Footer() {
             gap: 32px !important;
           }
 
+          .tt-footer-stats {
+            gap: 16px !important;
+          }
+
           .tt-footer-bottom {
             padding: 16px !important;
             flex-direction: column;
             align-items: stretch !important;
-            gap: 16px !important;
+            gap: 14px !important;
           }
 
           .tt-footer-meta {
@@ -589,21 +646,8 @@ export default function Footer() {
           .tt-footer-meta-divider {
             display: none;
           }
-
-          .tt-footer-trust {
-            width: 100%;
-            align-items: stretch !important;
-          }
-
-          .tt-footer-trust > span {
-            flex: 1 1 100%;
-            justify-content: flex-start;
-            white-space: normal !important;
-          }
         }
       `}</style>
     </footer>
   );
 }
-
-

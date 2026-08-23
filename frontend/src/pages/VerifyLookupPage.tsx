@@ -499,7 +499,7 @@ export default function VerifyLookupPage() {
                       maxLength={80}
                       aria-invalid={Boolean(error)}
                       aria-describedby="certificate-id-help certificate-id-error"
-                      className="h-12 min-w-0 flex-1 bg-transparent font-mono text-[14px] font-semibold tracking-[0.04em] outline-none placeholder:font-normal placeholder:tracking-normal sm:text-[15px]"
+                      className="h-12 min-w-0 flex-1 bg-transparent font-mono text-[14px] font-semibold tracking-[0.04em] outline-none focus:outline-none focus:ring-0 border-0 focus:border-0 appearance-none placeholder:font-normal placeholder:tracking-normal sm:text-[15px]"
                       style={{ color: colors.text.primary }}
                     />
                   </div>
