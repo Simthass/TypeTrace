@@ -503,7 +503,7 @@ function FlowLine({ reverse = false }: { reverse?: boolean }) {
   const reduced = useReducedMotion();
   return (
     <div
-      className="relative hidden h-px w-10 shrink-0 sm:block md:w-14"
+      className="relative block h-px w-6 shrink-0 sm:w-10 md:w-14"
       style={{ background: colors.surface[200] }}
     >
       {!reduced && (
@@ -696,11 +696,18 @@ function ProductFlowRow() {
         </div>
         <FlowLine />
         <div
-          className="flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2.5 text-[12.5px] font-bold shadow-sm"
-          style={{ background: colors.brand, color: colors.text.light }}
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full p-2.5"
+          style={{
+            background: colors.surface[50],
+            border: `1px solid ${colors.surface[200]}`,
+            boxShadow: `0 8px 20px -10px ${colors.shadow}`,
+          }}
         >
-          <Icon name="shieldCheck" size={14} />
-          TypeTrace
+          <img
+            src="/QR-Logo.png"
+            alt="TypeTrace"
+            className="h-full w-full object-contain"
+          />
         </div>
         <FlowLine />
         <div className="flex flex-col gap-3">
