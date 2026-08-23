@@ -850,7 +850,10 @@ export default function CertificatesPage() {
   );
 
   return (
-    <div className="responsive-page space-y-4">
+    <div
+      className="responsive-page space-y-4"
+      style={{ paddingLeft: 12, paddingRight: 12 }}
+    >
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p
@@ -1107,8 +1110,18 @@ export default function CertificatesPage() {
                     ].map((heading) => (
                       <th
                         key={heading}
-                        className="whitespace-nowrap px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em]"
-                        style={{ color: colors.text.muted }}
+                        className={`whitespace-nowrap px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                          heading === "Actions" ? "sticky right-0" : ""
+                        }`}
+                        style={{
+                          color: colors.text.muted,
+                          ...(heading === "Actions"
+                            ? {
+                                background: colors.surface[100],
+                                zIndex: 10,
+                              }
+                            : {}),
+                        }}
                       >
                         {heading}
                       </th>
@@ -1194,7 +1207,7 @@ export default function CertificatesPage() {
                             className="min-w-0 text-left"
                           >
                             <p
-                              className="max-w-[260px] truncate text-[13px] font-semibold"
+                              className="max-w-[220px] truncate text-[13px] font-semibold"
                               style={{ color: colors.text.primary }}
                             >
                               {certificate.title || "Untitled Document"}
@@ -1258,7 +1271,7 @@ export default function CertificatesPage() {
                           </div>
                         </td>
 
-                        <td className="px-4 py-3 align-middle">
+                        <td className="whitespace-nowrap px-4 py-3 align-middle">
                           <StatusBadge
                             value={certificate.risk_level || "LOW"}
                           />
@@ -1271,7 +1284,13 @@ export default function CertificatesPage() {
                           {formatShortDate(certificate.created_at)}
                         </td>
 
-                        <td className="whitespace-nowrap px-4 py-3 align-middle">
+                        <td
+                          className="sticky right-0 whitespace-nowrap px-4 py-3 align-middle"
+                          style={{
+                            background: colors.surface[50],
+                            zIndex: 10,
+                          }}
+                        >
                           <div className="flex flex-nowrap items-center gap-1.5">
                             <Link
                               to={ROUTES.REPLAY.replace(

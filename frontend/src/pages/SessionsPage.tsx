@@ -821,7 +821,10 @@ export default function SessionsPage() {
   );
 
   return (
-    <div className="responsive-page space-y-4">
+    <div
+      className="responsive-page space-y-4"
+      style={{ paddingLeft: 12, paddingRight: 12 }}
+    >
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p
@@ -1084,8 +1087,24 @@ export default function SessionsPage() {
                     ].map((heading) => (
                       <th
                         key={heading}
-                        className="whitespace-nowrap px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em]"
-                        style={{ color: colors.text.muted }}
+                        className={`whitespace-nowrap px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                          heading === "Actions" ? "sticky right-0" : ""
+                        }`}
+                        style={{
+                          color: colors.text.muted,
+                          ...(heading === "Document" || heading === "Actions"
+                            ? {
+                                paddingLeft: "16px",
+                                paddingRight: "16px",
+                              }
+                            : {}),
+                          ...(heading === "Actions"
+                            ? {
+                                background: colors.surface[100],
+                                zIndex: 10,
+                              }
+                            : {}),
+                        }}
                       >
                         {heading}
                       </th>
@@ -1107,14 +1126,20 @@ export default function SessionsPage() {
                         className="border-b transition-colors duration-100 hover:bg-surface-100"
                         style={{ borderColor: colors.surface[200] }}
                       >
-                        <td className="px-4 py-3 align-middle">
+                        <td
+                          className="px-4 py-3 align-middle"
+                          style={{
+                            paddingLeft: "16px",
+                            paddingRight: "16px",
+                          }}
+                        >
                           <div className="min-w-0">
                             <Link
                               to={ROUTES.SESSION_DETAIL.replace(
                                 ":sessionId",
                                 String(session.id),
                               )}
-                              className="block max-w-[280px] truncate text-[13px] font-semibold hover:underline"
+                              className="block max-w-[220px] truncate text-[13px] font-semibold hover:underline"
                               style={{ color: colors.text.primary }}
                             >
                               {session.title || "Untitled Document"}
@@ -1178,27 +1203,42 @@ export default function SessionsPage() {
                             style={{ color: colors.text.secondary }}
                           >
                             <div>
-                              <p style={{ color: colors.text.muted }}>Words</p>
                               <p
-                                className="font-mono font-bold tabular-nums"
+                                className="whitespace-nowrap"
+                                style={{ color: colors.text.muted }}
+                              >
+                                Words
+                              </p>
+                              <p
+                                className="font-mono font-bold tabular-nums whitespace-nowrap"
                                 style={{ color: colors.text.primary }}
                               >
                                 {Number(session.word_count || 0)}
                               </p>
                             </div>
                             <div>
-                              <p style={{ color: colors.text.muted }}>WPM</p>
                               <p
-                                className="font-mono font-bold tabular-nums"
+                                className="whitespace-nowrap"
+                                style={{ color: colors.text.muted }}
+                              >
+                                WPM
+                              </p>
+                              <p
+                                className="font-mono font-bold tabular-nums whitespace-nowrap"
                                 style={{ color: colors.text.primary }}
                               >
                                 {Math.round(Number(session.wpm) || 0)}
                               </p>
                             </div>
                             <div>
-                              <p style={{ color: colors.text.muted }}>Time</p>
                               <p
-                                className="font-mono font-bold tabular-nums"
+                                className="whitespace-nowrap"
+                                style={{ color: colors.text.muted }}
+                              >
+                                Time
+                              </p>
+                              <p
+                                className="font-mono font-bold tabular-nums whitespace-nowrap"
                                 style={{ color: colors.text.primary }}
                               >
                                 {formatCompactDuration(
@@ -1252,7 +1292,15 @@ export default function SessionsPage() {
                           )}
                         </td>
 
-                        <td className="whitespace-nowrap px-4 py-3 align-middle">
+                        <td
+                          className="sticky right-0 whitespace-nowrap px-4 py-3 align-middle"
+                          style={{
+                            background: colors.surface[50],
+                            zIndex: 10,
+                            paddingLeft: "16px",
+                            paddingRight: "16px",
+                          }}
+                        >
                           <div className="flex flex-nowrap items-center gap-1.5">
                             <Link
                               to={ROUTES.REPLAY.replace(
