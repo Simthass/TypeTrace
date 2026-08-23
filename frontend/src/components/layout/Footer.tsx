@@ -394,7 +394,8 @@ export default function Footer() {
                 display: "flex",
                 margin: 0,
                 gap: 18,
-                flexWrap: "wrap",
+                flexWrap: "nowrap",
+                whiteSpace: "nowrap",
               }}
             >
               {STATS.map((stat, i) => (
@@ -630,6 +631,8 @@ export default function Footer() {
 
           .tt-footer-stats {
             gap: 16px !important;
+            flex-wrap: wrap !important;
+            white-space: normal !important;
           }
 
           .tt-footer-bottom {

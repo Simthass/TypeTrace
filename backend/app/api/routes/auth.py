@@ -183,11 +183,6 @@ async def register_user(
             email=user_in.email,
             otp=otp,
             purpose="verification",
-            action_url=_frontend_recovery_url(
-                "/verify-otp",
-                "registration_id",
-                str(pending["registration_id"]),
-            ),
         )
     except EmailDeliveryError as exc:
         try:
@@ -693,11 +688,6 @@ async def request_password_reset(
                 email=user.email,
                 otp=otp,
                 purpose="password reset",
-                action_url=_frontend_recovery_url(
-                    "/forgot-password",
-                    "reset_id",
-                    str(reset["reset_id"]),
-                ),
             )
         except EmailDeliveryError as exc:
             try:
