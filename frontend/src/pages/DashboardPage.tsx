@@ -642,8 +642,8 @@ function EvidenceTrendPanel({
       total: trend.reduce((sum, point) => sum + point.suspicious_sessions, 0),
     },
     {
-      label: "AI-like sessions",
-      shortLabel: "AI-like",
+      label: "High Risk sessions",
+      shortLabel: "High-Risk",
       dataKey: "synthetic_sessions",
       color: colors.red,
       total: trend.reduce((sum, point) => sum + point.synthetic_sessions, 0),
@@ -950,7 +950,7 @@ function WeeklyBreakdownPanel({ data }: { data: NormalizedTrendPoint[] }) {
     <Panel className="p-4 md:p-5">
       <PanelHeader
         title="Seven-day signal breakdown"
-        subtitle="Human, suspicious, and AI-like sessions"
+        subtitle="Human, suspicious, and High-Risk sessions"
       />
       <div className="h-[230px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -999,7 +999,7 @@ function WeeklyBreakdownPanel({ data }: { data: NormalizedTrendPoint[] }) {
             />
             <Bar
               dataKey="synthetic_sessions"
-              name="AI-like"
+              name="High-Risk"
               stackId="a"
               fill={colors.red}
               radius={[3, 3, 0, 0]}
@@ -1142,7 +1142,8 @@ function LatestSessionsPanel({ sessions }: { sessions: StudentSession[] }) {
                     className="mt-1 text-[11px]"
                     style={{ color: colors.text.muted }}
                   >
-                    {session.course_name || "Personal session"} · {formatDate(session.created_at)}
+                    {session.course_name || "Personal session"} ·{" "}
+                    {formatDate(session.created_at)}
                   </p>
                 </div>
                 <StatusBadge
@@ -1712,5 +1713,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-

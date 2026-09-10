@@ -1,4 +1,3 @@
-# backend/app/core/security.py
 
 import re
 import secrets

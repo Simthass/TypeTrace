@@ -15,7 +15,7 @@ from app.ml.inference_engine import classify_from_human_score
 
 MINIMUM_KEYSTROKES = 30
 
-PASTE_POLICY_VERSION = "paste-policy-v1-day3"
+PASTE_POLICY_VERSION = "paste-policy-v1"
 LIGHT_PASTE_RATIO_THRESHOLD = 0.20
 DOMINANT_PASTE_RATIO_THRESHOLD = 0.60
 MODERATE_PASTE_MAX_HUMAN_SCORE = 79.99
@@ -71,7 +71,7 @@ def apply_paste_policy(
     risk_score: float,
     risk_level: str,
 ) -> Dict[str, Any]:
-    """Apply the Day 3 character-contribution paste policy.
+    """Apply the character-contribution paste policy.
 
     Paste is evaluated independently from timing-model fusion:
 

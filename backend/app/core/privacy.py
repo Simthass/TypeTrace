@@ -1,4 +1,3 @@
-# backend/app/core/privacy.py
 
 import hashlib
 import json

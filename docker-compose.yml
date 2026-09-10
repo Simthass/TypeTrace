@@ -6,7 +6,7 @@ services:
     container_name: typetrace_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-typetrace_admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin_password_123}
       POSTGRES_DB: ${POSTGRES_DB:-typetracedb}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"

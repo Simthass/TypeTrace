@@ -105,7 +105,7 @@ def sha256_hex_bytes(data: bytes) -> str:
 
 
 def sha256_hex_json(payload: Mapping[str, Any]) -> str:
-    return sha256_hex_bytes(canonical_json_bytes(payload))
+    return sha256_hex_bytes(canonical_json_bytes(payload))  
 
 
 def _b64url_encode(data: bytes) -> str:
